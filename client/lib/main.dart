@@ -3,6 +3,7 @@ import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/nav.dart';
+import 'screens/profile.dart';
 
 void main() {
   runApp(const MyApp());
@@ -26,6 +27,7 @@ class MyApp extends StatelessWidget {
         SignupScreen.routeName: (context) => SignupScreen(),
         DashboardScreen.routeName: (context) => DashboardScreen(),
         NavScreen.routeName: (context) => NavScreen(),
+        ProfileScreen.routeName: (context) => ProfileScreen(),
       },
     );
   }

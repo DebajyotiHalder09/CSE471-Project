@@ -5,6 +5,19 @@ require('dotenv').config();
 
 const app = express();
 
+// Check for required environment variables
+if (!process.env.JWT_SECRET) {
+  // If JWT_SECRET is not in .env, use a default one for development
+  process.env.JWT_SECRET = 'ASdqwfqsdas7897hjasd';
+  console.log('Using default JWT_SECRET for development');
+}
+
+if (!process.env.MONGO_URL) {
+  // If MONGO_URL is not in .env, use a default one for development
+  process.env.MONGO_URL = 'mongodb+srv://dhhlderayon:wHdFtHfhBGtDct9L@cluster0.vkrq2w6.mongodb.net/bus?retryWrites=true&w=majority&appName=Cluster0';
+  console.log('Using default MONGO_URL for development');
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -16,6 +29,7 @@ mongoose.connect(process.env.MONGO_URL)
 
 // Routes
 app.use('/auth', require('./routes/auth'));
+app.use('/bus', require('./routes/bus'));
 
 const PORT = 3000;
 app.listen(PORT, () => {

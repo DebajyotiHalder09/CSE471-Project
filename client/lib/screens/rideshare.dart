@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 class RideshareScreen extends StatelessWidget {
+  const RideshareScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(

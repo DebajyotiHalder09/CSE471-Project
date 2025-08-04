@@ -3,6 +3,8 @@ import '../services/bus_service.dart';
 import '../models/bus.dart';
 
 class BusScreen extends StatefulWidget {
+  const BusScreen({super.key});
+
   @override
   _BusScreenState createState() => _BusScreenState();
 }
@@ -427,7 +429,7 @@ class _BusScreenState extends State<BusScreen> {
 class BusResultCard extends StatefulWidget {
   final Bus bus;
 
-  const BusResultCard({Key? key, required this.bus}) : super(key: key);
+  const BusResultCard({super.key, required this.bus});
 
   @override
   _BusResultCardState createState() => _BusResultCardState();
@@ -563,7 +565,7 @@ class _BusResultCardState extends State<BusResultCard> {
                         ],
                       ),
                     );
-                  }).toList(),
+                  }),
                 ],
               ),
             ),

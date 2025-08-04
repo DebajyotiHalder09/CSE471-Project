@@ -7,6 +7,8 @@ import '../models/user.dart';
 
 class NavScreen extends StatefulWidget {
   static const routeName = '/nav';
+
+  const NavScreen({super.key});
   
   @override
   _NavScreenState createState() => _NavScreenState();

@@ -5,6 +5,8 @@ import 'nav.dart';
 
 class LoginScreen extends StatefulWidget {
   static const routeName = '/login';
+
+  const LoginScreen({super.key});
   
   @override
   _LoginScreenState createState() => _LoginScreenState();

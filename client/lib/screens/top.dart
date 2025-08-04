@@ -3,6 +3,8 @@ import 'profile.dart';
 
 class TopScreen extends StatelessWidget {
   static const routeName = '/top';
+
+  const TopScreen({super.key});
   
   @override
   Widget build(BuildContext context) {

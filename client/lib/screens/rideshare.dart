@@ -26,6 +26,7 @@ class _RideshareScreenState extends State<RideshareScreen> {
       TextEditingController();
   String? selectedGender;
   bool isSearching = false;
+  bool isFindRideExpanded = false;
 
   @override
   void initState() {
@@ -124,6 +125,74 @@ class _RideshareScreenState extends State<RideshareScreen> {
         return matchesSource && matchesDestination && matchesGender;
       }).toList();
     });
+  }
+
+  bool _hasExistingPost() {
+    if (currentUser == null) return false;
+    return ridePosts.any((post) => post['userId'] == currentUser!.id);
+  }
+
+  Map<String, dynamic>? _getExistingPost() {
+    if (currentUser == null) return null;
+    try {
+      return ridePosts.firstWhere((post) => post['userId'] == currentUser!.id);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Widget _buildExistingPostCard(Map<String, dynamic> post) {
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange[300]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.location_on, color: Colors.green, size: 16),
+              SizedBox(width: 8),
+              Text(
+                'From: ${post['source'] ?? 'Unknown location'}',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(Icons.flag, color: Colors.red, size: 16),
+              SizedBox(width: 8),
+              Text(
+                'To: ${post['destination'] ?? 'Unknown location'}',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Posted ${_formatDate(DateTime.parse(post['createdAt'] ?? DateTime.now().toIso8601String()))}',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[500],
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _clearSearch() {
@@ -244,80 +313,140 @@ class _RideshareScreenState extends State<RideshareScreen> {
                     ),
                   ),
                   SizedBox(height: 12),
-                  TextField(
-                    controller: sourceController,
-                    decoration: InputDecoration(
-                      hintText: 'Enter source location',
-                      border: OutlineInputBorder(
+
+                  // Show existing post if user has one
+                  if (_hasExistingPost()) ...[
+                    Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.orange[50],
                         borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange[200]!),
                       ),
-                      filled: true,
-                      fillColor: Colors.grey[50],
-                      prefixIcon: Icon(Icons.location_on, color: Colors.green),
-                    ),
-                  ),
-                  SizedBox(height: 12),
-                  TextField(
-                    controller: destinationController,
-                    decoration: InputDecoration(
-                      hintText: 'Enter destination location',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.info_outline,
+                                  color: Colors.orange[700], size: 20),
+                              SizedBox(width: 8),
+                              Text(
+                                'You already have an active ride post',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.orange[700],
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 12),
+                          _buildExistingPostCard(_getExistingPost()!),
+                          SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: () =>
+                                  _deleteRidePost(_getExistingPost()!['_id']),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: Text(
+                                'Delete Current Post',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      filled: true,
-                      fillColor: Colors.grey[50],
-                      prefixIcon: Icon(Icons.flag, color: Colors.red),
                     ),
-                  ),
-                  SizedBox(height: 12),
-                  if (currentUser != null) ...[
-                    Row(
-                      children: [
-                        Icon(Icons.person, color: Colors.blue, size: 16),
-                        SizedBox(width: 8),
-                        Text(
-                          'Posted by: ${currentUser!.name}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        SizedBox(width: 16),
-                        Icon(Icons.wc, color: Colors.purple, size: 16),
-                        SizedBox(width: 8),
-                        Text(
-                          'Gender: ${currentUser!.gender ?? 'Not specified'}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 12),
-                  ],
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed:
-                          (isLoading || currentUser == null) ? null : _postRide,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            currentUser == null ? Colors.grey : Colors.blue,
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
+                  ] else ...[
+                    // Show post form only if user doesn't have an existing post
+                    TextField(
+                      controller: sourceController,
+                      decoration: InputDecoration(
+                        hintText: 'Enter source location',
+                        border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                        prefixIcon:
+                            Icon(Icons.location_on, color: Colors.green),
                       ),
-                      child: Text(
-                        currentUser == null ? 'Login Required' : 'Post Ride',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
+                    ),
+                    SizedBox(height: 12),
+                    TextField(
+                      controller: destinationController,
+                      decoration: InputDecoration(
+                        hintText: 'Enter destination location',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                        prefixIcon: Icon(Icons.flag, color: Colors.red),
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    if (currentUser != null) ...[
+                      Row(
+                        children: [
+                          Icon(Icons.person, color: Colors.blue, size: 16),
+                          SizedBox(width: 8),
+                          Text(
+                            'Posted by: ${currentUser!.name}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                          SizedBox(width: 16),
+                          Icon(Icons.wc, color: Colors.purple, size: 16),
+                          SizedBox(width: 8),
+                          Text(
+                            'Gender: ${currentUser!.gender ?? 'Not specified'}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 12),
+                    ],
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: (isLoading || currentUser == null)
+                            ? null
+                            : _postRide,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              currentUser == null ? Colors.grey : Colors.blue,
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: Text(
+                          currentUser == null ? 'Login Required' : 'Post Ride',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -345,176 +474,219 @@ class _RideshareScreenState extends State<RideshareScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Find a Ride',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
+                  // Collapsible Find a Ride Button
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        isFindRideExpanded = !isFindRideExpanded;
+                      });
+                    },
+                    child: Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.1),
+                            spreadRadius: 1,
+                            blurRadius: 4,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.search,
+                            color: Colors.blue,
+                            size: 24,
+                          ),
+                          SizedBox(width: 12),
+                          Text(
+                            'Find a Ride',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          Spacer(),
+                          Icon(
+                            isFindRideExpanded
+                                ? Icons.keyboard_arrow_up
+                                : Icons.keyboard_arrow_down,
+                            color: Colors.grey[600],
+                            size: 24,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  SizedBox(height: 12),
 
-                  // Search and Filter Section
-                  Container(
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.1),
-                          spreadRadius: 1,
-                          blurRadius: 4,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Search & Filter',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black87,
+                  // Collapsible Search and Filter Section
+                  if (isFindRideExpanded) ...[
+                    SizedBox(height: 16),
+                    Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.1),
+                            spreadRadius: 1,
+                            blurRadius: 4,
+                            offset: Offset(0, 2),
                           ),
-                        ),
-                        SizedBox(height: 12),
-
-                        // Source Search
-                        TextField(
-                          controller: searchSourceController,
-                          decoration: InputDecoration(
-                            hintText: 'Search by source location',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            filled: true,
-                            fillColor: Colors.grey[50],
-                            prefixIcon:
-                                Icon(Icons.location_on, color: Colors.green),
-                            suffixIcon: IconButton(
-                              icon: Icon(Icons.search),
-                              onPressed: _applySearchAndFilter,
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Search & Filter',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
                             ),
                           ),
-                          onSubmitted: (_) => _applySearchAndFilter(),
-                        ),
-                        SizedBox(height: 12),
+                          SizedBox(height: 12),
 
-                        // Destination Search
-                        TextField(
-                          controller: searchDestinationController,
-                          decoration: InputDecoration(
-                            hintText: 'Search by destination location',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            filled: true,
-                            fillColor: Colors.grey[50],
-                            prefixIcon: Icon(Icons.flag, color: Colors.red),
-                            suffixIcon: IconButton(
-                              icon: Icon(Icons.search),
-                              onPressed: _applySearchAndFilter,
-                            ),
-                          ),
-                          onSubmitted: (_) => _applySearchAndFilter(),
-                        ),
-                        SizedBox(height: 12),
-
-                        // Gender Filter
-                        Row(
-                          children: [
-                            Text(
-                              'Preferred Gender: ',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.grey[700],
+                          // Source Search
+                          TextField(
+                            controller: searchSourceController,
+                            decoration: InputDecoration(
+                              hintText: 'Search by source location',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                            ),
-                            Expanded(
-                              child: DropdownButtonFormField<String>(
-                                value: selectedGender,
-                                decoration: InputDecoration(
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  filled: true,
-                                  fillColor: Colors.grey[50],
-                                  contentPadding: EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 8),
-                                ),
-                                hint: Text('All'),
-                                items: [
-                                  DropdownMenuItem(
-                                      value: null, child: Text('All')),
-                                  DropdownMenuItem(
-                                      value: 'Male', child: Text('Male')),
-                                  DropdownMenuItem(
-                                      value: 'Female', child: Text('Female')),
-                                ],
-                                onChanged: (value) {
-                                  setState(() {
-                                    selectedGender = value;
-                                  });
-                                  _applySearchAndFilter();
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 16),
-
-                        // Search and Clear Buttons
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ElevatedButton(
+                              filled: true,
+                              fillColor: Colors.grey[50],
+                              prefixIcon:
+                                  Icon(Icons.location_on, color: Colors.green),
+                              suffixIcon: IconButton(
+                                icon: Icon(Icons.search),
                                 onPressed: _applySearchAndFilter,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.blue,
-                                  padding: EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
+                              ),
+                            ),
+                            onSubmitted: (_) => _applySearchAndFilter(),
+                          ),
+                          SizedBox(height: 12),
+
+                          // Destination Search
+                          TextField(
+                            controller: searchDestinationController,
+                            decoration: InputDecoration(
+                              hintText: 'Search by destination location',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              filled: true,
+                              fillColor: Colors.grey[50],
+                              prefixIcon: Icon(Icons.flag, color: Colors.red),
+                              suffixIcon: IconButton(
+                                icon: Icon(Icons.search),
+                                onPressed: _applySearchAndFilter,
+                              ),
+                            ),
+                            onSubmitted: (_) => _applySearchAndFilter(),
+                          ),
+                          SizedBox(height: 12),
+
+                          // Gender Filter
+                          Row(
+                            children: [
+                              Text(
+                                'Preferred Gender: ',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.grey[700],
                                 ),
-                                child: Text(
-                                  'Search',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
+                              ),
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  value: selectedGender,
+                                  decoration: InputDecoration(
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    filled: true,
+                                    fillColor: Colors.grey[50],
+                                    contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 8),
+                                  ),
+                                  hint: Text('All'),
+                                  items: [
+                                    DropdownMenuItem(
+                                        value: null, child: Text('All')),
+                                    DropdownMenuItem(
+                                        value: 'Male', child: Text('Male')),
+                                    DropdownMenuItem(
+                                        value: 'Female', child: Text('Female')),
+                                  ],
+                                  onChanged: (value) {
+                                    setState(() {
+                                      selectedGender = value;
+                                    });
+                                    _applySearchAndFilter();
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 16),
+
+                          // Search and Clear Buttons
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: _applySearchAndFilter,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue,
+                                    padding: EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'Search',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                            SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: _clearSearch,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.grey,
-                                  padding: EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
+                              SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: _clearSearch,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.grey,
+                                    padding: EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
                                   ),
-                                ),
-                                child: Text(
-                                  'Clear',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
+                                  child: Text(
+                                    'Clear',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ],
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
 
                   SizedBox(height: 16),
 

@@ -53,6 +53,7 @@ app.use('/bus', require('./routes/bus'));
 app.use('/api/reviews', require('./routes/review'));
 app.use('/api/rideshare', require('./routes/rideshare'));
 app.use('/api/riderequests', require('./routes/riderequest'));
+app.use('/api/favbus', require('./routes/favBus'));
 
 // Test route to verify server is working
 app.get('/test', (req, res) => {

@@ -3,6 +3,32 @@ const mongoose = require('mongoose');
 // Since the collection already exists, we'll use it directly
 const BusInfo = mongoose.connection.collection('bus_info');
 
+const getAllBuses = async (req, res) => {
+  try {
+    const buses = await BusInfo.find({}).toArray();
+
+    if (buses.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'No buses found' 
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: buses,
+      count: buses.length
+    });
+
+  } catch (error) {
+    console.error('Error getting all buses:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error' 
+    });
+  }
+};
+
 const searchBusByName = async (req, res) => {
   try {
     const { busName } = req.query;
@@ -103,6 +129,7 @@ const searchBusByRoute = async (req, res) => {
 };
 
 module.exports = {
+  getAllBuses,
   searchBusByName,
   searchBusByRoute
 }; 

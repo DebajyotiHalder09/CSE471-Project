@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/bus_service.dart';
+import '../services/fav_bus_service.dart';
+import '../services/auth_service.dart';
 import '../models/bus.dart';
 import 'review.dart';
 
@@ -17,8 +19,19 @@ class _BusScreenState extends State<BusScreen> {
   TextEditingController endLocationController = TextEditingController();
 
   List<Bus> searchResults = [];
+  List<Bus> allBuses = [];
   bool isLoading = false;
+  bool isLoadingAll = false;
   String? errorMessage;
+  String? currentUserId;
+  Map<String, bool> favoriteStatus = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAllBuses();
+    _getCurrentUserId();
+  }
 
   @override
   void dispose() {
@@ -26,6 +39,103 @@ class _BusScreenState extends State<BusScreen> {
     startLocationController.dispose();
     endLocationController.dispose();
     super.dispose();
+  }
+
+  Future<void> _getCurrentUserId() async {
+    final user = await AuthService.getUser();
+    if (user != null) {
+      setState(() {
+        currentUserId = user.id;
+      });
+      _loadFavoriteStatuses();
+    }
+  }
+
+  Future<void> _loadFavoriteStatuses() async {
+    if (currentUserId == null) return;
+
+    for (final bus in allBuses) {
+      try {
+        final response = await FavBusService.checkIfFavorited(
+          userId: currentUserId!,
+          busId: bus.id,
+        );
+        if (response['success']) {
+          setState(() {
+            favoriteStatus[bus.id] = response['isFavorited'];
+          });
+        }
+      } catch (e) {
+        setState(() {
+          favoriteStatus[bus.id] = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _toggleFavorite(Bus bus) async {
+    if (currentUserId == null) return;
+
+    try {
+      if (favoriteStatus[bus.id] == true) {
+        await FavBusService.removeFromFavorites(
+          userId: currentUserId!,
+          busId: bus.id,
+        );
+        setState(() {
+          favoriteStatus[bus.id] = false;
+        });
+      } else {
+        await FavBusService.addToFavorites(
+          userId: currentUserId!,
+          busId: bus.id,
+          busName: bus.busName,
+          routeNumber: bus.routeNumber,
+          operator: bus.operator,
+        );
+        setState(() {
+          favoriteStatus[bus.id] = true;
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update favorite: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadAllBuses() async {
+    setState(() {
+      isLoadingAll = true;
+      errorMessage = null;
+    });
+
+    try {
+      final response = await BusService.getAllBuses();
+
+      if (response['success']) {
+        setState(() {
+          allBuses = (response['data'] as List)
+              .map((json) => Bus.fromJson(json))
+              .toList();
+          isLoadingAll = false;
+        });
+        _loadFavoriteStatuses();
+      } else {
+        setState(() {
+          errorMessage = response['message'] ?? 'Failed to load buses';
+          isLoadingAll = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        errorMessage = e.toString();
+        isLoadingAll = false;
+      });
+    }
   }
 
   void _clearSearch() {
@@ -36,6 +146,7 @@ class _BusScreenState extends State<BusScreen> {
       startLocationController.clear();
       endLocationController.clear();
     });
+    _loadFavoriteStatuses();
   }
 
   Future<void> _searchBusByName() async {
@@ -62,6 +173,7 @@ class _BusScreenState extends State<BusScreen> {
               .toList();
           isLoading = false;
         });
+        _loadFavoriteStatusesForSearchResults();
       } else {
         setState(() {
           errorMessage = response['message'] ?? 'No buses found';
@@ -103,6 +215,7 @@ class _BusScreenState extends State<BusScreen> {
               .toList();
           isLoading = false;
         });
+        _loadFavoriteStatusesForSearchResults();
       } else {
         setState(() {
           errorMessage = response['message'] ?? 'No buses found for this route';
@@ -117,6 +230,28 @@ class _BusScreenState extends State<BusScreen> {
     }
   }
 
+  Future<void> _loadFavoriteStatusesForSearchResults() async {
+    if (currentUserId == null) return;
+
+    for (final bus in searchResults) {
+      try {
+        final response = await FavBusService.checkIfFavorited(
+          userId: currentUserId!,
+          busId: bus.id,
+        );
+        if (response['success']) {
+          setState(() {
+            favoriteStatus[bus.id] = response['isFavorited'];
+          });
+        }
+      } catch (e) {
+        setState(() {
+          favoriteStatus[bus.id] = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -126,7 +261,7 @@ class _BusScreenState extends State<BusScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Search Type Selection
+            // Filter and Search Section
             Container(
               padding: EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -144,113 +279,52 @@ class _BusScreenState extends State<BusScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Search Type',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  SizedBox(height: 12),
                   Row(
                     children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              selectedSearchType = 'bus';
-                              _clearSearch();
-                            });
-                          },
-                          child: Container(
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            decoration: BoxDecoration(
-                              color: selectedSearchType == 'bus'
-                                  ? Colors.blue
-                                  : Colors.grey[200],
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Center(
-                              child: Text(
-                                'Search Bus',
-                                style: TextStyle(
-                                  color: selectedSearchType == 'bus'
-                                      ? Colors.white
-                                      : Colors.black87,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
+                      Text(
+                        'Search & Filter',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
                         ),
                       ),
-                      SizedBox(width: 12),
-                      Expanded(
+                      Spacer(),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          borderRadius: BorderRadius.circular(20),
+                        ),
                         child: GestureDetector(
                           onTap: () {
                             setState(() {
-                              selectedSearchType = 'route';
+                              selectedSearchType = selectedSearchType == 'bus' ? 'route' : 'bus';
                               _clearSearch();
                             });
                           },
-                          child: Container(
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            decoration: BoxDecoration(
-                              color: selectedSearchType == 'route'
-                                  ? Colors.blue
-                                  : Colors.grey[200],
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Center(
-                              child: Text(
-                                'Search Route',
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                selectedSearchType == 'bus' ? Icons.route : Icons.directions_bus,
+                                size: 16,
+                                color: Colors.grey[600],
+                              ),
+                              SizedBox(width: 6),
+                              Text(
+                                selectedSearchType == 'bus' ? 'Route' : 'Bus',
                                 style: TextStyle(
-                                  color: selectedSearchType == 'route'
-                                      ? Colors.white
-                                      : Colors.black87,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w600,
+                                  color: Colors.grey[600],
                                 ),
                               ),
-                            ),
+                            ],
                           ),
                         ),
                       ),
                     ],
-                  ),
-                ],
-              ),
-            ),
-
-            SizedBox(height: 16),
-
-            // Search Input Section
-            Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey.withOpacity(0.1),
-                    spreadRadius: 1,
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    selectedSearchType == 'bus'
-                        ? 'Search by Bus Name'
-                        : 'Search by Route',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
                   ),
                   SizedBox(height: 16),
                   if (selectedSearchType == 'bus') ...[
@@ -264,6 +338,7 @@ class _BusScreenState extends State<BusScreen> {
                         ),
                         filled: true,
                         fillColor: Colors.grey[50],
+                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       ),
                       onSubmitted: (_) => _searchBusByName(),
                     ),
@@ -299,31 +374,41 @@ class _BusScreenState extends State<BusScreen> {
                       ),
                     ),
                   ] else ...[
-                    TextField(
-                      controller: startLocationController,
-                      decoration: InputDecoration(
-                        hintText: 'Enter start location...',
-                        prefixIcon: Icon(Icons.location_on),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: startLocationController,
+                            decoration: InputDecoration(
+                              hintText: 'Start location...',
+                              prefixIcon: Icon(Icons.location_on, size: 20),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              filled: true,
+                              fillColor: Colors.grey[50],
+                              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            ),
+                          ),
                         ),
-                        filled: true,
-                        fillColor: Colors.grey[50],
-                      ),
-                    ),
-                    SizedBox(height: 12),
-                    TextField(
-                      controller: endLocationController,
-                      decoration: InputDecoration(
-                        hintText: 'Enter end location...',
-                        prefixIcon: Icon(Icons.location_on_outlined),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: endLocationController,
+                            decoration: InputDecoration(
+                              hintText: 'End location...',
+                              prefixIcon: Icon(Icons.location_on_outlined, size: 20),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              filled: true,
+                              fillColor: Colors.grey[50],
+                              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            ),
+                            onSubmitted: (_) => _searchBusByRoute(),
+                          ),
                         ),
-                        filled: true,
-                        fillColor: Colors.grey[50],
-                      ),
-                      onSubmitted: (_) => _searchBusByRoute(),
+                      ],
                     ),
                     SizedBox(height: 12),
                     SizedBox(
@@ -391,38 +476,54 @@ class _BusScreenState extends State<BusScreen> {
                       itemCount: searchResults.length,
                       itemBuilder: (context, index) {
                         final bus = searchResults[index];
-                        return BusResultCard(bus: bus);
+                        return BusResultCard(
+                          bus: bus,
+                          isFavorited: favoriteStatus[bus.id] ?? false,
+                          onFavoriteToggle: () => _toggleFavorite(bus),
+                        );
                       },
                     )
-                  : Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.directions_bus_outlined,
-                            size: 64,
-                            color: Colors.grey[400],
+                  : allBuses.isNotEmpty
+                      ? ListView.builder(
+                          itemCount: allBuses.length,
+                          itemBuilder: (context, index) {
+                            final bus = allBuses[index];
+                            return BusResultCard(
+                              bus: bus,
+                              isFavorited: favoriteStatus[bus.id] ?? false,
+                              onFavoriteToggle: () => _toggleFavorite(bus),
+                            );
+                          },
+                        )
+                      : Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.directions_bus_outlined,
+                                size: 64,
+                                color: Colors.grey[400],
+                              ),
+                              SizedBox(height: 16),
+                              Text(
+                                'No buses available',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                'No buses found in the system',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[500],
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
                           ),
-                          SizedBox(height: 16),
-                          Text(
-                            'No results to show',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Search for buses or routes to see results',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[500],
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
+                        ),
             ),
           ],
         ),
@@ -433,8 +534,15 @@ class _BusScreenState extends State<BusScreen> {
 
 class BusResultCard extends StatefulWidget {
   final Bus bus;
+  final bool isFavorited;
+  final VoidCallback onFavoriteToggle;
 
-  const BusResultCard({super.key, required this.bus});
+  const BusResultCard({
+    super.key,
+    required this.bus,
+    required this.isFavorited,
+    required this.onFavoriteToggle,
+  });
 
   @override
   _BusResultCardState createState() => _BusResultCardState();
@@ -520,6 +628,13 @@ class _BusResultCardState extends State<BusResultCard> {
                       ),
                     );
                   },
+                ),
+                IconButton(
+                  icon: Icon(
+                    widget.isFavorited ? Icons.favorite : Icons.favorite_border,
+                    color: Colors.red,
+                  ),
+                  onPressed: widget.onFavoriteToggle,
                 ),
                 IconButton(
                   icon: Icon(

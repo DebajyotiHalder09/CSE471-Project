@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/bus_service.dart';
 import '../models/bus.dart';
+import 'review.dart';
 
 class BusScreen extends StatefulWidget {
   const BusScreen({super.key});
@@ -14,7 +15,7 @@ class _BusScreenState extends State<BusScreen> {
   TextEditingController busNameController = TextEditingController();
   TextEditingController startLocationController = TextEditingController();
   TextEditingController endLocationController = TextEditingController();
-  
+
   List<Bus> searchResults = [];
   bool isLoading = false;
   String? errorMessage;
@@ -51,8 +52,9 @@ class _BusScreenState extends State<BusScreen> {
     });
 
     try {
-      final response = await BusService.searchBusByName(busNameController.text.trim());
-      
+      final response =
+          await BusService.searchBusByName(busNameController.text.trim());
+
       if (response['success']) {
         setState(() {
           searchResults = (response['data'] as List)
@@ -75,7 +77,7 @@ class _BusScreenState extends State<BusScreen> {
   }
 
   Future<void> _searchBusByRoute() async {
-    if (startLocationController.text.trim().isEmpty || 
+    if (startLocationController.text.trim().isEmpty ||
         endLocationController.text.trim().isEmpty) {
       setState(() {
         errorMessage = 'Please enter both start and end locations';
@@ -93,7 +95,7 @@ class _BusScreenState extends State<BusScreen> {
         startLocationController.text.trim(),
         endLocationController.text.trim(),
       );
-      
+
       if (response['success']) {
         setState(() {
           searchResults = (response['data'] as List)
@@ -164,8 +166,8 @@ class _BusScreenState extends State<BusScreen> {
                           child: Container(
                             padding: EdgeInsets.symmetric(vertical: 12),
                             decoration: BoxDecoration(
-                              color: selectedSearchType == 'bus' 
-                                  ? Colors.blue 
+                              color: selectedSearchType == 'bus'
+                                  ? Colors.blue
                                   : Colors.grey[200],
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -173,8 +175,8 @@ class _BusScreenState extends State<BusScreen> {
                               child: Text(
                                 'Search Bus',
                                 style: TextStyle(
-                                  color: selectedSearchType == 'bus' 
-                                      ? Colors.white 
+                                  color: selectedSearchType == 'bus'
+                                      ? Colors.white
                                       : Colors.black87,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -195,8 +197,8 @@ class _BusScreenState extends State<BusScreen> {
                           child: Container(
                             padding: EdgeInsets.symmetric(vertical: 12),
                             decoration: BoxDecoration(
-                              color: selectedSearchType == 'route' 
-                                  ? Colors.blue 
+                              color: selectedSearchType == 'route'
+                                  ? Colors.blue
                                   : Colors.grey[200],
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -204,8 +206,8 @@ class _BusScreenState extends State<BusScreen> {
                               child: Text(
                                 'Search Route',
                                 style: TextStyle(
-                                  color: selectedSearchType == 'route' 
-                                      ? Colors.white 
+                                  color: selectedSearchType == 'route'
+                                      ? Colors.white
                                       : Colors.black87,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -219,9 +221,9 @@ class _BusScreenState extends State<BusScreen> {
                 ],
               ),
             ),
-            
+
             SizedBox(height: 16),
-            
+
             // Search Input Section
             Container(
               padding: EdgeInsets.all(16),
@@ -241,7 +243,9 @@ class _BusScreenState extends State<BusScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    selectedSearchType == 'bus' ? 'Search by Bus Name' : 'Search by Route',
+                    selectedSearchType == 'bus'
+                        ? 'Search by Bus Name'
+                        : 'Search by Route',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
@@ -249,7 +253,6 @@ class _BusScreenState extends State<BusScreen> {
                     ),
                   ),
                   SizedBox(height: 16),
-                  
                   if (selectedSearchType == 'bus') ...[
                     TextField(
                       controller: busNameController,
@@ -282,7 +285,8 @@ class _BusScreenState extends State<BusScreen> {
                                 width: 20,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white),
                                 ),
                               )
                             : Text(
@@ -339,7 +343,8 @@ class _BusScreenState extends State<BusScreen> {
                                 width: 20,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white),
                                 ),
                               )
                             : Text(
@@ -355,9 +360,9 @@ class _BusScreenState extends State<BusScreen> {
                 ],
               ),
             ),
-            
+
             SizedBox(height: 16),
-            
+
             // Error Message
             if (errorMessage != null)
               Container(
@@ -376,9 +381,9 @@ class _BusScreenState extends State<BusScreen> {
                   ),
                 ),
               ),
-            
+
             SizedBox(height: 16),
-            
+
             // Results Section
             Expanded(
               child: searchResults.isNotEmpty
@@ -499,16 +504,35 @@ class _BusResultCardState extends State<BusResultCard> {
                 ),
               ],
             ),
-            trailing: IconButton(
-              icon: Icon(
-                isExpanded ? Icons.expand_less : Icons.expand_more,
-                color: Colors.blue,
-              ),
-              onPressed: () {
-                setState(() {
-                  isExpanded = !isExpanded;
-                });
-              },
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: Icon(
+                    Icons.message,
+                    color: Colors.orange,
+                  ),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ReviewScreen(bus: widget.bus),
+                      ),
+                    );
+                  },
+                ),
+                IconButton(
+                  icon: Icon(
+                    isExpanded ? Icons.expand_less : Icons.expand_more,
+                    color: Colors.blue,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      isExpanded = !isExpanded;
+                    });
+                  },
+                ),
+              ],
             ),
           ),
           if (isExpanded)
@@ -522,50 +546,97 @@ class _BusResultCardState extends State<BusResultCard> {
                     'Stops:',
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      fontSize: 14,
+                      fontSize: 16,
                       color: Colors.grey[700],
                     ),
                   ),
-                  SizedBox(height: 8),
-                  ...widget.bus.stops.asMap().entries.map((entry) {
-                    int index = entry.key;
-                    String stop = entry.value;
-                    return Padding(
-                      padding: EdgeInsets.symmetric(vertical: 2),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 20,
-                            height: 20,
-                            decoration: BoxDecoration(
-                              color: Colors.blue,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Center(
-                              child: Text(
-                                '${index + 1}',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
+                  SizedBox(height: 12),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey[200]!),
+                    ),
+                    child: Column(
+                      children: widget.bus.stops.asMap().entries.map((entry) {
+                        int index = entry.key;
+                        String stop = entry.value;
+                        bool isLast = index == widget.bus.stops.length - 1;
+                        return Container(
+                          decoration: BoxDecoration(
+                            border: isLast
+                                ? null
+                                : Border(
+                                    bottom: BorderSide(
+                                      color: Colors.grey[200]!,
+                                      width: 0.5,
+                                    ),
+                                  ),
+                          ),
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 24,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    color: index == 0
+                                        ? Colors.green
+                                        : index == widget.bus.stops.length - 1
+                                            ? Colors.red
+                                            : Colors.blue,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
+                                    child: Icon(
+                                      index == 0
+                                          ? Icons.trip_origin
+                                          : index == widget.bus.stops.length - 1
+                                              ? Icons.location_on
+                                              : Icons.circle,
+                                      color: Colors.white,
+                                      size: 16,
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        stop,
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.grey[800],
+                                        ),
+                                      ),
+                                      Text(
+                                        index == 0
+                                            ? 'Starting Point'
+                                            : index ==
+                                                    widget.bus.stops.length - 1
+                                                ? 'Final Destination'
+                                                : 'Stop ${index + 1}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              stop,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[800],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
+                        );
+                      }).toList(),
+                    ),
+                  ),
                 ],
               ),
             ),

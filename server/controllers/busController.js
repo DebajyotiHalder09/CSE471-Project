@@ -19,6 +19,11 @@ const searchBusByName = async (req, res) => {
       busName: { $regex: busName, $options: 'i' }
     }).toArray();
 
+    console.log('Found buses:', buses.length);
+    if (buses.length > 0) {
+      console.log('First bus data:', JSON.stringify(buses[0], null, 2));
+    }
+
     if (buses.length === 0) {
       return res.status(404).json({ 
         success: false, 
@@ -69,6 +74,11 @@ const searchBusByRoute = async (req, res) => {
         }
       ]
     }).toArray();
+
+    console.log('Found buses for route:', buses.length);
+    if (buses.length > 0) {
+      console.log('First bus data for route:', JSON.stringify(buses[0], null, 2));
+    }
 
     if (buses.length === 0) {
       return res.status(404).json({ 

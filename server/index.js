@@ -50,6 +50,12 @@ mongoose.connect(mongoUrl)
 // Routes
 app.use('/auth', require('./routes/auth'));
 app.use('/bus', require('./routes/bus'));
+app.use('/api/reviews', require('./routes/review'));
+
+// Test route to verify server is working
+app.get('/test', (req, res) => {
+  res.json({ message: 'Server is working!' });
+});
 
 const PORT = 3000;
 app.listen(PORT, () => {

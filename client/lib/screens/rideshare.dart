@@ -186,7 +186,10 @@ class _RideshareScreenState extends State<RideshareScreen> {
   }
 
   Future<void> _loadRideRequests() async {
-    for (final post in ridePosts) {
+    // Load requests for all ride posts (including user's own posts)
+    final allPosts = [...ridePosts, ...userRides];
+
+    for (final post in allPosts) {
       try {
         final response = await RideRequestService.getRideRequests(post['_id']);
         if (response['success']) {
@@ -210,6 +213,9 @@ class _RideshareScreenState extends State<RideshareScreen> {
         setState(() {
           userRides = List<Map<String, dynamic>>.from(response['data']);
         });
+
+        // Load ride requests for user's own posts
+        await _loadRideRequests();
       }
     } catch (e) {
       print('Error loading user rides: $e');
@@ -454,6 +460,7 @@ class _RideshareScreenState extends State<RideshareScreen> {
         destinationController.clear();
         await _loadRidePosts();
         await _loadUserRides();
+        await _loadRideRequests();
         // Refresh filtered results (this will automatically exclude the new post from search results)
         _applySearchAndFilter();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -479,6 +486,7 @@ class _RideshareScreenState extends State<RideshareScreen> {
       if (response['success']) {
         await _loadRidePosts();
         await _loadUserRides();
+        await _loadRideRequests();
         // Refresh filtered results (this will automatically update the search results)
         _applySearchAndFilter();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1023,6 +1031,164 @@ class _RideshareScreenState extends State<RideshareScreen> {
                                                                 : FontWeight
                                                                     .normal,
                                                           ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ))
+                                              .toList(),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+
+                                  // Show pending requests for user's own posts in Your Ride section
+                                  if (isOwnPost &&
+                                      rideRequests[post['_id']] != null &&
+                                      rideRequests[post['_id']]!.any((req) =>
+                                          req['status'] == 'pending')) ...[
+                                    SizedBox(height: 12),
+                                    Container(
+                                      padding: EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange[50],
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                            color: Colors.orange[200]!),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Pending Requests:',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.orange[700],
+                                            ),
+                                          ),
+                                          SizedBox(height: 8),
+                                          ...rideRequests[post['_id']]!
+                                              .where((req) =>
+                                                  req['status'] == 'pending')
+                                              .map<Widget>((request) => Padding(
+                                                    padding: EdgeInsets.only(
+                                                        bottom: 8),
+                                                    child: Row(
+                                                      children: [
+                                                        Expanded(
+                                                          child: Column(
+                                                            crossAxisAlignment:
+                                                                CrossAxisAlignment
+                                                                    .start,
+                                                            children: [
+                                                              Text(
+                                                                '${request['requesterName']} (${request['requesterGender']})',
+                                                                style:
+                                                                    TextStyle(
+                                                                  fontSize: 13,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                  color: Colors
+                                                                          .orange[
+                                                                      700],
+                                                                ),
+                                                              ),
+                                                              Text(
+                                                                'Requested ${_formatDate(DateTime.parse(request['createdAt']))}',
+                                                                style:
+                                                                    TextStyle(
+                                                                  fontSize: 11,
+                                                                  color: Colors
+                                                                          .orange[
+                                                                      600],
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                        Row(
+                                                          children: [
+                                                            ElevatedButton(
+                                                              onPressed: () =>
+                                                                  _acceptRideRequest(
+                                                                      request[
+                                                                          '_id'],
+                                                                      post[
+                                                                          '_id']),
+                                                              style:
+                                                                  ElevatedButton
+                                                                      .styleFrom(
+                                                                backgroundColor:
+                                                                    Colors
+                                                                        .green,
+                                                                padding: EdgeInsets
+                                                                    .symmetric(
+                                                                        horizontal:
+                                                                            8,
+                                                                        vertical:
+                                                                            4),
+                                                                shape:
+                                                                    RoundedRectangleBorder(
+                                                                  borderRadius:
+                                                                      BorderRadius
+                                                                          .circular(
+                                                                              4),
+                                                                ),
+                                                              ),
+                                                              child: Text(
+                                                                'Accept',
+                                                                style:
+                                                                    TextStyle(
+                                                                  color: Colors
+                                                                      .white,
+                                                                  fontSize: 11,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                            SizedBox(width: 8),
+                                                            ElevatedButton(
+                                                              onPressed: () =>
+                                                                  _rejectRideRequest(
+                                                                      request[
+                                                                          '_id']),
+                                                              style:
+                                                                  ElevatedButton
+                                                                      .styleFrom(
+                                                                backgroundColor:
+                                                                    Colors.red,
+                                                                padding: EdgeInsets
+                                                                    .symmetric(
+                                                                        horizontal:
+                                                                            8,
+                                                                        vertical:
+                                                                            4),
+                                                                shape:
+                                                                    RoundedRectangleBorder(
+                                                                  borderRadius:
+                                                                      BorderRadius
+                                                                          .circular(
+                                                                              4),
+                                                                ),
+                                                              ),
+                                                              child: Text(
+                                                                'Reject',
+                                                                style:
+                                                                    TextStyle(
+                                                                  color: Colors
+                                                                      .white,
+                                                                  fontSize: 11,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ],
                                                         ),
                                                       ],
                                                     ),

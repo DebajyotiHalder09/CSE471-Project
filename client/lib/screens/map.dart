@@ -36,6 +36,13 @@ class _MapScreenState extends State<MapScreen> {
   String? _currentUserId;
   Map<String, bool> _favoriteStatus = {};
 
+  // Search suggestions
+  List<Map<String, dynamic>> _sourceSuggestions = [];
+  List<Map<String, dynamic>> _destinationSuggestions = [];
+  bool _showSourceSuggestions = false;
+  bool _showDestinationSuggestions = false;
+  List<String> _allBusStops = [];
+
   // Dhaka City boundaries
   static const LatLng dhakaCenter = LatLng(23.8103, 90.4125);
   static const double dhakaMinLat = 23.6;
@@ -48,6 +55,11 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     _initializeMap();
     _getCurrentUserId();
+    _loadAllBusStops();
+
+    // Add listeners for search suggestions
+    _sourceController.addListener(() => _onSourceChanged());
+    _destinationController.addListener(() => _onDestinationChanged());
   }
 
   void _initializeMap() {
@@ -107,12 +119,203 @@ class _MapScreenState extends State<MapScreen> {
     return sortedBuses;
   }
 
+  Future<void> _loadAllBusStops() async {
+    try {
+      final uri = Uri.parse('${AuthService.baseUrl}/bus/all');
+      final response = await http.get(uri);
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        final List<dynamic> buses = data['data'] as List<dynamic>? ?? [];
+
+        final Set<String> uniqueStops = <String>{};
+        for (final bus in buses) {
+          final List<dynamic> stops = bus['stops'] as List<dynamic>? ?? [];
+          for (final stop in stops) {
+            uniqueStops.add(stop.toString().toLowerCase().trim());
+          }
+        }
+
+        setState(() {
+          _allBusStops = uniqueStops.toList();
+        });
+      }
+    } catch (e) {
+      print('Error loading bus stops: $e');
+    }
+  }
+
+  void _onSourceChanged() {
+    if (_sourceController.text.isEmpty) {
+      setState(() {
+        _sourceSuggestions = [];
+        _showSourceSuggestions = false;
+      });
+      return;
+    }
+    _getSearchSuggestions(_sourceController.text, true);
+  }
+
+  void _onDestinationChanged() {
+    if (_destinationController.text.isEmpty) {
+      setState(() {
+        _destinationSuggestions = [];
+        _showDestinationSuggestions = false;
+      });
+      return;
+    }
+    _getSearchSuggestions(_destinationController.text, false);
+  }
+
+  Future<void> _getSearchSuggestions(String query, bool isSource) async {
+    if (query.trim().isEmpty) return;
+
+    final suggestions = <Map<String, dynamic>>{};
+
+    // First, check for exact matches in bus stops
+    for (final stop in _allBusStops) {
+      if (stop.contains(query.toLowerCase())) {
+        suggestions.add({
+          'name': stop,
+          'type': 'bus_stop',
+          'isExactMatch': true,
+        });
+      }
+    }
+
+    // Then get location suggestions from OpenStreetMap
+    try {
+      String searchQuery = query.trim();
+      if (!searchQuery.toLowerCase().contains('dhaka')) {
+        searchQuery = '$searchQuery, Dhaka, Bangladesh';
+      }
+
+      final url = Uri.parse(
+          'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(searchQuery)}&format=json&limit=10&viewbox=$dhakaMinLng,$dhakaMaxLat,$dhakaMaxLng,$dhakaMinLat&bounded=1');
+
+      final response =
+          await http.get(url, headers: {'User-Agent': 'flutter_map_app'});
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body) as List<dynamic>;
+
+        for (final item in data) {
+          final lat = double.parse(item['lat']);
+          final lon = double.parse(item['lon']);
+
+          // Check if within Dhaka boundaries
+          if (lat >= dhakaMinLat &&
+              lat <= dhakaMaxLat &&
+              lon >= dhakaMinLng &&
+              lon <= dhakaMaxLng) {
+            final displayName = item['display_name'] as String;
+            final name = item['name'] as String;
+
+            // Check if any part of the suggestion matches bus stops
+            bool hasBusStopMatch = false;
+            String matchedBusStop = '';
+
+            for (final stop in _allBusStops) {
+              if (displayName.toLowerCase().contains(stop) ||
+                  name.toLowerCase().contains(stop)) {
+                hasBusStopMatch = true;
+                matchedBusStop = stop;
+                break;
+              }
+            }
+
+            suggestions.add({
+              'name': displayName,
+              'lat': lat,
+              'lon': lon,
+              'type': 'location',
+              'hasBusStopMatch': hasBusStopMatch,
+              'matchedBusStop': matchedBusStop,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      print('Error getting location suggestions: $e');
+    }
+
+    // Sort suggestions: exact bus stop matches first, then bus stop matches, then locations
+    final sortedSuggestions = suggestions.toList();
+    sortedSuggestions.sort((a, b) {
+      if (a['type'] == 'bus_stop' && b['type'] != 'bus_stop') return -1;
+      if (a['type'] != 'bus_stop' && b['type'] == 'bus_stop') return 1;
+      if (a['isExactMatch'] == true && b['isExactMatch'] != true) return -1;
+      if (a['isExactMatch'] != true && b['isExactMatch'] == true) return 1;
+      if (a['hasBusStopMatch'] == true && b['hasBusStopMatch'] != true)
+        return -1;
+      if (a['hasBusStopMatch'] != true && b['hasBusStopMatch'] == true)
+        return 1;
+      return 0;
+    });
+
+    setState(() {
+      if (isSource) {
+        _sourceSuggestions = sortedSuggestions.take(8).toList();
+        _showSourceSuggestions = _sourceSuggestions.isNotEmpty;
+      } else {
+        _destinationSuggestions = sortedSuggestions.take(8).toList();
+        _showDestinationSuggestions = _destinationSuggestions.isNotEmpty;
+      }
+    });
+  }
+
+  void _selectSourceSuggestion(Map<String, dynamic> suggestion) {
+    if (suggestion['type'] == 'bus_stop') {
+      _sourceController.text = suggestion['name'];
+      _searchSource();
+    } else if (suggestion['type'] == 'location') {
+      _sourceController.text = suggestion['name'];
+      _sourcePoint = LatLng(suggestion['lat'], suggestion['lon']);
+      if (_mapController != null && _mapReady) {
+        _mapController!.move(_sourcePoint!, 15.0);
+      }
+      _updateRoute();
+    }
+
+    setState(() {
+      _showSourceSuggestions = false;
+      _sourceSuggestions = [];
+    });
+  }
+
+  void _selectDestinationSuggestion(Map<String, dynamic> suggestion) {
+    if (suggestion['type'] == 'bus_stop') {
+      _destinationController.text = suggestion['name'];
+      _searchDestination();
+    } else if (suggestion['type'] == 'location') {
+      _destinationController.text = suggestion['name'];
+      _destinationPoint = LatLng(suggestion['lat'], suggestion['lon']);
+      if (_mapController != null && _mapReady) {
+        _mapController!.move(_destinationPoint!, 15.0);
+      }
+      _updateRoute();
+    }
+
+    setState(() {
+      _showDestinationSuggestions = false;
+      _destinationSuggestions = [];
+    });
+  }
+
   @override
   void dispose() {
     _mapController?.dispose();
     _sourceController.dispose();
     _destinationController.dispose();
     super.dispose();
+  }
+
+  void _hideAllSuggestions() {
+    setState(() {
+      _showSourceSuggestions = false;
+      _showDestinationSuggestions = false;
+      _sourceSuggestions = [];
+      _destinationSuggestions = [];
+    });
   }
 
   Future<LatLng?> _getCoordinates(String query) async {
@@ -488,6 +691,10 @@ class _MapScreenState extends State<MapScreen> {
       _routePoints = [];
       _sourceController.clear();
       _destinationController.clear();
+      _showSourceSuggestions = false;
+      _showDestinationSuggestions = false;
+      _sourceSuggestions = [];
+      _destinationSuggestions = [];
     });
     if (_mapController != null && _mapReady) {
       _mapController!.move(dhakaCenter, _currentZoom);
@@ -582,53 +789,198 @@ class _MapScreenState extends State<MapScreen> {
             top: 40,
             left: 16,
             right: 16,
-            child: Column(
-              children: [
-                // Source field
-                TextField(
-                  controller: _sourceController,
-                  decoration: InputDecoration(
-                    hintText: "Enter source location",
-                    filled: true,
-                    fillColor: Colors.white,
-                    prefixIcon:
-                        const Icon(Icons.location_on, color: Colors.green),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.search),
-                      onPressed: _searchSource,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+            child: GestureDetector(
+              onTap: _hideAllSuggestions,
+              child: Column(
+                children: [
+                  // Source field
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: _sourceController,
+                        decoration: InputDecoration(
+                          hintText: "Enter source location",
+                          filled: true,
+                          fillColor: Colors.white,
+                          prefixIcon: const Icon(Icons.location_on,
+                              color: Colors.green),
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.search),
+                            onPressed: _searchSource,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                        ),
+                        onSubmitted: (_) => _searchSource(),
+                      ),
+                      if (_showSourceSuggestions &&
+                          _sourceSuggestions.isNotEmpty)
+                        Container(
+                          margin: const EdgeInsets.only(top: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: _sourceSuggestions.length,
+                            itemBuilder: (context, index) {
+                              final suggestion = _sourceSuggestions[index];
+                              final isBusStop =
+                                  suggestion['type'] == 'bus_stop';
+                              final hasBusStopMatch =
+                                  suggestion['hasBusStopMatch'] == true;
+
+                              return ListTile(
+                                dense: true,
+                                leading: Icon(
+                                  isBusStop
+                                      ? Icons.directions_bus
+                                      : Icons.location_on,
+                                  color: isBusStop
+                                      ? Colors.blue
+                                      : hasBusStopMatch
+                                          ? Colors.orange
+                                          : Colors.grey,
+                                  size: 20,
+                                ),
+                                title: Text(
+                                  suggestion['name'],
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: isBusStop || hasBusStopMatch
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: isBusStop
+                                    ? null
+                                    : hasBusStopMatch
+                                        ? Text(
+                                            'Near bus stop: ${suggestion['matchedBusStop']}',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.orange[700],
+                                            ),
+                                          )
+                                        : null,
+                                onTap: () =>
+                                    _selectSourceSuggestion(suggestion),
+                              );
+                            },
+                          ),
+                        ),
+                    ],
                   ),
-                  onSubmitted: (_) => _searchSource(),
-                ),
-                const SizedBox(height: 8),
-                // Destination field
-                TextField(
-                  controller: _destinationController,
-                  decoration: InputDecoration(
-                    hintText: "Enter destination location",
-                    filled: true,
-                    fillColor: Colors.white,
-                    prefixIcon: const Icon(Icons.flag, color: Colors.red),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.search),
-                      onPressed: _searchDestination,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                  const SizedBox(height: 8),
+                  // Destination field
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: _destinationController,
+                        decoration: InputDecoration(
+                          hintText: "Enter destination location",
+                          filled: true,
+                          fillColor: Colors.white,
+                          prefixIcon: const Icon(Icons.flag, color: Colors.red),
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.search),
+                            onPressed: _searchDestination,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                        ),
+                        onSubmitted: (_) => _searchDestination(),
+                      ),
+                      if (_showDestinationSuggestions &&
+                          _destinationSuggestions.isNotEmpty)
+                        Container(
+                          margin: const EdgeInsets.only(top: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: _destinationSuggestions.length,
+                            itemBuilder: (context, index) {
+                              final suggestion = _destinationSuggestions[index];
+                              final isBusStop =
+                                  suggestion['type'] == 'bus_stop';
+                              final hasBusStopMatch =
+                                  suggestion['hasBusStopMatch'] == true;
+
+                              return ListTile(
+                                dense: true,
+                                leading: Icon(
+                                  isBusStop
+                                      ? Icons.directions_bus
+                                      : Icons.location_on,
+                                  color: isBusStop
+                                      ? Colors.blue
+                                      : hasBusStopMatch
+                                          ? Colors.orange
+                                          : Colors.grey,
+                                  size: 20,
+                                ),
+                                title: Text(
+                                  suggestion['name'],
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: isBusStop || hasBusStopMatch
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: isBusStop
+                                    ? null
+                                    : hasBusStopMatch
+                                        ? Text(
+                                            'Near bus stop: ${suggestion['matchedBusStop']}',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.orange[700],
+                                            ),
+                                          )
+                                        : null,
+                                onTap: () =>
+                                    _selectDestinationSuggestion(suggestion),
+                              );
+                            },
+                          ),
+                        ),
+                    ],
                   ),
-                  onSubmitted: (_) => _searchDestination(),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
 

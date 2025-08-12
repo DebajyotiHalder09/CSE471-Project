@@ -12,7 +12,7 @@ const userSchema = new mongoose.Schema({
   },
   gender: {
     type: String,
-    required: true,
+    required: false,
   },
   role: {
     type: String,
@@ -26,4 +26,10 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-module.exports = mongoose.model('User', userSchema);
+const User = mongoose.model('users', userSchema);
+
+// Add some debugging to see what collection is being used
+console.log('User model created with collection name:', User.collection.name);
+console.log('User model database:', User.db.name);
+
+module.exports = User;

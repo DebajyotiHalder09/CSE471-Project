@@ -56,10 +56,19 @@ class AuthService {
   // Get auth headers with token
   static Future<Map<String, String>> getAuthHeaders() async {
     final token = await getToken();
-    return {
+    print('Getting auth headers - Token: ${token != null ? 'Present' : 'Missing'}');
+    if (token != null) {
+      print('Token length: ${token.length}');
+      print('Token preview: ${token.substring(0, token.length > 20 ? 20 : token.length)}...');
+    }
+    
+    final headers = {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
     };
+    
+    print('Final headers: $headers');
+    return headers;
   }
 
   Future<Map<String, dynamic>> login(String email, String password) async {
@@ -75,21 +84,23 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
-        
+
         // Store token and user data
         await storeToken(responseData['token']);
         await storeUser(User.fromJson(responseData['user']));
-        
+
         return responseData;
       } else {
-        throw Exception(jsonDecode(response.body)['error'] ?? 'Failed to login');
+        throw Exception(
+            jsonDecode(response.body)['error'] ?? 'Failed to login');
       }
     } catch (e) {
       throw Exception('Connection error: $e');
     }
   }
 
-  Future<void> signup(String name, String email, String gender, String role, String password) async {
+  Future<void> signup(String name, String email, String gender, String role,
+      String password) async {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/signup'),
       headers: {'Content-Type': 'application/json'},
@@ -124,5 +135,55 @@ class AuthService {
   // Logout
   Future<void> logout() async {
     await clearStoredData();
+  }
+
+  // Update user profile
+  Future<void> updateProfile(Map<String, dynamic> updateData) async {
+    try {
+      final headers = await getAuthHeaders();
+      print('Sending profile update request to: $baseUrl/auth/profile');
+      print('Headers: $headers');
+      print('Update data: $updateData');
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/auth/profile'),
+        headers: headers,
+        body: jsonEncode(updateData),
+      );
+
+      print('Response status: ${response.statusCode}');
+      print('Response body: ${response.body}');
+
+      if (response.statusCode != 200) {
+        final errorData = jsonDecode(response.body);
+        throw Exception(errorData['error'] ?? 'Failed to update profile');
+      }
+    } catch (e) {
+      print('Profile update error: $e');
+      throw Exception('Failed to update profile: $e');
+    }
+  }
+
+  // Update user password
+  Future<void> updatePassword(
+      String currentPassword, String newPassword) async {
+    try {
+      final headers = await getAuthHeaders();
+      final response = await http.put(
+        Uri.parse('$baseUrl/auth/password'),
+        headers: headers,
+        body: jsonEncode({
+          'currentPassword': currentPassword,
+          'newPassword': newPassword,
+        }),
+      );
+
+      if (response.statusCode != 200) {
+        final errorData = jsonDecode(response.body);
+        throw Exception(errorData['error'] ?? 'Failed to update password');
+      }
+    } catch (e) {
+      throw Exception('Failed to update password: $e');
+    }
   }
 }

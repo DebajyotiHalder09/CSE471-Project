@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../models/user.dart';
+import 'pinfo.dart';
 
 class ProfileScreen extends StatefulWidget {
   static const routeName = '/profile';
@@ -90,27 +91,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               color: Colors.black87,
                             ),
                           ),
-                          SizedBox(height: 8),
-                          Text(
-                            _currentUser?.email ?? 'user@example.com',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Role: ${_currentUser?.role ?? 'User'}',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[500],
-                            ),
-                          ),
                         ],
                       ),
                     ),
                     SizedBox(height: 32),
-                    _buildProfileItem(Icons.person, 'Personal Information'),
+                    _buildProfileItem(Icons.person, 'Personal Information', onTap: () {
+                      print('Navigating to personal info page');
+                      try {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => PersonalInfoScreen(),
+                          ),
+                        );
+                      } catch (e) {
+                        print('Navigation error: $e');
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Navigation failed: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }),
                     _buildProfileItem(Icons.history, 'Trip History'),
                     _buildProfileItem(Icons.favorite, 'Favorites'),
                     _buildProfileItem(Icons.settings, 'Settings'),

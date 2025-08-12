@@ -23,9 +23,29 @@ app.use(cors());
 app.use(express.json());
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGO_URL)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch((err) => console.error('MongoDB connection error:', err));
+const mongoUrl = process.env.MONGO_URL;
+console.log('Attempting to connect to MongoDB...');
+console.log('MongoDB URL:', mongoUrl);
+
+mongoose.connect(mongoUrl)
+  .then(() => {
+    console.log('Connected to MongoDB successfully!');
+    console.log('Database name:', mongoose.connection.db.databaseName);
+    console.log('Connection state:', mongoose.connection.readyState);
+    
+    // List all collections in the database
+    mongoose.connection.db.listCollections().toArray((err, collections) => {
+      if (err) {
+        console.error('Error listing collections:', err);
+      } else {
+        console.log('Available collections:', collections.map(c => c.name));
+      }
+    });
+  })
+  .catch((err) => {
+    console.error('MongoDB connection error:', err);
+    console.error('MongoDB URL used:', mongoUrl);
+  });
 
 // Routes
 app.use('/auth', require('./routes/auth'));

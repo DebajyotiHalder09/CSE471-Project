@@ -51,6 +51,7 @@ mongoose.connect(mongoUrl)
 app.use('/auth', require('./routes/auth'));
 app.use('/bus', require('./routes/bus'));
 app.use('/api/reviews', require('./routes/review'));
+app.use('/api/rideshare', require('./routes/rideshare'));
 
 // Test route to verify server is working
 app.get('/test', (req, res) => {

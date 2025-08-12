@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../services/auth_service.dart';
 import '../models/bus.dart';
 import 'nav.dart';
+import 'rideshare.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key, this.onOpenRideshare});
@@ -309,16 +310,14 @@ class _MapScreenState extends State<MapScreen> {
                       ElevatedButton(
                         onPressed: () {
                           Navigator.of(context).maybePop();
-                          if (widget.onOpenRideshare != null) {
-                            widget.onOpenRideshare!();
-                          } else {
-                            Navigator.of(context).pushReplacement(
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    const NavScreen(initialIndex: 2),
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => RideshareScreen(
+                                source: _sourceController.text.trim(),
+                                destination: _destinationController.text.trim(),
                               ),
-                            );
-                          }
+                            ),
+                          );
                         },
                         child: const Text('RideShare'),
                       )

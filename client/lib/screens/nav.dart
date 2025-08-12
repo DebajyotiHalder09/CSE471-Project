@@ -8,8 +8,10 @@ import '../models/user.dart';
 class NavScreen extends StatefulWidget {
   static const routeName = '/nav';
 
-  const NavScreen({super.key});
-  
+  const NavScreen({super.key, this.initialIndex = 0});
+
+  final int initialIndex;
+
   @override
   _NavScreenState createState() => _NavScreenState();
 }
@@ -18,17 +20,25 @@ class _NavScreenState extends State<NavScreen> {
   int _currentIndex = 0;
   User? _currentUser;
   bool _isLoading = true;
-  
-  final List<Widget> _screens = [
-    MapScreen(),
-    BusScreen(),
-    RideshareScreen(),
-  ];
+
+  late final List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    _currentIndex = widget.initialIndex;
+    _screens = [
+      MapScreen(
+        onOpenRideshare: () {
+          setState(() {
+            _currentIndex = 2;
+          });
+        },
+      ),
+      BusScreen(),
+      RideshareScreen(),
+    ];
   }
 
   Future<void> _loadUserData() async {
@@ -78,7 +88,7 @@ class _NavScreenState extends State<NavScreen> {
                         color: Colors.blue[700],
                       ),
                     ),
-                    
+
                     // Circular avatar on the right
                     GestureDetector(
                       onTap: () {
@@ -93,7 +103,8 @@ class _NavScreenState extends State<NavScreen> {
                                 height: 16,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.blue[700]!),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.blue[700]!),
                                 ),
                               )
                             : Text(
@@ -110,7 +121,7 @@ class _NavScreenState extends State<NavScreen> {
                 ),
               ),
             ),
-            
+
             // Main content area
             Expanded(
               child: _screens[_currentIndex],

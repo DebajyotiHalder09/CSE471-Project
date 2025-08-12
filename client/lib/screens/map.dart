@@ -3,9 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
+import '../services/auth_service.dart';
+import '../models/bus.dart';
+import 'nav.dart';
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  const MapScreen({super.key, this.onOpenRideshare});
+
+  final VoidCallback? onOpenRideshare;
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -23,6 +28,9 @@ class _MapScreenState extends State<MapScreen> {
   List<LatLng> _routePoints = [];
   final double _currentZoom = 13.0;
   bool _isLoading = false;
+  bool _busesLoading = false;
+  List<Bus> _availableBuses = [];
+  String? _busesError;
 
   // Dhaka City boundaries
   static const LatLng dhakaCenter = LatLng(23.8103, 90.4125);
@@ -71,19 +79,20 @@ class _MapScreenState extends State<MapScreen> {
         'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(searchQuery)}&format=json&limit=5&viewbox=$dhakaMinLng,$dhakaMaxLat,$dhakaMaxLng,$dhakaMinLat&bounded=1');
 
     try {
-      final response = await http.get(url, headers: {
-        'User-Agent': 'flutter_map_app'
-      });
+      final response =
+          await http.get(url, headers: {'User-Agent': 'flutter_map_app'});
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data.isNotEmpty) {
           final lat = double.parse(data[0]['lat']);
           final lon = double.parse(data[0]['lon']);
-          
+
           // Check if the result is within Dhaka City boundaries
-          if (lat >= dhakaMinLat && lat <= dhakaMaxLat && 
-              lon >= dhakaMinLng && lon <= dhakaMaxLng) {
+          if (lat >= dhakaMinLat &&
+              lat <= dhakaMaxLat &&
+              lon >= dhakaMinLng &&
+              lon <= dhakaMaxLng) {
             return LatLng(lat, lon);
           }
         }
@@ -102,7 +111,7 @@ class _MapScreenState extends State<MapScreen> {
     });
 
     final coordinates = await _getCoordinates(_sourceController.text);
-    
+
     setState(() {
       _isLoading = false;
       if (coordinates != null) {
@@ -113,7 +122,9 @@ class _MapScreenState extends State<MapScreen> {
         _updateRoute();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Could not find source location: ${_sourceController.text}")),
+          SnackBar(
+              content: Text(
+                  "Could not find source location: ${_sourceController.text}")),
         );
       }
     });
@@ -127,7 +138,7 @@ class _MapScreenState extends State<MapScreen> {
     });
 
     final coordinates = await _getCoordinates(_destinationController.text);
-    
+
     setState(() {
       _isLoading = false;
       if (coordinates != null) {
@@ -138,7 +149,9 @@ class _MapScreenState extends State<MapScreen> {
         _updateRoute();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Could not find destination location: ${_destinationController.text}")),
+          SnackBar(
+              content: Text(
+                  "Could not find destination location: ${_destinationController.text}")),
         );
       }
     });
@@ -163,7 +176,7 @@ class _MapScreenState extends State<MapScreen> {
         if (data['routes'] != null && data['routes'].isNotEmpty) {
           final route = data['routes'][0];
           final geometry = route['geometry'];
-          
+
           if (geometry['coordinates'] != null) {
             final coordinates = geometry['coordinates'] as List;
             final routePoints = coordinates.map((coord) {
@@ -197,6 +210,152 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       _isLoading = false;
     });
+
+    await _fetchAvailableBuses();
+    if (mounted) {
+      _showResultsSheet();
+    }
+  }
+
+  Future<void> _fetchAvailableBuses() async {
+    final startLocation = _sourceController.text.trim();
+    final endLocation = _destinationController.text.trim();
+    if (startLocation.isEmpty || endLocation.isEmpty) {
+      setState(() {
+        _availableBuses = [];
+        _busesError = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _busesLoading = true;
+      _busesError = null;
+      _availableBuses = [];
+    });
+
+    try {
+      final uri = Uri.parse(
+          '${AuthService.baseUrl}/bus/search-by-route?startLocation=${Uri.encodeComponent(startLocation)}&endLocation=${Uri.encodeComponent(endLocation)}');
+      final response = await http.get(uri);
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        final List<dynamic> list = data['data'] as List<dynamic>? ?? [];
+        final buses =
+            list.map((e) => Bus.fromJson(e as Map<String, dynamic>)).toList();
+        setState(() {
+          _availableBuses = buses;
+          _busesLoading = false;
+          _busesError = null;
+        });
+      } else if (response.statusCode == 404) {
+        setState(() {
+          _availableBuses = [];
+          _busesLoading = false;
+          _busesError = null;
+        });
+      } else {
+        setState(() {
+          _availableBuses = [];
+          _busesLoading = false;
+          _busesError = 'Failed to load buses';
+        });
+      }
+    } catch (_) {
+      setState(() {
+        _availableBuses = [];
+        _busesLoading = false;
+        _busesError = 'Failed to load buses';
+      });
+    }
+  }
+
+  void _showResultsSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.35,
+          minChildSize: 0.25,
+          maxChildSize: 0.8,
+          expand: false,
+          builder: (context, scrollController) {
+            return Column(
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(top: 12, bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade400,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Available Bus',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).maybePop();
+                          if (widget.onOpenRideshare != null) {
+                            widget.onOpenRideshare!();
+                          } else {
+                            Navigator.of(context).pushReplacement(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    const NavScreen(initialIndex: 2),
+                              ),
+                            );
+                          }
+                        },
+                        child: const Text('RideShare'),
+                      )
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: _busesLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _busesError != null
+                          ? Center(child: Text(_busesError!))
+                          : _availableBuses.isEmpty
+                              ? const Center(child: Text('No bus available'))
+                              : ListView.separated(
+                                  controller: scrollController,
+                                  itemCount: _availableBuses.length,
+                                  separatorBuilder: (_, __) =>
+                                      const Divider(height: 1),
+                                  itemBuilder: (context, index) {
+                                    final bus = _availableBuses[index];
+                                    return ListTile(
+                                      leading: const Icon(Icons.directions_bus,
+                                          color: Colors.blue),
+                                      title: Text(bus.busName),
+                                      subtitle:
+                                          Text('${bus.stops.length} stops'),
+                                    );
+                                  },
+                                ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   void _fitMapToRoute() {
@@ -227,7 +386,7 @@ class _MapScreenState extends State<MapScreen> {
     final latDiff = maxLat - minLat;
     final lngDiff = maxLng - minLng;
     final maxDiff = latDiff > lngDiff ? latDiff : lngDiff;
-    
+
     double zoom = 13.0;
     if (maxDiff > 0.1) {
       zoom = 10.0;
@@ -314,7 +473,8 @@ class _MapScreenState extends State<MapScreen> {
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 2),
                         ),
-                        child: const Icon(Icons.location_on, color: Colors.white, size: 30),
+                        child: const Icon(Icons.location_on,
+                            color: Colors.white, size: 30),
                       ),
                     ),
                   if (_destinationPoint != null)
@@ -328,7 +488,8 @@ class _MapScreenState extends State<MapScreen> {
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 2),
                         ),
-                        child: const Icon(Icons.flag, color: Colors.white, size: 30),
+                        child: const Icon(Icons.flag,
+                            color: Colors.white, size: 30),
                       ),
                     ),
                 ],
@@ -350,7 +511,8 @@ class _MapScreenState extends State<MapScreen> {
                     hintText: "Enter source location",
                     filled: true,
                     fillColor: Colors.white,
-                    prefixIcon: const Icon(Icons.location_on, color: Colors.green),
+                    prefixIcon:
+                        const Icon(Icons.location_on, color: Colors.green),
                     suffixIcon: IconButton(
                       icon: const Icon(Icons.search),
                       onPressed: _searchSource,
@@ -359,7 +521,8 @@ class _MapScreenState extends State<MapScreen> {
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
                     ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
                   ),
                   onSubmitted: (_) => _searchSource(),
                 ),
@@ -380,7 +543,8 @@ class _MapScreenState extends State<MapScreen> {
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
                     ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
                   ),
                   onSubmitted: (_) => _searchDestination(),
                 ),

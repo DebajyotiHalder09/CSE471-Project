@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import '../services/auth_service.dart';
+import '../services/fav_bus_service.dart';
 import '../models/bus.dart';
 import 'nav.dart';
 import 'rideshare.dart';
@@ -32,6 +33,8 @@ class _MapScreenState extends State<MapScreen> {
   bool _busesLoading = false;
   List<Bus> _availableBuses = [];
   String? _busesError;
+  String? _currentUserId;
+  Map<String, bool> _favoriteStatus = {};
 
   // Dhaka City boundaries
   static const LatLng dhakaCenter = LatLng(23.8103, 90.4125);
@@ -44,6 +47,7 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     _initializeMap();
+    _getCurrentUserId();
   }
 
   void _initializeMap() {
@@ -57,6 +61,50 @@ class _MapScreenState extends State<MapScreen> {
         _mapController!.move(dhakaCenter, _currentZoom);
       }
     });
+  }
+
+  Future<void> _getCurrentUserId() async {
+    final user = await AuthService.getUser();
+    if (user != null) {
+      setState(() {
+        _currentUserId = user.id;
+      });
+    }
+  }
+
+  Future<void> _loadFavoriteStatuses() async {
+    if (_currentUserId == null) return;
+
+    for (final bus in _availableBuses) {
+      try {
+        final response = await FavBusService.checkIfFavorited(
+          userId: _currentUserId!,
+          busId: bus.id,
+        );
+        if (response['success']) {
+          setState(() {
+            _favoriteStatus[bus.id] = response['isFavorited'];
+          });
+        }
+      } catch (e) {
+        setState(() {
+          _favoriteStatus[bus.id] = false;
+        });
+      }
+    }
+  }
+
+  List<Bus> _getSortedBuses() {
+    final sortedBuses = List<Bus>.from(_availableBuses);
+    sortedBuses.sort((a, b) {
+      final aFavorited = _favoriteStatus[a.id] ?? false;
+      final bFavorited = _favoriteStatus[b.id] ?? false;
+
+      if (aFavorited && !bFavorited) return -1;
+      if (!aFavorited && bFavorited) return 1;
+      return 0;
+    });
+    return sortedBuses;
   }
 
   @override
@@ -225,6 +273,7 @@ class _MapScreenState extends State<MapScreen> {
       setState(() {
         _availableBuses = [];
         _busesError = null;
+        _favoriteStatus.clear();
       });
       return;
     }
@@ -233,6 +282,7 @@ class _MapScreenState extends State<MapScreen> {
       _busesLoading = true;
       _busesError = null;
       _availableBuses = [];
+      _favoriteStatus.clear();
     });
 
     try {
@@ -249,6 +299,7 @@ class _MapScreenState extends State<MapScreen> {
           _busesLoading = false;
           _busesError = null;
         });
+        await _loadFavoriteStatuses();
       } else if (response.statusCode == 404) {
         setState(() {
           _availableBuses = [];
@@ -350,15 +401,29 @@ class _MapScreenState extends State<MapScreen> {
                               ? const Center(child: Text('No bus available'))
                               : ListView.separated(
                                   controller: scrollController,
-                                  itemCount: _availableBuses.length,
+                                  itemCount: _getSortedBuses().length,
                                   separatorBuilder: (_, __) =>
                                       const Divider(height: 1),
                                   itemBuilder: (context, index) {
-                                    final bus = _availableBuses[index];
+                                    final bus = _getSortedBuses()[index];
+                                    final isFavorited =
+                                        _favoriteStatus[bus.id] ?? false;
                                     return ListTile(
-                                      leading: const Icon(Icons.directions_bus,
-                                          color: Colors.blue),
-                                      title: Text(bus.busName),
+                                      leading: Icon(
+                                        Icons.directions_bus,
+                                        color: Colors.blue,
+                                      ),
+                                      title: Row(
+                                        children: [
+                                          Expanded(child: Text(bus.busName)),
+                                          if (isFavorited)
+                                            Icon(
+                                              Icons.favorite,
+                                              color: Colors.red,
+                                              size: 16,
+                                            ),
+                                        ],
+                                      ),
                                       subtitle:
                                           Text('${bus.stops.length} stops'),
                                     );

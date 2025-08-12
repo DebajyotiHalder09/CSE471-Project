@@ -55,12 +55,39 @@ class RideshareService {
         final data = json.decode(response.body);
         return {
           'success': true,
-          'data': data['ridePosts'],
+          'data': data['data'],
         };
       } else {
         return {
           'success': false,
           'message': 'Failed to fetch ride posts: ${response.statusCode}',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': e.toString(),
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> getUserRides(String userId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/rideshare/user/$userId'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return {
+          'success': true,
+          'data': data['data'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': 'Failed to fetch user rides: ${response.statusCode}',
         };
       }
     } catch (e) {

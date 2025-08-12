@@ -21,25 +21,32 @@ class _NavScreenState extends State<NavScreen> {
   User? _currentUser;
   bool _isLoading = true;
 
-  late final List<Widget> _screens;
+  String? _rideSource;
+  String? _rideDestination;
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
     _currentIndex = widget.initialIndex;
-    _screens = [
-      MapScreen(
-        onOpenRideshare: () {
-          setState(() {
-            _currentIndex = 2;
-          });
-        },
-      ),
-      BusScreen(),
-      RideshareScreen(),
-    ];
   }
+
+  List<Widget> get _screens => [
+        MapScreen(
+          onOpenRideshare: (source, destination) {
+            setState(() {
+              _rideSource = source;
+              _rideDestination = destination;
+              _currentIndex = 2;
+            });
+          },
+        ),
+        BusScreen(),
+        RideshareScreen(
+          source: _rideSource,
+          destination: _rideDestination,
+        ),
+      ];
 
   Future<void> _loadUserData() async {
     try {

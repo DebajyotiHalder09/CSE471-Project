@@ -50,13 +50,15 @@ const rideshareController = {
 
       res.json({
         success: true,
-        ridePosts: ridePosts.map(post => ({
+        data: ridePosts.map(post => ({
           _id: post._id,
           source: post.source,
           destination: post.destination,
           userId: post.userId,
           userName: post.userName,
           gender: post.gender,
+          participants: post.participants || [],
+          maxParticipants: post.maxParticipants || 3,
           createdAt: post.createdAt,
         })),
       });
@@ -92,6 +94,42 @@ const rideshareController = {
       res.status(500).json({
         success: false,
         message: 'Error deleting ride post',
+        error: error.message,
+      });
+    }
+  },
+
+  getUserRides: async (req, res) => {
+    try {
+      const { userId } = req.params;
+      
+      // Find rides where user is either the creator or a participant
+      const userRides = await RidePost.find({
+        $or: [
+          { userId: userId },
+          { 'participants.userId': userId }
+        ]
+      }).sort({ createdAt: -1 });
+
+      res.json({
+        success: true,
+        data: userRides.map(post => ({
+          _id: post._id,
+          source: post.source,
+          destination: post.destination,
+          userId: post.userId,
+          userName: post.userName,
+          gender: post.gender,
+          participants: post.participants || [],
+          maxParticipants: post.maxParticipants || 3,
+          createdAt: post.createdAt,
+        })),
+      });
+    } catch (error) {
+      console.error('Error fetching user rides:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching user rides',
         error: error.message,
       });
     }

@@ -11,7 +11,7 @@ import 'rideshare.dart';
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key, this.onOpenRideshare});
 
-  final VoidCallback? onOpenRideshare;
+  final Function(String, String)? onOpenRideshare;
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -310,16 +310,32 @@ class _MapScreenState extends State<MapScreen> {
                       ElevatedButton(
                         onPressed: () {
                           Navigator.of(context).maybePop();
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => RideshareScreen(
-                                source: _sourceController.text.trim(),
-                                destination: _destinationController.text.trim(),
-                              ),
-                            ),
-                          );
+                          // Use the callback to switch to rideshare tab instead of pushing a new page
+                          if (widget.onOpenRideshare != null) {
+                            widget.onOpenRideshare!(
+                              _sourceController.text.trim(),
+                              _destinationController.text.trim(),
+                            );
+                          }
                         },
-                        child: const Text('RideShare'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.directions_car, size: 18),
+                            SizedBox(width: 8),
+                            Text('RideShare',
+                                style: TextStyle(fontWeight: FontWeight.w600)),
+                          ],
+                        ),
                       )
                     ],
                   ),

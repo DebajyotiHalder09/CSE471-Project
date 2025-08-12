@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/user.dart';
 import '../services/auth_service.dart';
 import '../services/rideshare_service.dart';
+import '../services/riderequest_service.dart';
 
 class RideshareScreen extends StatefulWidget {
   final String? source;
@@ -27,12 +28,17 @@ class _RideshareScreenState extends State<RideshareScreen> {
   String? selectedGender;
   bool isSearching = false;
   bool isFindRideExpanded = false;
+  Map<String, List<Map<String, dynamic>>> rideRequests = {};
+  Map<String, List<Map<String, dynamic>>> rideParticipants = {};
+  List<Map<String, dynamic>> userRides = [];
+  bool isYourRideExpanded = false;
 
   @override
   void initState() {
     super.initState();
     _loadCurrentUser();
     _loadRidePosts();
+    _loadUserRides();
 
     if (widget.source != null) {
       sourceController.text = widget.source!;
@@ -57,6 +63,11 @@ class _RideshareScreenState extends State<RideshareScreen> {
       setState(() {
         currentUser = user;
       });
+
+      // Load user rides after user is loaded
+      if (user != null) {
+        await _loadUserRides();
+      }
     } catch (e) {
       print('Error loading current user: $e');
     }
@@ -73,9 +84,28 @@ class _RideshareScreenState extends State<RideshareScreen> {
       if (response['success']) {
         setState(() {
           ridePosts = List<Map<String, dynamic>>.from(response['data']);
-          filteredRidePosts = List<Map<String, dynamic>>.from(response['data']);
+          // Filter out current user's posts and rides where user is participant from the search results
+          filteredRidePosts = ridePosts.where((post) {
+            // Exclude current user's own posts
+            if (currentUser != null && post['userId'] == currentUser!.id) {
+              return false;
+            }
+
+            // Exclude rides where current user is already a participant
+            if (currentUser != null && post['participants'] != null) {
+              final isParticipant = post['participants'].any(
+                  (participant) => participant['userId'] == currentUser!.id);
+              if (isParticipant) {
+                return false;
+              }
+            }
+
+            return true;
+          }).toList();
           isLoading = false;
         });
+
+        await _loadRideRequests();
       } else {
         setState(() {
           errorMessage = response['message'] ?? 'Failed to load ride posts';
@@ -97,6 +127,20 @@ class _RideshareScreenState extends State<RideshareScreen> {
           selectedGender != null;
 
       filteredRidePosts = ridePosts.where((post) {
+        // Exclude current user's own posts from search results
+        if (currentUser != null && post['userId'] == currentUser!.id) {
+          return false;
+        }
+
+        // Exclude rides where current user is already a participant
+        if (currentUser != null && post['participants'] != null) {
+          final isParticipant = post['participants']
+              .any((participant) => participant['userId'] == currentUser!.id);
+          if (isParticipant) {
+            return false;
+          }
+        }
+
         bool matchesSource = true;
         bool matchesDestination = true;
         bool matchesGender = true;
@@ -139,6 +183,159 @@ class _RideshareScreenState extends State<RideshareScreen> {
     } catch (e) {
       return null;
     }
+  }
+
+  Future<void> _loadRideRequests() async {
+    for (final post in ridePosts) {
+      try {
+        final response = await RideRequestService.getRideRequests(post['_id']);
+        if (response['success']) {
+          setState(() {
+            rideRequests[post['_id']] =
+                List<Map<String, dynamic>>.from(response['data']);
+          });
+        }
+      } catch (e) {
+        print('Error loading ride requests for post ${post['_id']}: $e');
+      }
+    }
+  }
+
+  Future<void> _loadUserRides() async {
+    if (currentUser == null) return;
+
+    try {
+      final response = await RideshareService.getUserRides(currentUser!.id);
+      if (response['success']) {
+        setState(() {
+          userRides = List<Map<String, dynamic>>.from(response['data']);
+        });
+      }
+    } catch (e) {
+      print('Error loading user rides: $e');
+    }
+  }
+
+  Future<void> _sendRideRequest(Map<String, dynamic> post) async {
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please login to send ride request')),
+      );
+      return;
+    }
+
+    try {
+      final response = await RideRequestService.sendRideRequest(
+        ridePostId: post['_id'],
+        requesterId: currentUser!.id,
+        requesterName: currentUser!.name,
+        requesterGender: currentUser!.gender ?? 'Not specified',
+      );
+
+      if (response['success']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ride request sent successfully!')),
+        );
+        await _loadRideRequests();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content:
+                  Text(response['message'] ?? 'Failed to send ride request')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error sending ride request')),
+      );
+    }
+  }
+
+  Future<void> _acceptRideRequest(String requestId, String ridePostId) async {
+    try {
+      final response = await RideRequestService.acceptRideRequest(
+        requestId: requestId,
+        ridePostId: ridePostId,
+      );
+
+      if (response['success']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ride request accepted successfully!')),
+        );
+
+        // Refresh both ride posts and requests to get updated data
+        // Force refresh of ride posts to get updated participant data
+        await _loadRidePosts();
+        await _loadRideRequests();
+        await _loadUserRides();
+
+        // Refresh filtered results to ensure they're up to date
+        _applySearchAndFilter();
+
+        // Force UI update
+        setState(() {});
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content:
+                  Text(response['message'] ?? 'Failed to accept ride request')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error accepting ride request')),
+      );
+    }
+  }
+
+  Future<void> _rejectRideRequest(String requestId) async {
+    try {
+      final response = await RideRequestService.rejectRideRequest(requestId);
+
+      if (response['success']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ride request rejected successfully!')),
+        );
+        await _loadRideRequests();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content:
+                  Text(response['message'] ?? 'Failed to reject ride request')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error rejecting ride request')),
+      );
+    }
+  }
+
+  bool _canSendRequest(Map<String, dynamic> post) {
+    if (currentUser == null) return false;
+    if (post['userId'] == currentUser!.id) return false;
+
+    // Check if user is already a participant
+    if (post['participants'] != null) {
+      final isAlreadyParticipant = post['participants']
+          .any((participant) => participant['userId'] == currentUser!.id);
+      if (isAlreadyParticipant) return false;
+    }
+
+    final currentParticipants = post['participants']?.length ?? 0;
+    if (currentParticipants >= (post['maxParticipants'] ?? 3)) return false;
+
+    final requests = rideRequests[post['_id']] ?? [];
+    final hasExistingRequest = requests.any((req) =>
+        req['requesterId'] == currentUser!.id && req['status'] == 'pending');
+
+    return !hasExistingRequest;
+  }
+
+  int _getCurrentParticipantCount(Map<String, dynamic> post) {
+    final participants = post['participants'] ?? [];
+    return participants
+        .length; // Creator is already in participants, so this shows total count
   }
 
   Widget _buildExistingPostCard(Map<String, dynamic> post) {
@@ -201,7 +398,24 @@ class _RideshareScreenState extends State<RideshareScreen> {
       searchDestinationController.clear();
       selectedGender = null;
       isSearching = false;
-      filteredRidePosts = ridePosts;
+      // Filter out current user's posts and rides where user is participant even when search is cleared
+      filteredRidePosts = ridePosts.where((post) {
+        // Exclude current user's own posts
+        if (currentUser != null && post['userId'] == currentUser!.id) {
+          return false;
+        }
+
+        // Exclude rides where current user is already a participant
+        if (currentUser != null && post['participants'] != null) {
+          final isParticipant = post['participants']
+              .any((participant) => participant['userId'] == currentUser!.id);
+          if (isParticipant) {
+            return false;
+          }
+        }
+
+        return true;
+      }).toList();
     });
   }
 
@@ -239,7 +453,9 @@ class _RideshareScreenState extends State<RideshareScreen> {
         sourceController.clear();
         destinationController.clear();
         await _loadRidePosts();
-        _applySearchAndFilter(); // Refresh filtered results
+        await _loadUserRides();
+        // Refresh filtered results (this will automatically exclude the new post from search results)
+        _applySearchAndFilter();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Ride posted successfully!')),
         );
@@ -262,7 +478,9 @@ class _RideshareScreenState extends State<RideshareScreen> {
       final response = await RideshareService.deleteRidePost(postId);
       if (response['success']) {
         await _loadRidePosts();
-        _applySearchAndFilter(); // Refresh filtered results
+        await _loadUserRides();
+        // Refresh filtered results (this will automatically update the search results)
+        _applySearchAndFilter();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Ride post deleted successfully!')),
         );
@@ -468,6 +686,372 @@ class _RideshareScreenState extends State<RideshareScreen> {
                   ),
                 ),
               ),
+
+            // Your Ride Section
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Collapsible Your Ride Button
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        isYourRideExpanded = !isYourRideExpanded;
+                      });
+                    },
+                    child: Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.1),
+                            spreadRadius: 1,
+                            blurRadius: 4,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.directions_car,
+                            color: Colors.green,
+                            size: 24,
+                          ),
+                          SizedBox(width: 12),
+                          Text(
+                            'Your Ride',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          Spacer(),
+                          Icon(
+                            isYourRideExpanded
+                                ? Icons.keyboard_arrow_up
+                                : Icons.keyboard_arrow_down,
+                            color: Colors.grey[600],
+                            size: 24,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Collapsible Your Ride Content
+                  if (isYourRideExpanded) ...[
+                    SizedBox(height: 16),
+                    if (userRides.isEmpty)
+                      Center(
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.directions_car_outlined,
+                              size: 64,
+                              color: Colors.grey[400],
+                            ),
+                            SizedBox(height: 16),
+                            Text(
+                              'No rides yet',
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: Colors.grey[600],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              'Post a ride or join one to see it here',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[500],
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: NeverScrollableScrollPhysics(),
+                        itemCount: userRides.length,
+                        itemBuilder: (context, index) {
+                          final post = userRides[index];
+                          final isOwnPost = currentUser?.id == post['userId'];
+
+                          return Container(
+                            margin: EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.grey.withOpacity(0.1),
+                                  spreadRadius: 1,
+                                  blurRadius: 4,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        isOwnPost
+                                            ? Icons.star
+                                            : Icons.person_add,
+                                        color: isOwnPost
+                                            ? Colors.orange
+                                            : Colors.blue,
+                                        size: 20,
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        isOwnPost ? 'Your Post' : 'Joined Ride',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: isOwnPost
+                                              ? Colors.orange[700]
+                                              : Colors.blue[700],
+                                        ),
+                                      ),
+                                      Spacer(),
+                                      if (isOwnPost)
+                                        IconButton(
+                                          icon: Icon(Icons.delete,
+                                              color: Colors.red),
+                                          onPressed: () =>
+                                              _deleteRidePost(post['_id']),
+                                        ),
+                                    ],
+                                  ),
+                                  SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Icon(Icons.location_on,
+                                                    color: Colors.green,
+                                                    size: 16),
+                                                SizedBox(width: 8),
+                                                Text(
+                                                  'From:',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 14,
+                                                    color: Colors.grey[700],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            SizedBox(height: 4),
+                                            Text(
+                                              post['source'] ??
+                                                  'Unknown location',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                color: Colors.black87,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Icon(Icons.flag,
+                                                    color: Colors.red,
+                                                    size: 16),
+                                                SizedBox(width: 8),
+                                                Text(
+                                                  'To:',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 14,
+                                                    color: Colors.grey[700],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            SizedBox(height: 4),
+                                            Text(
+                                              post['destination'] ??
+                                                  'Unknown location',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                color: Colors.black87,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  SizedBox(height: 12),
+
+                                  // Participant count and status
+                                  Row(
+                                    children: [
+                                      Icon(Icons.people,
+                                          color: Colors.blue, size: 16),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        '${_getCurrentParticipantCount(post)}/3 participants (including creator)',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.blue[700],
+                                        ),
+                                      ),
+                                      Spacer(),
+                                      if (_getCurrentParticipantCount(post) >=
+                                          3)
+                                        Container(
+                                          padding: EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.red[100],
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            'Full',
+                                            style: TextStyle(
+                                              color: Colors.red[700],
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+
+                                  // Small note about participant counting
+                                  Padding(
+                                    padding: EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      'Note: Creator is counted as 1st participant',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey[600],
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                  ),
+
+                                  // Show participants if any
+                                  if (post['participants'] != null &&
+                                      post['participants'].isNotEmpty) ...[
+                                    SizedBox(height: 12),
+                                    Container(
+                                      padding: EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green[50],
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                            color: Colors.green[200]!),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Participants:',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.green[700],
+                                            ),
+                                          ),
+                                          SizedBox(height: 8),
+                                          ...post['participants']
+                                              .map<Widget>((participant) =>
+                                                  Padding(
+                                                    padding: EdgeInsets.only(
+                                                        bottom: 4),
+                                                    child: Row(
+                                                      children: [
+                                                        Icon(
+                                                            participant['userId'] ==
+                                                                    post[
+                                                                        'userId']
+                                                                ? Icons.star
+                                                                : Icons.person,
+                                                            color: participant[
+                                                                        'userId'] ==
+                                                                    post[
+                                                                        'userId']
+                                                                ? Colors
+                                                                    .orange[600]
+                                                                : Colors
+                                                                    .green[600],
+                                                            size: 16),
+                                                        SizedBox(width: 8),
+                                                        Text(
+                                                          '${participant['userName']} (${participant['gender']})',
+                                                          style: TextStyle(
+                                                            fontSize: 13,
+                                                            color: Colors
+                                                                .green[700],
+                                                            fontWeight: participant[
+                                                                        'userId'] ==
+                                                                    post[
+                                                                        'userId']
+                                                                ? FontWeight
+                                                                    .w600
+                                                                : FontWeight
+                                                                    .normal,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ))
+                                              .toList(),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+
+                                  SizedBox(height: 12),
+                                  Text(
+                                    'Posted ${_formatDate(DateTime.parse(post['createdAt'] ?? DateTime.now().toIso8601String()))}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[500],
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                  ],
+                ],
+              ),
+            ),
             Container(
               width: double.infinity,
               padding: EdgeInsets.all(16),
@@ -851,6 +1435,27 @@ class _RideshareScreenState extends State<RideshareScreen> {
                                         onPressed: () =>
                                             _deleteRidePost(post['_id']),
                                       ),
+                                    if (!isOwnPost && _canSendRequest(post))
+                                      ElevatedButton(
+                                        onPressed: () => _sendRideRequest(post),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.green,
+                                          padding: EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 8),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          'Request',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
                                   ],
                                 ),
                                 SizedBox(height: 16),
@@ -924,6 +1529,262 @@ class _RideshareScreenState extends State<RideshareScreen> {
                                     ),
                                   ],
                                 ),
+                                SizedBox(height: 12),
+
+                                // Participant count and status
+                                Row(
+                                  children: [
+                                    Icon(Icons.people,
+                                        color: Colors.blue, size: 16),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      '${_getCurrentParticipantCount(post)}/3 participants (including creator)',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.blue[700],
+                                      ),
+                                    ),
+                                    Spacer(),
+                                    if (_getCurrentParticipantCount(post) >= 3)
+                                      Container(
+                                        padding: EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red[100],
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                        child: Text(
+                                          'Full',
+                                          style: TextStyle(
+                                            color: Colors.red[700],
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+
+                                // Small note about participant counting
+                                Padding(
+                                  padding: EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    'Note: Creator is counted as 1st participant',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey[600],
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ),
+
+                                // Show participants if any
+                                if (post['participants'] != null &&
+                                    post['participants'].isNotEmpty) ...[
+                                  SizedBox(height: 12),
+                                  Container(
+                                    padding: EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green[50],
+                                      borderRadius: BorderRadius.circular(8),
+                                      border:
+                                          Border.all(color: Colors.green[200]!),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Participants:',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.green[700],
+                                          ),
+                                        ),
+                                        SizedBox(height: 8),
+                                        ...post['participants']
+                                            .map<Widget>((participant) =>
+                                                Padding(
+                                                  padding: EdgeInsets.only(
+                                                      bottom: 4),
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(Icons.person,
+                                                          color:
+                                                              Colors.green[600],
+                                                          size: 16),
+                                                      SizedBox(width: 8),
+                                                      Text(
+                                                        '${participant['userName']} (${participant['gender']})',
+                                                        style: TextStyle(
+                                                          fontSize: 13,
+                                                          color:
+                                                              Colors.green[700],
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ))
+                                            .toList(),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+
+                                // Show pending requests for post owner
+                                if (isOwnPost &&
+                                    rideRequests[post['_id']] != null) ...[
+                                  SizedBox(height: 12),
+                                  Container(
+                                    padding: EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange[50],
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: Colors.orange[200]!),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Pending Requests:',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.orange[700],
+                                          ),
+                                        ),
+                                        SizedBox(height: 8),
+                                        ...rideRequests[post['_id']]!
+                                            .where((req) =>
+                                                req['status'] == 'pending')
+                                            .map<Widget>((request) => Padding(
+                                                  padding: EdgeInsets.only(
+                                                      bottom: 8),
+                                                  child: Row(
+                                                    children: [
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .start,
+                                                          children: [
+                                                            Text(
+                                                              '${request['requesterName']} (${request['requesterGender']})',
+                                                              style: TextStyle(
+                                                                fontSize: 13,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                                color: Colors
+                                                                        .orange[
+                                                                    700],
+                                                              ),
+                                                            ),
+                                                            Text(
+                                                              'Requested ${_formatDate(DateTime.parse(request['createdAt']))}',
+                                                              style: TextStyle(
+                                                                fontSize: 11,
+                                                                color: Colors
+                                                                        .orange[
+                                                                    600],
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      Row(
+                                                        children: [
+                                                          ElevatedButton(
+                                                            onPressed: () =>
+                                                                _acceptRideRequest(
+                                                                    request[
+                                                                        '_id'],
+                                                                    post[
+                                                                        '_id']),
+                                                            style:
+                                                                ElevatedButton
+                                                                    .styleFrom(
+                                                              backgroundColor:
+                                                                  Colors.green,
+                                                              padding: EdgeInsets
+                                                                  .symmetric(
+                                                                      horizontal:
+                                                                          8,
+                                                                      vertical:
+                                                                          4),
+                                                              shape:
+                                                                  RoundedRectangleBorder(
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
+                                                                            4),
+                                                              ),
+                                                            ),
+                                                            child: Text(
+                                                              'Accept',
+                                                              style: TextStyle(
+                                                                color: Colors
+                                                                    .white,
+                                                                fontSize: 11,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                          SizedBox(width: 8),
+                                                          ElevatedButton(
+                                                            onPressed: () =>
+                                                                _rejectRideRequest(
+                                                                    request[
+                                                                        '_id']),
+                                                            style:
+                                                                ElevatedButton
+                                                                    .styleFrom(
+                                                              backgroundColor:
+                                                                  Colors.red,
+                                                              padding: EdgeInsets
+                                                                  .symmetric(
+                                                                      horizontal:
+                                                                          8,
+                                                                      vertical:
+                                                                          4),
+                                                              shape:
+                                                                  RoundedRectangleBorder(
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
+                                                                            4),
+                                                              ),
+                                                            ),
+                                                            child: Text(
+                                                              'Reject',
+                                                              style: TextStyle(
+                                                                color: Colors
+                                                                    .white,
+                                                                fontSize: 11,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ))
+                                            .toList(),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+
                                 SizedBox(height: 12),
                                 Text(
                                   'Posted ${_formatDate(DateTime.parse(post['createdAt'] ?? DateTime.now().toIso8601String()))}',

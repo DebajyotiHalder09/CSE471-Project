@@ -691,8 +691,8 @@ class _MapScreenState extends State<MapScreen> {
                       hintText: "Enter source location",
                       filled: true,
                       fillColor: Colors.white,
-                      prefixIcon: const Icon(Icons.location_on,
-                          color: Colors.green),
+                      prefixIcon:
+                          const Icon(Icons.location_on, color: Colors.green),
                       suffixIcon: IconButton(
                         icon: const Icon(Icons.search),
                         onPressed: () {
@@ -725,12 +725,11 @@ class _MapScreenState extends State<MapScreen> {
                         (s) =>
                             s.name.toLowerCase() ==
                             _sourceController.text.trim().toLowerCase(),
-                        orElse: () => BusStop(
-                            name: '', latitude: 0.0, longitude: 0.0),
+                        orElse: () =>
+                            BusStop(name: '', latitude: 0.0, longitude: 0.0),
                       );
                       if (stop.name.isNotEmpty) {
-                        _sourcePoint =
-                            LatLng(stop.latitude, stop.longitude);
+                        _sourcePoint = LatLng(stop.latitude, stop.longitude);
                         if (_mapController != null && _mapReady) {
                           _mapController!.move(_sourcePoint!, 15.0);
                         }
@@ -757,25 +756,27 @@ class _MapScreenState extends State<MapScreen> {
                         itemCount: _sourceSuggestions.length,
                         itemBuilder: (context, index) {
                           final suggestion = _sourceSuggestions[index];
-                          return ListTile(
-                            dense: true,
-                            leading: Icon(
-                              Icons.directions_bus,
-                              color: Colors.blue,
-                              size: 20,
-                            ),
-                            title: Text(
-                              suggestion['name'],
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: suggestion['isExactMatch'] == true
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                          return GestureDetector(
                             onTap: () => _selectSourceSuggestion(suggestion),
+                            child: ListTile(
+                              dense: true,
+                              leading: Icon(
+                                Icons.directions_bus,
+                                color: Colors.blue,
+                                size: 20,
+                              ),
+                              title: Text(
+                                suggestion['name'],
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: suggestion['isExactMatch'] == true
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           );
                         },
                       ),
@@ -804,8 +805,7 @@ class _MapScreenState extends State<MapScreen> {
                             _destinationPoint =
                                 LatLng(stop.latitude, stop.longitude);
                             if (_mapController != null && _mapReady) {
-                              _mapController!
-                                  .move(_destinationPoint!, 15.0);
+                              _mapController!.move(_destinationPoint!, 15.0);
                             }
                             _updateRoute();
                           }
@@ -822,11 +822,9 @@ class _MapScreenState extends State<MapScreen> {
                       final stop = _allBusStops.firstWhere(
                         (s) =>
                             s.name.toLowerCase() ==
-                            _destinationController.text
-                                .trim()
-                                .toLowerCase(),
-                        orElse: () => BusStop(
-                            name: '', latitude: 0.0, longitude: 0.0),
+                            _destinationController.text.trim().toLowerCase(),
+                        orElse: () =>
+                            BusStop(name: '', latitude: 0.0, longitude: 0.0),
                       );
                       if (stop.name.isNotEmpty) {
                         _destinationPoint =
@@ -858,27 +856,28 @@ class _MapScreenState extends State<MapScreen> {
                         itemCount: _destinationSuggestions.length,
                         itemBuilder: (context, index) {
                           final suggestion = _destinationSuggestions[index];
-                          return ListTile(
-                            dense: true,
-                            leading: Icon(
-                              Icons.directions_bus,
-                              color: Colors.blue,
-                              size: 20,
-                            ),
-                            title: Text(
-                              suggestion['name'],
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight:
-                                    suggestion['isExactMatch'] == true
-                                        ? FontWeight.w600
-                                        : FontWeight.normal,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                          return GestureDetector(
                             onTap: () =>
                                 _selectDestinationSuggestion(suggestion),
+                            child: ListTile(
+                              dense: true,
+                              leading: Icon(
+                                Icons.directions_bus,
+                                color: Colors.blue,
+                                size: 20,
+                              ),
+                              title: Text(
+                                suggestion['name'],
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: suggestion['isExactMatch'] == true
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           );
                         },
                       ),

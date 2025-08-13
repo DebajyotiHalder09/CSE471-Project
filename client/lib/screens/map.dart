@@ -682,48 +682,20 @@ class _MapScreenState extends State<MapScreen> {
             right: 16,
             child: GestureDetector(
               onTap: _hideAllSuggestions,
-              child: Stack(
-                clipBehavior: Clip.none,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TextField(
-                        controller: _sourceController,
-                        decoration: InputDecoration(
-                          hintText: "Enter source location",
-                          filled: true,
-                          fillColor: Colors.white,
-                          prefixIcon: const Icon(Icons.location_on,
-                              color: Colors.green),
-                          suffixIcon: IconButton(
-                            icon: const Icon(Icons.search),
-                            onPressed: () {
-                              final stop = _allBusStops.firstWhere(
-                                (s) =>
-                                    s.name.toLowerCase() ==
-                                    _sourceController.text.trim().toLowerCase(),
-                                orElse: () => BusStop(
-                                    name: '', latitude: 0.0, longitude: 0.0),
-                              );
-                              if (stop.name.isNotEmpty) {
-                                _sourcePoint =
-                                    LatLng(stop.latitude, stop.longitude);
-                                if (_mapController != null && _mapReady) {
-                                  _mapController!.move(_sourcePoint!, 15.0);
-                                }
-                                _updateRoute();
-                              }
-                            },
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                        ),
-                        onSubmitted: (_) {
+                  TextField(
+                    controller: _sourceController,
+                    decoration: InputDecoration(
+                      hintText: "Enter source location",
+                      filled: true,
+                      fillColor: Colors.white,
+                      prefixIcon: const Icon(Icons.location_on,
+                          color: Colors.green),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.search),
+                        onPressed: () {
                           final stop = _allBusStops.firstWhere(
                             (s) =>
                                 s.name.toLowerCase() ==
@@ -741,45 +713,84 @@ class _MapScreenState extends State<MapScreen> {
                           }
                         },
                       ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _destinationController,
-                        decoration: InputDecoration(
-                          hintText: "Enter destination location",
-                          filled: true,
-                          fillColor: Colors.white,
-                          prefixIcon: const Icon(Icons.flag, color: Colors.red),
-                          suffixIcon: IconButton(
-                            icon: const Icon(Icons.search),
-                            onPressed: () {
-                              final stop = _allBusStops.firstWhere(
-                                (s) =>
-                                    s.name.toLowerCase() ==
-                                    _destinationController.text
-                                        .trim()
-                                        .toLowerCase(),
-                                orElse: () => BusStop(
-                                    name: '', latitude: 0.0, longitude: 0.0),
-                              );
-                              if (stop.name.isNotEmpty) {
-                                _destinationPoint =
-                                    LatLng(stop.latitude, stop.longitude);
-                                if (_mapController != null && _mapReady) {
-                                  _mapController!
-                                      .move(_destinationPoint!, 15.0);
-                                }
-                                _updateRoute();
-                              }
-                            },
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                    ),
+                    onSubmitted: (_) {
+                      final stop = _allBusStops.firstWhere(
+                        (s) =>
+                            s.name.toLowerCase() ==
+                            _sourceController.text.trim().toLowerCase(),
+                        orElse: () => BusStop(
+                            name: '', latitude: 0.0, longitude: 0.0),
+                      );
+                      if (stop.name.isNotEmpty) {
+                        _sourcePoint =
+                            LatLng(stop.latitude, stop.longitude);
+                        if (_mapController != null && _mapReady) {
+                          _mapController!.move(_sourcePoint!, 15.0);
+                        }
+                        _updateRoute();
+                      }
+                    },
+                  ),
+                  if (_showSourceSuggestions && _sourceSuggestions.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(top: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
                           ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                        ),
-                        onSubmitted: (_) {
+                        ],
+                      ),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: _sourceSuggestions.length,
+                        itemBuilder: (context, index) {
+                          final suggestion = _sourceSuggestions[index];
+                          return ListTile(
+                            dense: true,
+                            leading: Icon(
+                              Icons.directions_bus,
+                              color: Colors.blue,
+                              size: 20,
+                            ),
+                            title: Text(
+                              suggestion['name'],
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: suggestion['isExactMatch'] == true
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () => _selectSourceSuggestion(suggestion),
+                          );
+                        },
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _destinationController,
+                    decoration: InputDecoration(
+                      hintText: "Enter destination location",
+                      filled: true,
+                      fillColor: Colors.white,
+                      prefixIcon: const Icon(Icons.flag, color: Colors.red),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.search),
+                        onPressed: () {
                           final stop = _allBusStops.firstWhere(
                             (s) =>
                                 s.name.toLowerCase() ==
@@ -793,108 +804,83 @@ class _MapScreenState extends State<MapScreen> {
                             _destinationPoint =
                                 LatLng(stop.latitude, stop.longitude);
                             if (_mapController != null && _mapReady) {
-                              _mapController!.move(_destinationPoint!, 15.0);
+                              _mapController!
+                                  .move(_destinationPoint!, 15.0);
                             }
                             _updateRoute();
                           }
                         },
                       ),
-                    ],
-                  ),
-                  if (_showSourceSuggestions && _sourceSuggestions.isNotEmpty)
-                    Positioned(
-                      top: 60,
-                      left: 0,
-                      right: 0,
-                      child: Container(
-                        margin: const EdgeInsets.only(top: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: _sourceSuggestions.length,
-                          itemBuilder: (context, index) {
-                            final suggestion = _sourceSuggestions[index];
-                            return ListTile(
-                              dense: true,
-                              leading: Icon(
-                                Icons.directions_bus,
-                                color: Colors.blue,
-                                size: 20,
-                              ),
-                              title: Text(
-                                suggestion['name'],
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: suggestion['isExactMatch'] == true
-                                      ? FontWeight.w600
-                                      : FontWeight.normal,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              onTap: () => _selectSourceSuggestion(suggestion),
-                            );
-                          },
-                        ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
                       ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
                     ),
+                    onSubmitted: (_) {
+                      final stop = _allBusStops.firstWhere(
+                        (s) =>
+                            s.name.toLowerCase() ==
+                            _destinationController.text
+                                .trim()
+                                .toLowerCase(),
+                        orElse: () => BusStop(
+                            name: '', latitude: 0.0, longitude: 0.0),
+                      );
+                      if (stop.name.isNotEmpty) {
+                        _destinationPoint =
+                            LatLng(stop.latitude, stop.longitude);
+                        if (_mapController != null && _mapReady) {
+                          _mapController!.move(_destinationPoint!, 15.0);
+                        }
+                        _updateRoute();
+                      }
+                    },
+                  ),
                   if (_showDestinationSuggestions &&
                       _destinationSuggestions.isNotEmpty)
-                    Positioned(
-                      top: 140,
-                      left: 0,
-                      right: 0,
-                      child: Container(
-                        margin: const EdgeInsets.only(top: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
+                    Container(
+                      margin: const EdgeInsets.only(top: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: _destinationSuggestions.length,
+                        itemBuilder: (context, index) {
+                          final suggestion = _destinationSuggestions[index];
+                          return ListTile(
+                            dense: true,
+                            leading: Icon(
+                              Icons.directions_bus,
+                              color: Colors.blue,
+                              size: 20,
                             ),
-                          ],
-                        ),
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: _destinationSuggestions.length,
-                          itemBuilder: (context, index) {
-                            final suggestion = _destinationSuggestions[index];
-                            return ListTile(
-                              dense: true,
-                              leading: Icon(
-                                Icons.directions_bus,
-                                color: Colors.blue,
-                                size: 20,
+                            title: Text(
+                              suggestion['name'],
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight:
+                                    suggestion['isExactMatch'] == true
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
                               ),
-                              title: Text(
-                                suggestion['name'],
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: suggestion['isExactMatch'] == true
-                                      ? FontWeight.w600
-                                      : FontWeight.normal,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              onTap: () =>
-                                  _selectDestinationSuggestion(suggestion),
-                            );
-                          },
-                        ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () =>
+                                _selectDestinationSuggestion(suggestion),
+                          );
+                        },
                       ),
                     ),
                 ],

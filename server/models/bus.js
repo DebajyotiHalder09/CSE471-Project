@@ -19,10 +19,30 @@ const busSchema = new mongoose.Schema({
     trim: true,
   },
   stops: [{
-    type: String,
-    required: true,
-    trim: true,
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    lat: {
+      type: Number,
+      required: true,
+    },
+    lng: {
+      type: Number,
+      required: true,
+    },
   }],
+  base_fare: {
+    type: Number,
+    required: true,
+    default: 0,
+  },
+  per_km_fare: {
+    type: Number,
+    required: true,
+    default: 0,
+  },
 }, {
   timestamps: true,
 });

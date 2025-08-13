@@ -87,13 +87,13 @@ const searchBusByRoute = async (req, res) => {
     const buses = await BusInfo.find({
       $and: [
         { 
-          stops: { 
+          'stops.name': { 
             $regex: startLocation, 
             $options: 'i' 
           } 
         },
         { 
-          stops: { 
+          'stops.name': { 
             $regex: endLocation, 
             $options: 'i' 
           } 

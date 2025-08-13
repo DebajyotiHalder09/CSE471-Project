@@ -291,7 +291,8 @@ class _BusScreenState extends State<BusScreen> {
                       ),
                       Spacer(),
                       Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
                           color: Colors.grey[200],
                           borderRadius: BorderRadius.circular(20),
@@ -299,7 +300,8 @@ class _BusScreenState extends State<BusScreen> {
                         child: GestureDetector(
                           onTap: () {
                             setState(() {
-                              selectedSearchType = selectedSearchType == 'bus' ? 'route' : 'bus';
+                              selectedSearchType =
+                                  selectedSearchType == 'bus' ? 'route' : 'bus';
                               _clearSearch();
                             });
                           },
@@ -307,7 +309,9 @@ class _BusScreenState extends State<BusScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                selectedSearchType == 'bus' ? Icons.route : Icons.directions_bus,
+                                selectedSearchType == 'bus'
+                                    ? Icons.route
+                                    : Icons.directions_bus,
                                 size: 16,
                                 color: Colors.grey[600],
                               ),
@@ -338,7 +342,8 @@ class _BusScreenState extends State<BusScreen> {
                         ),
                         filled: true,
                         fillColor: Colors.grey[50],
-                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       ),
                       onSubmitted: (_) => _searchBusByName(),
                     ),
@@ -387,7 +392,8 @@ class _BusScreenState extends State<BusScreen> {
                               ),
                               filled: true,
                               fillColor: Colors.grey[50],
-                              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
                             ),
                           ),
                         ),
@@ -397,13 +403,15 @@ class _BusScreenState extends State<BusScreen> {
                             controller: endLocationController,
                             decoration: InputDecoration(
                               hintText: 'End location...',
-                              prefixIcon: Icon(Icons.location_on_outlined, size: 20),
+                              prefixIcon:
+                                  Icon(Icons.location_on_outlined, size: 20),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               filled: true,
                               fillColor: Colors.grey[50],
-                              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
                             ),
                             onSubmitted: (_) => _searchBusByRoute(),
                           ),
@@ -673,7 +681,8 @@ class _BusResultCardState extends State<BusResultCard> {
                       border: Border.all(color: Colors.grey[200]!),
                     ),
                     child: Column(
-                      children: widget.bus.stops.asMap().entries.map((entry) {
+                      children:
+                          widget.bus.stopNames.asMap().entries.map((entry) {
                         int index = entry.key;
                         String stop = entry.value;
                         bool isLast = index == widget.bus.stops.length - 1;

@@ -6,8 +6,7 @@ import 'package:http/http.dart' as http;
 import '../services/auth_service.dart';
 import '../services/fav_bus_service.dart';
 import '../models/bus.dart';
-import 'nav.dart';
-import 'rideshare.dart';
+import '../utils/distance_calculator.dart' as distance_calc;
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key, this.onOpenRideshare});
@@ -36,19 +35,15 @@ class _MapScreenState extends State<MapScreen> {
   String? _currentUserId;
   Map<String, bool> _favoriteStatus = {};
 
+  List<BusStop> _allBusStops = [];
+
   // Search suggestions
   List<Map<String, dynamic>> _sourceSuggestions = [];
   List<Map<String, dynamic>> _destinationSuggestions = [];
   bool _showSourceSuggestions = false;
   bool _showDestinationSuggestions = false;
-  List<String> _allBusStops = [];
 
-  // Dhaka City boundaries
   static const LatLng dhakaCenter = LatLng(23.8103, 90.4125);
-  static const double dhakaMinLat = 23.6;
-  static const double dhakaMaxLat = 24.0;
-  static const double dhakaMinLng = 90.2;
-  static const double dhakaMaxLng = 90.6;
 
   @override
   void initState() {
@@ -57,14 +52,12 @@ class _MapScreenState extends State<MapScreen> {
     _getCurrentUserId();
     _loadAllBusStops();
 
-    // Add listeners for search suggestions
     _sourceController.addListener(() => _onSourceChanged());
     _destinationController.addListener(() => _onDestinationChanged());
   }
 
   void _initializeMap() {
     _mapController = MapController();
-    // Wait for the next frame to ensure the map is ready
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _mapController != null) {
         setState(() {
@@ -127,16 +120,29 @@ class _MapScreenState extends State<MapScreen> {
         final data = json.decode(response.body) as Map<String, dynamic>;
         final List<dynamic> buses = data['data'] as List<dynamic>? ?? [];
 
-        final Set<String> uniqueStops = <String>{};
+        final Set<String> uniqueStopNames = <String>{};
+        final List<BusStop> allStops = <BusStop>[];
+
         for (final bus in buses) {
           final List<dynamic> stops = bus['stops'] as List<dynamic>? ?? [];
           for (final stop in stops) {
-            uniqueStops.add(stop.toString().toLowerCase().trim());
+            if (stop is Map<String, dynamic> && stop['name'] != null) {
+              final stopName = stop['name'].toString().toLowerCase().trim();
+              uniqueStopNames.add(stopName);
+
+              if (stop['lat'] != null && stop['lng'] != null) {
+                allStops.add(BusStop(
+                  name: stop['name'],
+                  latitude: (stop['lat'] ?? 0.0).toDouble(),
+                  longitude: (stop['lng'] ?? 0.0).toDouble(),
+                ));
+              }
+            }
           }
         }
 
         setState(() {
-          _allBusStops = uniqueStops.toList();
+          _allBusStops = allStops;
         });
       }
     } catch (e) {
@@ -147,7 +153,6 @@ class _MapScreenState extends State<MapScreen> {
   void _onSourceChanged() {
     if (_sourceController.text.isEmpty) {
       setState(() {
-        _sourceSuggestions = [];
         _showSourceSuggestions = false;
       });
       return;
@@ -158,7 +163,6 @@ class _MapScreenState extends State<MapScreen> {
   void _onDestinationChanged() {
     if (_destinationController.text.isEmpty) {
       setState(() {
-        _destinationSuggestions = [];
         _showDestinationSuggestions = false;
       });
       return;
@@ -171,85 +175,23 @@ class _MapScreenState extends State<MapScreen> {
 
     final suggestions = <Map<String, dynamic>>{};
 
-    // First, check for exact matches in bus stops
     for (final stop in _allBusStops) {
-      if (stop.contains(query.toLowerCase())) {
+      if (stop.name.toLowerCase().contains(query.toLowerCase())) {
         suggestions.add({
-          'name': stop,
+          'name': stop.name,
           'type': 'bus_stop',
-          'isExactMatch': true,
+          'latitude': stop.latitude,
+          'longitude': stop.longitude,
+          'isExactMatch': stop.name.toLowerCase() == query.toLowerCase(),
         });
       }
     }
 
-    // Then get location suggestions from OpenStreetMap
-    try {
-      String searchQuery = query.trim();
-      if (!searchQuery.toLowerCase().contains('dhaka')) {
-        searchQuery = '$searchQuery, Dhaka, Bangladesh';
-      }
-
-      final url = Uri.parse(
-          'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(searchQuery)}&format=json&limit=10&viewbox=$dhakaMinLng,$dhakaMaxLat,$dhakaMaxLng,$dhakaMinLat&bounded=1');
-
-      final response =
-          await http.get(url, headers: {'User-Agent': 'flutter_map_app'});
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body) as List<dynamic>;
-
-        for (final item in data) {
-          final lat = double.parse(item['lat']);
-          final lon = double.parse(item['lon']);
-
-          // Check if within Dhaka boundaries
-          if (lat >= dhakaMinLat &&
-              lat <= dhakaMaxLat &&
-              lon >= dhakaMinLng &&
-              lon <= dhakaMaxLng) {
-            final displayName = item['display_name'] as String;
-            final name = item['name'] as String;
-
-            // Check if any part of the suggestion matches bus stops
-            bool hasBusStopMatch = false;
-            String matchedBusStop = '';
-
-            for (final stop in _allBusStops) {
-              if (displayName.toLowerCase().contains(stop) ||
-                  name.toLowerCase().contains(stop)) {
-                hasBusStopMatch = true;
-                matchedBusStop = stop;
-                break;
-              }
-            }
-
-            suggestions.add({
-              'name': displayName,
-              'lat': lat,
-              'lon': lon,
-              'type': 'location',
-              'hasBusStopMatch': hasBusStopMatch,
-              'matchedBusStop': matchedBusStop,
-            });
-          }
-        }
-      }
-    } catch (e) {
-      print('Error getting location suggestions: $e');
-    }
-
-    // Sort suggestions: exact bus stop matches first, then bus stop matches, then locations
     final sortedSuggestions = suggestions.toList();
     sortedSuggestions.sort((a, b) {
-      if (a['type'] == 'bus_stop' && b['type'] != 'bus_stop') return -1;
-      if (a['type'] != 'bus_stop' && b['type'] == 'bus_stop') return 1;
       if (a['isExactMatch'] == true && b['isExactMatch'] != true) return -1;
       if (a['isExactMatch'] != true && b['isExactMatch'] == true) return 1;
-      if (a['hasBusStopMatch'] == true && b['hasBusStopMatch'] != true)
-        return -1;
-      if (a['hasBusStopMatch'] != true && b['hasBusStopMatch'] == true)
-        return 1;
-      return 0;
+      return a['name'].toLowerCase().compareTo(b['name'].toLowerCase());
     });
 
     setState(() {
@@ -264,17 +206,12 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _selectSourceSuggestion(Map<String, dynamic> suggestion) {
-    if (suggestion['type'] == 'bus_stop') {
-      _sourceController.text = suggestion['name'];
-      _searchSource();
-    } else if (suggestion['type'] == 'location') {
-      _sourceController.text = suggestion['name'];
-      _sourcePoint = LatLng(suggestion['lat'], suggestion['lon']);
-      if (_mapController != null && _mapReady) {
-        _mapController!.move(_sourcePoint!, 15.0);
-      }
-      _updateRoute();
+    _sourceController.text = suggestion['name'];
+    _sourcePoint = LatLng(suggestion['latitude'], suggestion['longitude']);
+    if (_mapController != null && _mapReady) {
+      _mapController!.move(_sourcePoint!, 15.0);
     }
+    _updateRoute();
 
     setState(() {
       _showSourceSuggestions = false;
@@ -283,17 +220,12 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _selectDestinationSuggestion(Map<String, dynamic> suggestion) {
-    if (suggestion['type'] == 'bus_stop') {
-      _destinationController.text = suggestion['name'];
-      _searchDestination();
-    } else if (suggestion['type'] == 'location') {
-      _destinationController.text = suggestion['name'];
-      _destinationPoint = LatLng(suggestion['lat'], suggestion['lon']);
-      if (_mapController != null && _mapReady) {
-        _mapController!.move(_destinationPoint!, 15.0);
-      }
-      _updateRoute();
+    _destinationController.text = suggestion['name'];
+    _destinationPoint = LatLng(suggestion['latitude'], suggestion['longitude']);
+    if (_mapController != null && _mapReady) {
+      _mapController!.move(_destinationPoint!, 15.0);
     }
+    _updateRoute();
 
     setState(() {
       _showDestinationSuggestions = false;
@@ -318,97 +250,6 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
-  Future<LatLng?> _getCoordinates(String query) async {
-    if (query.trim().isEmpty) return null;
-
-    // Add "Dhaka, Bangladesh" to improve search accuracy
-    String searchQuery = query.trim();
-    if (!searchQuery.toLowerCase().contains('dhaka')) {
-      searchQuery = '$searchQuery, Dhaka, Bangladesh';
-    }
-
-    final url = Uri.parse(
-        'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(searchQuery)}&format=json&limit=5&viewbox=$dhakaMinLng,$dhakaMaxLat,$dhakaMaxLng,$dhakaMinLat&bounded=1');
-
-    try {
-      final response =
-          await http.get(url, headers: {'User-Agent': 'flutter_map_app'});
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data.isNotEmpty) {
-          final lat = double.parse(data[0]['lat']);
-          final lon = double.parse(data[0]['lon']);
-
-          // Check if the result is within Dhaka City boundaries
-          if (lat >= dhakaMinLat &&
-              lat <= dhakaMaxLat &&
-              lon >= dhakaMinLng &&
-              lon <= dhakaMaxLng) {
-            return LatLng(lat, lon);
-          }
-        }
-      }
-    } catch (e) {
-      print('Error getting coordinates: $e');
-    }
-    return null;
-  }
-
-  Future<void> _searchSource() async {
-    if (_sourceController.text.trim().isEmpty) return;
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    final coordinates = await _getCoordinates(_sourceController.text);
-
-    setState(() {
-      _isLoading = false;
-      if (coordinates != null) {
-        _sourcePoint = coordinates;
-        if (_mapController != null && _mapReady) {
-          _mapController!.move(coordinates, 15.0);
-        }
-        _updateRoute();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(
-                  "Could not find source location: ${_sourceController.text}")),
-        );
-      }
-    });
-  }
-
-  Future<void> _searchDestination() async {
-    if (_destinationController.text.trim().isEmpty) return;
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    final coordinates = await _getCoordinates(_destinationController.text);
-
-    setState(() {
-      _isLoading = false;
-      if (coordinates != null) {
-        _destinationPoint = coordinates;
-        if (_mapController != null && _mapReady) {
-          _mapController!.move(coordinates, 15.0);
-        }
-        _updateRoute();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(
-                  "Could not find destination location: ${_destinationController.text}")),
-        );
-      }
-    });
-  }
-
   Future<void> _updateRoute() async {
     if (_sourcePoint == null || _destinationPoint == null) return;
 
@@ -417,7 +258,6 @@ class _MapScreenState extends State<MapScreen> {
     });
 
     try {
-      // Get route using OSRM (Open Source Routing Machine)
       final routeUrl = Uri.parse(
           'https://router.project-osrm.org/route/v1/driving/${_sourcePoint!.longitude},${_sourcePoint!.latitude};${_destinationPoint!.longitude},${_destinationPoint!.latitude}?overview=full&geometries=geojson');
 
@@ -439,12 +279,10 @@ class _MapScreenState extends State<MapScreen> {
               _routePoints = routePoints;
             });
 
-            // Fit map to show entire route
             _fitMapToRoute();
           }
         }
       } else {
-        // Fallback to straight line if routing fails
         setState(() {
           _routePoints = [_sourcePoint!, _destinationPoint!];
         });
@@ -452,7 +290,6 @@ class _MapScreenState extends State<MapScreen> {
       }
     } catch (e) {
       print('Error getting route: $e');
-      // Fallback to straight line
       setState(() {
         _routePoints = [_sourcePoint!, _destinationPoint!];
       });
@@ -525,6 +362,31 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  double _calculateRouteDistance(Bus bus) {
+    if (_sourcePoint == null || _destinationPoint == null) return 0.0;
+
+    final sourceStop = bus.stops.firstWhere(
+      (stop) =>
+          stop.name.toLowerCase() ==
+          _sourceController.text.trim().toLowerCase(),
+      orElse: () => bus.stops.first,
+    );
+
+    final destStop = bus.stops.firstWhere(
+      (stop) =>
+          stop.name.toLowerCase() ==
+          _destinationController.text.trim().toLowerCase(),
+      orElse: () => bus.stops.last,
+    );
+
+    return distance_calc.DistanceCalculator.calculateDistance(
+      sourceStop.latitude,
+      sourceStop.longitude,
+      destStop.latitude,
+      destStop.longitude,
+    );
+  }
+
   void _showResultsSheet() {
     showModalBottomSheet(
       context: context,
@@ -564,7 +426,6 @@ class _MapScreenState extends State<MapScreen> {
                       ElevatedButton(
                         onPressed: () {
                           Navigator.of(context).maybePop();
-                          // Use the callback to switch to rideshare tab instead of pushing a new page
                           if (widget.onOpenRideshare != null) {
                             widget.onOpenRideshare!(
                               _sourceController.text.trim(),
@@ -611,6 +472,11 @@ class _MapScreenState extends State<MapScreen> {
                                     final bus = _getSortedBuses()[index];
                                     final isFavorited =
                                         _favoriteStatus[bus.id] ?? false;
+                                    final distance =
+                                        _calculateRouteDistance(bus);
+                                    final totalFare =
+                                        bus.calculateFare(distance);
+
                                     return ListTile(
                                       leading: Icon(
                                         Icons.directions_bus,
@@ -627,8 +493,38 @@ class _MapScreenState extends State<MapScreen> {
                                             ),
                                         ],
                                       ),
-                                      subtitle:
-                                          Text('${bus.stops.length} stops'),
+                                      subtitle: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text('${bus.stopNames.length} stops'),
+                                          Text(
+                                            'Distance: ${distance.toStringAsFixed(1)} km',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      trailing: Container(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.green[100],
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                        child: Text(
+                                          '৳${totalFare.toStringAsFixed(0)}',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.green[800],
+                                          ),
+                                        ),
+                                      ),
                                     );
                                   },
                                 ),
@@ -728,14 +624,12 @@ class _MapScreenState extends State<MapScreen> {
               },
             ),
             children: [
-              // Base map - Carto Light
               TileLayer(
                 urlTemplate:
                     'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
                 subdomains: const ['a', 'b', 'c', 'd'],
                 userAgentPackageName: 'com.example.flutter_application_1',
               ),
-              // Route line
               if (_routePoints.isNotEmpty)
                 PolylineLayer(
                   polylines: [
@@ -746,7 +640,6 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ],
                 ),
-              // Markers
               MarkerLayer(
                 markers: [
                   if (_sourcePoint != null)
@@ -783,8 +676,6 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ],
           ),
-
-          // Search fields
           Positioned(
             top: 40,
             left: 16,
@@ -793,7 +684,6 @@ class _MapScreenState extends State<MapScreen> {
               onTap: _hideAllSuggestions,
               child: Column(
                 children: [
-                  // Source field
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -807,7 +697,23 @@ class _MapScreenState extends State<MapScreen> {
                               color: Colors.green),
                           suffixIcon: IconButton(
                             icon: const Icon(Icons.search),
-                            onPressed: _searchSource,
+                            onPressed: () {
+                              final stop = _allBusStops.firstWhere(
+                                (s) =>
+                                    s.name.toLowerCase() ==
+                                    _sourceController.text.trim().toLowerCase(),
+                                orElse: () => BusStop(
+                                    name: '', latitude: 0.0, longitude: 0.0),
+                              );
+                              if (stop.name.isNotEmpty) {
+                                _sourcePoint =
+                                    LatLng(stop.latitude, stop.longitude);
+                                if (_mapController != null && _mapReady) {
+                                  _mapController!.move(_sourcePoint!, 15.0);
+                                }
+                                _updateRoute();
+                              }
+                            },
                           ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -816,7 +722,23 @@ class _MapScreenState extends State<MapScreen> {
                           contentPadding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 12),
                         ),
-                        onSubmitted: (_) => _searchSource(),
+                        onSubmitted: (_) {
+                          final stop = _allBusStops.firstWhere(
+                            (s) =>
+                                s.name.toLowerCase() ==
+                                _sourceController.text.trim().toLowerCase(),
+                            orElse: () => BusStop(
+                                name: '', latitude: 0.0, longitude: 0.0),
+                          );
+                          if (stop.name.isNotEmpty) {
+                            _sourcePoint =
+                                LatLng(stop.latitude, stop.longitude);
+                            if (_mapController != null && _mapReady) {
+                              _mapController!.move(_sourcePoint!, 15.0);
+                            }
+                            _updateRoute();
+                          }
+                        },
                       ),
                       if (_showSourceSuggestions &&
                           _sourceSuggestions.isNotEmpty)
@@ -838,46 +760,25 @@ class _MapScreenState extends State<MapScreen> {
                             itemCount: _sourceSuggestions.length,
                             itemBuilder: (context, index) {
                               final suggestion = _sourceSuggestions[index];
-                              final isBusStop =
-                                  suggestion['type'] == 'bus_stop';
-                              final hasBusStopMatch =
-                                  suggestion['hasBusStopMatch'] == true;
-
                               return ListTile(
                                 dense: true,
                                 leading: Icon(
-                                  isBusStop
-                                      ? Icons.directions_bus
-                                      : Icons.location_on,
-                                  color: isBusStop
-                                      ? Colors.blue
-                                      : hasBusStopMatch
-                                          ? Colors.orange
-                                          : Colors.grey,
+                                  Icons.directions_bus,
+                                  color: Colors.blue,
                                   size: 20,
                                 ),
                                 title: Text(
                                   suggestion['name'],
                                   style: TextStyle(
                                     fontSize: 14,
-                                    fontWeight: isBusStop || hasBusStopMatch
-                                        ? FontWeight.w600
-                                        : FontWeight.normal,
+                                    fontWeight:
+                                        suggestion['isExactMatch'] == true
+                                            ? FontWeight.w600
+                                            : FontWeight.normal,
                                   ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                subtitle: isBusStop
-                                    ? null
-                                    : hasBusStopMatch
-                                        ? Text(
-                                            'Near bus stop: ${suggestion['matchedBusStop']}',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.orange[700],
-                                            ),
-                                          )
-                                        : null,
                                 onTap: () =>
                                     _selectSourceSuggestion(suggestion),
                               );
@@ -887,7 +788,6 @@ class _MapScreenState extends State<MapScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  // Destination field
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -900,7 +800,26 @@ class _MapScreenState extends State<MapScreen> {
                           prefixIcon: const Icon(Icons.flag, color: Colors.red),
                           suffixIcon: IconButton(
                             icon: const Icon(Icons.search),
-                            onPressed: _searchDestination,
+                            onPressed: () {
+                              final stop = _allBusStops.firstWhere(
+                                (s) =>
+                                    s.name.toLowerCase() ==
+                                    _destinationController.text
+                                        .trim()
+                                        .toLowerCase(),
+                                orElse: () => BusStop(
+                                    name: '', latitude: 0.0, longitude: 0.0),
+                              );
+                              if (stop.name.isNotEmpty) {
+                                _destinationPoint =
+                                    LatLng(stop.latitude, stop.longitude);
+                                if (_mapController != null && _mapReady) {
+                                  _mapController!
+                                      .move(_destinationPoint!, 15.0);
+                                }
+                                _updateRoute();
+                              }
+                            },
                           ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -909,7 +828,25 @@ class _MapScreenState extends State<MapScreen> {
                           contentPadding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 12),
                         ),
-                        onSubmitted: (_) => _searchDestination(),
+                        onSubmitted: (_) {
+                          final stop = _allBusStops.firstWhere(
+                            (s) =>
+                                s.name.toLowerCase() ==
+                                _destinationController.text
+                                    .trim()
+                                    .toLowerCase(),
+                            orElse: () => BusStop(
+                                name: '', latitude: 0.0, longitude: 0.0),
+                          );
+                          if (stop.name.isNotEmpty) {
+                            _destinationPoint =
+                                LatLng(stop.latitude, stop.longitude);
+                            if (_mapController != null && _mapReady) {
+                              _mapController!.move(_destinationPoint!, 15.0);
+                            }
+                            _updateRoute();
+                          }
+                        },
                       ),
                       if (_showDestinationSuggestions &&
                           _destinationSuggestions.isNotEmpty)
@@ -931,46 +868,25 @@ class _MapScreenState extends State<MapScreen> {
                             itemCount: _destinationSuggestions.length,
                             itemBuilder: (context, index) {
                               final suggestion = _destinationSuggestions[index];
-                              final isBusStop =
-                                  suggestion['type'] == 'bus_stop';
-                              final hasBusStopMatch =
-                                  suggestion['hasBusStopMatch'] == true;
-
                               return ListTile(
                                 dense: true,
                                 leading: Icon(
-                                  isBusStop
-                                      ? Icons.directions_bus
-                                      : Icons.location_on,
-                                  color: isBusStop
-                                      ? Colors.blue
-                                      : hasBusStopMatch
-                                          ? Colors.orange
-                                          : Colors.grey,
+                                  Icons.directions_bus,
+                                  color: Colors.blue,
                                   size: 20,
                                 ),
                                 title: Text(
                                   suggestion['name'],
                                   style: TextStyle(
                                     fontSize: 14,
-                                    fontWeight: isBusStop || hasBusStopMatch
-                                        ? FontWeight.w600
-                                        : FontWeight.normal,
+                                    fontWeight:
+                                        suggestion['isExactMatch'] == true
+                                            ? FontWeight.w600
+                                            : FontWeight.normal,
                                   ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                subtitle: isBusStop
-                                    ? null
-                                    : hasBusStopMatch
-                                        ? Text(
-                                            'Near bus stop: ${suggestion['matchedBusStop']}',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.orange[700],
-                                            ),
-                                          )
-                                        : null,
                                 onTap: () =>
                                     _selectDestinationSuggestion(suggestion),
                               );
@@ -983,8 +899,6 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
           ),
-
-          // Clear button
           if (_sourcePoint != null || _destinationPoint != null)
             Positioned(
               top: 140,
@@ -995,8 +909,6 @@ class _MapScreenState extends State<MapScreen> {
                 child: const Icon(Icons.clear, color: Colors.white),
               ),
             ),
-
-          // Loading indicator
           if (_isLoading)
             Positioned(
               top: 0,

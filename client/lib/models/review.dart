@@ -9,6 +9,7 @@ class Review {
   final int dislikes;
   final int replies;
   final List<ReviewReply> repliesList;
+  final bool isEditing;
 
   Review({
     required this.id,
@@ -21,7 +22,36 @@ class Review {
     this.dislikes = 0,
     this.replies = 0,
     this.repliesList = const [],
+    this.isEditing = false,
   });
+
+  Review copyWith({
+    String? id,
+    String? busId,
+    String? userId,
+    String? userName,
+    String? comment,
+    DateTime? createdAt,
+    int? likes,
+    int? dislikes,
+    int? replies,
+    List<ReviewReply>? repliesList,
+    bool? isEditing,
+  }) {
+    return Review(
+      id: id ?? this.id,
+      busId: busId ?? this.busId,
+      userId: userId ?? this.userId,
+      userName: userName ?? this.userName,
+      comment: comment ?? this.comment,
+      createdAt: createdAt ?? this.createdAt,
+      likes: likes ?? this.likes,
+      dislikes: dislikes ?? this.dislikes,
+      replies: replies ?? this.replies,
+      repliesList: repliesList ?? this.repliesList,
+      isEditing: isEditing ?? this.isEditing,
+    );
+  }
 
   factory Review.fromJson(Map<String, dynamic> json) {
     return Review(
@@ -39,6 +69,7 @@ class Review {
               ?.map((reply) => ReviewReply.fromJson(reply))
               .toList() ??
           [],
+      isEditing: false,
     );
   }
 

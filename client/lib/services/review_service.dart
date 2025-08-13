@@ -91,14 +91,24 @@ class ReviewService {
     required String userId,
   }) async {
     try {
+      print('Liking review: $reviewId for user: $userId');
       final response = await http.post(
         Uri.parse('$baseUrl/api/reviews/$reviewId/like'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'userId': userId}),
       );
 
+      print('Like response status: ${response.statusCode}');
+      print('Like response body: ${response.body}');
+
       if (response.statusCode == 200) {
-        return {'success': true};
+        final data = json.decode(response.body);
+        print('Like response data: $data');
+        return {
+          'success': true,
+          'likes': data['likes'],
+          'dislikes': data['dislikes'],
+        };
       } else {
         return {
           'success': false,
@@ -106,6 +116,7 @@ class ReviewService {
         };
       }
     } catch (e) {
+      print('Error liking review: $e');
       return {
         'success': false,
         'message': e.toString(),
@@ -118,14 +129,24 @@ class ReviewService {
     required String userId,
   }) async {
     try {
+      print('Disliking review: $reviewId for user: $userId');
       final response = await http.post(
         Uri.parse('$baseUrl/api/reviews/$reviewId/dislike'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'userId': userId}),
       );
 
+      print('Dislike response status: ${response.statusCode}');
+      print('Dislike response body: ${response.body}');
+
       if (response.statusCode == 200) {
-        return {'success': true};
+        final data = json.decode(response.body);
+        print('Dislike response data: $data');
+        return {
+          'success': true,
+          'likes': data['likes'],
+          'dislikes': data['dislikes'],
+        };
       } else {
         return {
           'success': false,
@@ -133,6 +154,7 @@ class ReviewService {
         };
       }
     } catch (e) {
+      print('Error disliking review: $e');
       return {
         'success': false,
         'message': e.toString(),
@@ -167,6 +189,64 @@ class ReviewService {
         return {
           'success': false,
           'message': 'Failed to add reply',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': e.toString(),
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateReview({
+    required String reviewId,
+    required String comment,
+  }) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/api/reviews/$reviewId'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'comment': comment,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return {
+          'success': true,
+          'data': data['review'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': 'Failed to update review',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': e.toString(),
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> deleteReview({
+    required String reviewId,
+  }) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/api/reviews/$reviewId'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        return {'success': true};
+      } else {
+        return {
+          'success': false,
+          'message': 'Failed to delete review',
         };
       }
     } catch (e) {

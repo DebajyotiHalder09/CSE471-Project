@@ -683,6 +683,7 @@ class _MapScreenState extends State<MapScreen> {
             child: GestureDetector(
               onTap: _hideAllSuggestions,
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

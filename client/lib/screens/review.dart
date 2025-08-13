@@ -21,7 +21,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
   User? currentUser;
   final TextEditingController commentController = TextEditingController();
   final TextEditingController replyController = TextEditingController();
+  final TextEditingController editController = TextEditingController();
   String? replyingToReviewId;
+  String? editingReviewId;
 
   @override
   void initState() {
@@ -34,6 +36,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
   void dispose() {
     commentController.dispose();
     replyController.dispose();
+    editController.dispose();
     super.dispose();
   }
 
@@ -112,8 +115,12 @@ class _ReviewScreenState extends State<ReviewScreen> {
       );
 
       if (response['success']) {
+        final newReview = Review.fromJson(response['data']);
+        setState(() {
+          reviews.insert(0, newReview);
+          isLoading = false;
+        });
         commentController.clear();
-        await _loadReviews();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Review added successfully!')),
         );
@@ -155,11 +162,23 @@ class _ReviewScreenState extends State<ReviewScreen> {
       );
 
       if (response['success']) {
-        replyController.clear();
+        final newReply = ReviewReply.fromJson(response['data']);
         setState(() {
+          final reviewIndex = reviews.indexWhere((r) => r.id == reviewId);
+          if (reviewIndex != -1) {
+            final review = reviews[reviewIndex];
+            final updatedReplies = List<ReviewReply>.from(review.repliesList)
+              ..add(newReply);
+            final updatedReview = review.copyWith(
+              replies: updatedReplies.length,
+              repliesList: updatedReplies,
+            );
+            reviews[reviewIndex] = updatedReview;
+          }
           replyingToReviewId = null;
+          isLoading = false;
         });
-        await _loadReviews();
+        replyController.clear();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Reply added successfully!')),
         );
@@ -167,9 +186,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
     } catch (e) {
       setState(() {
         errorMessage = e.toString();
-      });
-    } finally {
-      setState(() {
         isLoading = false;
       });
     }
@@ -184,11 +200,28 @@ class _ReviewScreenState extends State<ReviewScreen> {
     }
 
     try {
-      await ReviewService.likeReview(
+      final response = await ReviewService.likeReview(
         reviewId: reviewId,
         userId: currentUser!.id,
       );
-      await _loadReviews();
+
+      if (response['success']) {
+        setState(() {
+          final reviewIndex = reviews.indexWhere((r) => r.id == reviewId);
+          if (reviewIndex != -1) {
+            final review = reviews[reviewIndex];
+            final updatedReview = review.copyWith(
+              likes: response['likes'] ?? review.likes,
+              dislikes: response['dislikes'] ?? review.dislikes,
+            );
+            reviews[reviewIndex] = updatedReview;
+          }
+        });
+      } else {
+        setState(() {
+          errorMessage = response['message'] ?? 'Failed to like review';
+        });
+      }
     } catch (e) {
       setState(() {
         errorMessage = e.toString();
@@ -205,16 +238,186 @@ class _ReviewScreenState extends State<ReviewScreen> {
     }
 
     try {
-      await ReviewService.dislikeReview(
+      final response = await ReviewService.dislikeReview(
         reviewId: reviewId,
         userId: currentUser!.id,
       );
-      await _loadReviews();
+
+      if (response['success']) {
+        setState(() {
+          final reviewIndex = reviews.indexWhere((r) => r.id == reviewId);
+          if (reviewIndex != -1) {
+            final review = reviews[reviewIndex];
+            final updatedReview = review.copyWith(
+              likes: response['likes'] ?? review.likes,
+              dislikes: response['dislikes'] ?? review.dislikes,
+            );
+            reviews[reviewIndex] = updatedReview;
+          }
+        });
+      } else {
+        setState(() {
+          errorMessage = response['message'] ?? 'Failed to dislike review';
+        });
+      }
     } catch (e) {
       setState(() {
         errorMessage = e.toString();
       });
     }
+  }
+
+  Future<void> _editReview(String reviewId, String newComment) async {
+    if (newComment.trim().isEmpty) {
+      setState(() {
+        errorMessage = 'Please enter a comment';
+      });
+      return;
+    }
+
+    // Store the original comment for potential revert
+    final originalComment = editController.text.trim();
+
+    // Update local state immediately for instant feedback
+    setState(() {
+      editingReviewId = null;
+      final reviewIndex = reviews.indexWhere((r) => r.id == reviewId);
+      if (reviewIndex != -1) {
+        final review = reviews[reviewIndex];
+        final updatedReview = review.copyWith(
+          comment: newComment.trim(),
+        );
+        reviews[reviewIndex] = updatedReview;
+      }
+    });
+    editController.clear();
+
+    // Show success message immediately
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Review updated successfully!')),
+    );
+
+    // Make API call in background
+    try {
+      final response = await ReviewService.updateReview(
+        reviewId: reviewId,
+        comment: newComment.trim(),
+      );
+
+      if (!response['success']) {
+        // If API call failed, revert the local change
+        setState(() {
+          final reviewIndex = reviews.indexWhere((r) => r.id == reviewId);
+          if (reviewIndex != -1) {
+            final review = reviews[reviewIndex];
+            final originalReview = review.copyWith(
+              comment: originalComment,
+            );
+            reviews[reviewIndex] = originalReview;
+          }
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response['message'] ?? 'Failed to update review'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      // If API call failed, revert the local change
+      setState(() {
+        final reviewIndex = reviews.indexWhere((r) => r.id == reviewId);
+        if (reviewIndex != -1) {
+          final review = reviews[reviewIndex];
+          final originalReview = review.copyWith(
+            comment: originalComment,
+          );
+          reviews[reviewIndex] = originalReview;
+        }
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update review: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteReview(String reviewId) async {
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+
+    try {
+      final response = await ReviewService.deleteReview(
+        reviewId: reviewId,
+      );
+
+      if (response['success']) {
+        setState(() {
+          reviews.removeWhere((r) => r.id == reviewId);
+          isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Review deleted successfully!')),
+        );
+      } else {
+        setState(() {
+          errorMessage = response['message'] ?? 'Failed to delete review';
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        errorMessage = e.toString();
+        isLoading = false;
+      });
+    }
+  }
+
+  void _startEditing(String reviewId, String currentComment) {
+    setState(() {
+      editingReviewId = reviewId;
+      editController.text = currentComment;
+    });
+  }
+
+  void _cancelEditing() {
+    setState(() {
+      editingReviewId = null;
+      editController.clear();
+    });
+  }
+
+  Future<void> _showDeleteConfirmation(String reviewId) async {
+    return showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Delete Review'),
+          content: Text(
+              'Are you sure you want to delete this review? This action cannot be undone.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _deleteReview(reviewId);
+              },
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -406,6 +609,15 @@ class _ReviewScreenState extends State<ReviewScreen> {
                             isReplying: replyingToReviewId == review.id,
                             replyController: replyController,
                             onAddReply: () => _addReply(review.id),
+                            onEdit: () =>
+                                _startEditing(review.id, review.comment),
+                            onDelete: () => _showDeleteConfirmation(review.id),
+                            canEdit: currentUser?.id == review.userId,
+                            isEditing: editingReviewId == review.id,
+                            editController: editController,
+                            onSaveEdit: () => _editReview(
+                                editingReviewId!, editController.text.trim()),
+                            onCancelEdit: _cancelEditing,
                           );
                         },
                       ),
@@ -424,6 +636,13 @@ class ReviewCard extends StatelessWidget {
   final bool isReplying;
   final TextEditingController replyController;
   final VoidCallback onAddReply;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  final bool canEdit;
+  final bool isEditing;
+  final TextEditingController? editController;
+  final VoidCallback? onSaveEdit;
+  final VoidCallback? onCancelEdit;
 
   const ReviewCard({
     super.key,
@@ -434,6 +653,13 @@ class ReviewCard extends StatelessWidget {
     required this.isReplying,
     required this.replyController,
     required this.onAddReply,
+    this.onEdit,
+    this.onDelete,
+    this.canEdit = false,
+    this.isEditing = false,
+    this.editController,
+    this.onSaveEdit,
+    this.onCancelEdit,
   });
 
   @override
@@ -493,17 +719,87 @@ class ReviewCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (canEdit)
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert, color: Colors.grey[600]),
+                    onSelected: (value) {
+                      if (value == 'edit') {
+                        onEdit?.call();
+                      } else if (value == 'delete') {
+                        onDelete?.call();
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit, size: 18, color: Colors.blue),
+                            SizedBox(width: 8),
+                            Text('Edit'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete, size: 18, color: Colors.red),
+                            SizedBox(width: 8),
+                            Text('Delete'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
             SizedBox(height: 12),
-            Text(
-              review.comment,
-              style: TextStyle(
-                fontSize: 15,
-                color: Colors.grey[800],
-                height: 1.4,
+            if (isEditing && editController != null) ...[
+              TextField(
+                controller: editController!,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText: 'Edit your review...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: EdgeInsets.all(12),
+                ),
               ),
-            ),
+              SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: onCancelEdit,
+                    child: Text('Cancel'),
+                  ),
+                  SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: onSaveEdit,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    ),
+                    child: Text(
+                      'Save',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            ] else ...[
+              Text(
+                review.comment,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Colors.grey[800],
+                  height: 1.4,
+                ),
+              ),
+            ],
             SizedBox(height: 16),
             Row(
               children: [

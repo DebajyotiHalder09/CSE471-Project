@@ -230,6 +230,88 @@ const reviewController = {
       });
     }
   },
+
+  updateReview: async (req, res) => {
+    try {
+      const { reviewId } = req.params;
+      const { comment } = req.body;
+
+      if (!comment) {
+        return res.status(400).json({
+          success: false,
+          message: 'Comment is required',
+        });
+      }
+
+      const review = await Review.findById(reviewId);
+      if (!review) {
+        return res.status(404).json({
+          success: false,
+          message: 'Review not found',
+        });
+      }
+
+      review.comment = comment;
+      await review.save();
+
+      res.json({
+        success: true,
+        review: {
+          _id: review._id,
+          busId: review.busId,
+          userId: review.userId,
+          userName: review.userName,
+          comment: review.comment,
+          createdAt: review.createdAt,
+          likes: review.likes ? review.likes.length : 0,
+          dislikes: review.dislikes ? review.dislikes.length : 0,
+          replies: review.replies ? review.replies.length : 0,
+          repliesList: review.replies ? review.replies.map(reply => ({
+            _id: reply._id,
+            userId: reply.userId,
+            userName: reply.userName,
+            comment: reply.comment,
+            createdAt: reply.createdAt,
+            likes: reply.likes ? reply.likes.length : 0,
+            dislikes: reply.dislikes ? reply.dislikes.length : 0,
+          })) : [],
+        },
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error updating review',
+        error: error.message,
+      });
+    }
+  },
+
+  deleteReview: async (req, res) => {
+    try {
+      const { reviewId } = req.params;
+
+      const review = await Review.findById(reviewId);
+      if (!review) {
+        return res.status(404).json({
+          success: false,
+          message: 'Review not found',
+        });
+      }
+
+      await Review.findByIdAndDelete(reviewId);
+
+      res.json({
+        success: true,
+        message: 'Review deleted successfully',
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting review',
+        error: error.message,
+      });
+    }
+  },
 };
 
 module.exports = reviewController;

@@ -682,8 +682,8 @@ class _MapScreenState extends State<MapScreen> {
             right: 16,
             child: GestureDetector(
               onTap: _hideAllSuggestions,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Stack(
+                clipBehavior: Clip.none,
                 children: [
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -741,57 +741,7 @@ class _MapScreenState extends State<MapScreen> {
                           }
                         },
                       ),
-                      if (_showSourceSuggestions &&
-                          _sourceSuggestions.isNotEmpty)
-                        Container(
-                          margin: const EdgeInsets.only(top: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.1),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: ListView.builder(
-                            shrinkWrap: true,
-                            itemCount: _sourceSuggestions.length,
-                            itemBuilder: (context, index) {
-                              final suggestion = _sourceSuggestions[index];
-                              return ListTile(
-                                dense: true,
-                                leading: Icon(
-                                  Icons.directions_bus,
-                                  color: Colors.blue,
-                                  size: 20,
-                                ),
-                                title: Text(
-                                  suggestion['name'],
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight:
-                                        suggestion['isExactMatch'] == true
-                                            ? FontWeight.w600
-                                            : FontWeight.normal,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                onTap: () =>
-                                    _selectSourceSuggestion(suggestion),
-                              );
-                            },
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                      const SizedBox(height: 8),
                       TextField(
                         controller: _destinationController,
                         decoration: InputDecoration(
@@ -849,53 +799,104 @@ class _MapScreenState extends State<MapScreen> {
                           }
                         },
                       ),
-                      if (_showDestinationSuggestions &&
-                          _destinationSuggestions.isNotEmpty)
-                        Container(
-                          margin: const EdgeInsets.only(top: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.1),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: ListView.builder(
-                            shrinkWrap: true,
-                            itemCount: _destinationSuggestions.length,
-                            itemBuilder: (context, index) {
-                              final suggestion = _destinationSuggestions[index];
-                              return ListTile(
-                                dense: true,
-                                leading: Icon(
-                                  Icons.directions_bus,
-                                  color: Colors.blue,
-                                  size: 20,
-                                ),
-                                title: Text(
-                                  suggestion['name'],
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight:
-                                        suggestion['isExactMatch'] == true
-                                            ? FontWeight.w600
-                                            : FontWeight.normal,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                onTap: () =>
-                                    _selectDestinationSuggestion(suggestion),
-                              );
-                            },
-                          ),
-                        ),
                     ],
                   ),
+                  if (_showSourceSuggestions && _sourceSuggestions.isNotEmpty)
+                    Positioned(
+                      top: 60,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: _sourceSuggestions.length,
+                          itemBuilder: (context, index) {
+                            final suggestion = _sourceSuggestions[index];
+                            return ListTile(
+                              dense: true,
+                              leading: Icon(
+                                Icons.directions_bus,
+                                color: Colors.blue,
+                                size: 20,
+                              ),
+                              title: Text(
+                                suggestion['name'],
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: suggestion['isExactMatch'] == true
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              onTap: () => _selectSourceSuggestion(suggestion),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  if (_showDestinationSuggestions &&
+                      _destinationSuggestions.isNotEmpty)
+                    Positioned(
+                      top: 140,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: _destinationSuggestions.length,
+                          itemBuilder: (context, index) {
+                            final suggestion = _destinationSuggestions[index];
+                            return ListTile(
+                              dense: true,
+                              leading: Icon(
+                                Icons.directions_bus,
+                                color: Colors.blue,
+                                size: 20,
+                              ),
+                              title: Text(
+                                suggestion['name'],
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: suggestion['isExactMatch'] == true
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              onTap: () =>
+                                  _selectDestinationSuggestion(suggestion),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),

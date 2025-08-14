@@ -1,29 +1,25 @@
 import 'package:flutter/material.dart';
 import 'map.dart';
 import 'bus.dart';
-import 'rideshare.dart';
 import 'driverDash.dart';
 import '../services/auth_service.dart';
 import '../models/user.dart';
 
-class NavScreen extends StatefulWidget {
-  static const routeName = '/nav';
+class NavDriverScreen extends StatefulWidget {
+  static const routeName = '/navDriver';
 
-  const NavScreen({super.key, this.initialIndex = 0});
+  const NavDriverScreen({super.key, this.initialIndex = 0});
 
   final int initialIndex;
 
   @override
-  NavScreenState createState() => NavScreenState();
+  NavDriverScreenState createState() => NavDriverScreenState();
 }
 
-class NavScreenState extends State<NavScreen> {
+class NavDriverScreenState extends State<NavDriverScreen> {
   int _currentIndex = 0;
   User? _currentUser;
   bool _isLoading = true;
-
-  String? _rideSource;
-  String? _rideDestination;
 
   @override
   void initState() {
@@ -51,32 +47,31 @@ class NavScreenState extends State<NavScreen> {
       case 0:
         return MapScreen(
           onOpenRideshare: (source, destination) {
-            setState(() {
-              _rideSource = source;
-              _rideDestination = destination;
-              _currentIndex = 2;
-            });
+            // For drivers, this could open a different screen or do nothing
+            // For now, we'll just show a message
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content:
+                    Text('Driver mode: Use Driver Dashboard to accept rides'),
+                backgroundColor: Colors.blue,
+              ),
+            );
           },
         );
       case 1:
         return BusScreen();
       case 2:
-        if (_currentUser?.role == 'driver') {
-          return DriverDashScreen();
-        } else {
-          return RideshareScreen(
-            source: _rideSource,
-            destination: _rideDestination,
-          );
-        }
+        return DriverDashScreen();
       default:
         return MapScreen(
           onOpenRideshare: (source, destination) {
-            setState(() {
-              _rideSource = source;
-              _rideDestination = destination;
-              _currentIndex = 2;
-            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content:
+                    Text('Driver mode: Use Driver Dashboard to accept rides'),
+                backgroundColor: Colors.blue,
+              ),
+            );
           },
         );
     }
@@ -90,7 +85,7 @@ class NavScreenState extends State<NavScreen> {
           children: [
             // Top Bar
             Container(
-              height: 60, // Smaller height than nav.dart
+              height: 60,
               decoration: BoxDecoration(
                 color: Colors.white,
                 boxShadow: [
@@ -116,33 +111,37 @@ class NavScreenState extends State<NavScreen> {
                       ),
                     ),
 
-                    // Circular avatar on the right
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.pushNamed(context, '/profile');
-                      },
-                      child: CircleAvatar(
-                        radius: 20,
-                        backgroundColor: Colors.blue[100],
-                        child: _isLoading
-                            ? SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.blue[700]!),
-                                ),
-                              )
-                            : Text(
-                                _currentUser?.firstNameInitial ?? 'U',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue[700],
-                                ),
-                              ),
-                      ),
+                    // Driver indicator and avatar on the right
+                    Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.pushNamed(context, '/profile');
+                          },
+                          child: CircleAvatar(
+                            radius: 20,
+                            backgroundColor: Colors.blue[100],
+                            child: _isLoading
+                                ? SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                          Colors.blue[700]!),
+                                    ),
+                                  )
+                                : Text(
+                                    _currentUser?.firstNameInitial ?? 'D',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue[700],
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -175,7 +174,7 @@ class NavScreenState extends State<NavScreen> {
           },
           type: BottomNavigationBarType.fixed,
           backgroundColor: Colors.white,
-          selectedItemColor: Colors.blue,
+          selectedItemColor: Colors.green[700],
           unselectedItemColor: Colors.grey[600],
           selectedLabelStyle: TextStyle(
             fontWeight: FontWeight.w600,
@@ -195,12 +194,8 @@ class NavScreenState extends State<NavScreen> {
               label: 'Bus',
             ),
             BottomNavigationBarItem(
-              icon: Icon(
-                  _currentUser?.role == 'driver'
-                      ? Icons.directions_car
-                      : Icons.local_taxi,
-                  size: 24),
-              label: _currentUser?.role == 'driver' ? 'Driver' : 'Rideshare',
+              icon: Icon(Icons.directions_car, size: 24),
+              label: 'Driver',
             ),
           ],
         ),

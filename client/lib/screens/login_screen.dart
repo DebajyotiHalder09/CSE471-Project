@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import 'signup_screen.dart';
 import 'nav.dart';
+import 'navDriver.dart';
 
 class LoginScreen extends StatefulWidget {
   static const routeName = '/login';
 
   const LoginScreen({super.key});
-  
+
   @override
   _LoginScreenState createState() => _LoginScreenState();
 }
@@ -67,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       SizedBox(height: 32),
-                      
+
                       // Email Field
                       TextFormField(
                         controller: _emailController,
@@ -87,9 +88,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.blue, width: 2),
+                            borderSide:
+                                BorderSide(color: Colors.blue, width: 2),
                           ),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 16),
                         ),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
@@ -99,7 +102,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         },
                       ),
                       SizedBox(height: 20),
-                      
+
                       // Password Field
                       TextFormField(
                         controller: _passwordController,
@@ -119,9 +122,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.blue, width: 2),
+                            borderSide:
+                                BorderSide(color: Colors.blue, width: 2),
                           ),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 16),
                         ),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
@@ -131,7 +136,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         },
                       ),
                       SizedBox(height: 16),
-                      
+
                       // Forgot Password
                       Align(
                         alignment: Alignment.centerRight,
@@ -149,62 +154,114 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       SizedBox(height: 24),
-                      
+
                       // Login Button
                       SizedBox(
                         width: double.infinity,
                         height: 50,
-                        child: _isLoading 
-                          ? Center(child: CircularProgressIndicator())
-                          : ElevatedButton(
-                              onPressed: () async {
-                                if (_formKey.currentState!.validate()) {
-                                  setState(() => _isLoading = true);
-                                  try {
-                                    final response = await _authService.login(
-                                      _emailController.text,
-                                      _passwordController.text,
-                                    );
-                                    
-                                    if (mounted) {
-                                      print('User data: ${response['user']}');
-                                      
-                                      Navigator.pushReplacementNamed(
-                                        context,
-                                        NavScreen.routeName,
-                                        arguments: response['user'],
+                        child: _isLoading
+                            ? Center(child: CircularProgressIndicator())
+                            : ElevatedButton(
+                                onPressed: () async {
+                                  if (_formKey.currentState!.validate()) {
+                                    setState(() => _isLoading = true);
+                                    try {
+                                      final response = await _authService.login(
+                                        _emailController.text,
+                                        _passwordController.text,
                                       );
+
+                                      if (mounted) {
+                                        print('User data: ${response['user']}');
+                                        print(
+                                            'User role: ${response['user']['role']}');
+                                        print(
+                                            'Role type: ${response['user']['role'].runtimeType}');
+                                        print(
+                                            'Role length: ${response['user']['role']?.length ?? 'null'}');
+                                        print(
+                                            'Role comparison: ${response['user']['role'] == 'driver'}');
+                                        print(
+                                            'Role comparison (case insensitive): ${response['user']['role']?.toString().toLowerCase() == 'driver'}');
+                                        print(
+                                            'Response keys: ${response.keys.toList()}');
+                                        print(
+                                            'User keys: ${response['user'].keys.toList()}');
+
+                                        // Check role with case insensitivity and trim whitespace
+                                        final userRole = response['user']
+                                                    ['role']
+                                                ?.toString()
+                                                .toLowerCase()
+                                                .trim() ??
+                                            '';
+                                        final isDriver = userRole == 'driver';
+
+                                        print('Processed role: "$userRole"');
+                                        print('Is driver: $isDriver');
+
+                                        // Also check for common variations
+                                        final alternativeDriverRoles = [
+                                          'driver',
+                                          'drivers',
+                                          'd',
+                                          'driver_user'
+                                        ];
+                                        final isDriverAlternative =
+                                            alternativeDriverRoles
+                                                .contains(userRole);
+                                        print(
+                                            'Is driver (alternative check): $isDriverAlternative');
+
+                                        if (isDriver || isDriverAlternative) {
+                                          print(
+                                              'Navigating to NavDriverScreen');
+                                          Navigator.pushReplacementNamed(
+                                            context,
+                                            NavDriverScreen.routeName,
+                                            arguments: response['user'],
+                                          );
+                                        } else {
+                                          print('Navigating to NavScreen');
+                                          Navigator.pushReplacementNamed(
+                                            context,
+                                            NavScreen.routeName,
+                                            arguments: response['user'],
+                                          );
+                                        }
+                                      }
+                                    } catch (e) {
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(content: Text(e.toString())),
+                                        );
+                                      }
+                                    } finally {
+                                      if (mounted)
+                                        setState(() => _isLoading = false);
                                     }
-                                  } catch (e) {
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text(e.toString())),
-                                      );
-                                    }
-                                  } finally {
-                                    if (mounted) setState(() => _isLoading = false);
                                   }
-                                }
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blue,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blue,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  elevation: 2,
                                 ),
-                                elevation: 2,
-                              ),
-                              child: Text(
-                                'Login',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
+                                child: Text(
+                                  'Login',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
-                            ),
                       ),
                       SizedBox(height: 20),
-                      
+
                       // Divider
                       Row(
                         children: [
@@ -223,7 +280,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
                       SizedBox(height: 20),
-                      
+
                       // Continue with Google Button
                       SizedBox(
                         width: double.infinity,
@@ -232,9 +289,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           onPressed: () {
                             // TODO: Implement Google sign-in
                           },
-                          icon: Image.asset('assets/icons/icons8-google-48.png',
-                          width: 30,
-                          height: 30,),
+                          icon: Image.asset(
+                            'assets/icons/icons8-google-48.png',
+                            width: 30,
+                            height: 30,
+                          ),
                           label: Text(
                             'Continue with Google',
                             style: TextStyle(
@@ -255,7 +314,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 SizedBox(height: 24),
-                
+
                 // Sign Up Link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,

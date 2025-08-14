@@ -3,6 +3,7 @@ import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/nav.dart';
+import 'screens/navDriver.dart';
 import 'screens/profile.dart';
 import 'screens/pinfo.dart';
 import 'screens/map.dart';
@@ -29,6 +30,7 @@ class MyApp extends StatelessWidget {
         SignupScreen.routeName: (context) => SignupScreen(),
         DashboardScreen.routeName: (context) => DashboardScreen(),
         NavScreen.routeName: (context) => NavScreen(),
+        NavDriverScreen.routeName: (context) => NavDriverScreen(),
         ProfileScreen.routeName: (context) => ProfileScreen(),
         PersonalInfoScreen.routeName: (context) => PersonalInfoScreen(),
         '/map': (context) => MapScreen(),

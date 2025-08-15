@@ -33,7 +33,7 @@ class _MapScreenState extends State<MapScreen> {
   List<Bus> _availableBuses = [];
   String? _busesError;
   String? _currentUserId;
-  Map<String, bool> _favoriteStatus = {};
+  final Map<String, bool> _favoriteStatus = {};
 
   List<BusStop> _allBusStops = [];
 

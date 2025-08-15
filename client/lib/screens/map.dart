@@ -35,7 +35,7 @@ class _MapScreenState extends State<MapScreen> {
   List<Bus> _availableBuses = [];
   String? _busesError;
   String? _currentUserId;
-  Map<String, bool> _favoriteStatus = {};
+  final Map<String, bool> _favoriteStatus = {};
 
   List<BusStop> _allBusStops = [];
 
@@ -110,122 +110,265 @@ class _MapScreenState extends State<MapScreen> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Individual Buses'),
-          content: FutureBuilder<Map<String, dynamic>>(
-            future: IndividualBusService.getIndividualBuses(busInfoId),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return Container(
-                  height: 100,
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
+        return Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.9,
+            height: MediaQuery.of(context).size.height * 0.7,
+            padding: EdgeInsets.all(20),
+            child: FutureBuilder<Map<String, dynamic>>(
+              future: IndividualBusService.getIndividualBuses(busInfoId),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(child: CircularProgressIndicator());
+                }
 
-              if (snapshot.hasError) {
-                return Text(
-                    'Error loading individual buses: ${snapshot.error}');
-              }
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      'Error loading individual buses: ${snapshot.error}',
+                      style: TextStyle(color: Colors.red[600]),
+                    ),
+                  );
+                }
 
-              if (!snapshot.hasData || !snapshot.data!['success']) {
-                return Text('No individual buses found');
-              }
+                if (!snapshot.hasData || !snapshot.data!['success']) {
+                  return Center(
+                    child: Text(
+                      'No individual buses found',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  );
+                }
 
-              final List<IndividualBus> buses = snapshot.data!['data'];
+                final List<IndividualBus> buses = snapshot.data!['data'];
 
-              if (buses.isEmpty) {
-                return Text('No individual buses available');
-              }
+                if (buses.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'No individual buses available',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  );
+                }
 
-              return Container(
-                width: double.maxFinite,
-                height: 300,
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: buses.length,
-                  itemBuilder: (context, index) {
-                    final bus = buses[index];
-                    return Container(
-                      margin: EdgeInsets.only(bottom: 12),
-                      padding: EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[50],
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey[300]!),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  bus.busCode,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                SizedBox(height: 4),
-                                Text(
-                                  'Passengers: ${bus.currentPassengerCount}/${bus.totalPassengerCapacity}',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                                Text(
-                                  'Status: ${bus.status}',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                                Text(
-                                  'ETA: N/A',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey[600],
-                                  ),
+                final sortedBuses = List<IndividualBus>.from(buses);
+                if (_sourcePoint != null) {
+                  sortedBuses.sort((a, b) {
+                    final aDistance = _calculateDistanceFromSource(a);
+                    final bDistance = _calculateDistanceFromSource(b);
+                    return aDistance.compareTo(bDistance);
+                  });
+                }
+
+                return Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Individual Buses',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[800],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: Icon(Icons.close, color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                    Divider(height: 16),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: sortedBuses.length,
+                        itemBuilder: (context, index) {
+                          final bus = sortedBuses[index];
+                          return Container(
+                            margin: EdgeInsets.only(bottom: 12),
+                            padding: EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: Colors.grey[100]!),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  blurRadius: 12,
+                                  offset: Offset(0, 6),
                                 ),
                               ],
                             ),
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Container(
-                                padding: EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: _getStatusColor(bus.status),
-                                  borderRadius: BorderRadius.circular(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          bus.busCode,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 18,
+                                            color: Colors.grey[900],
+                                          ),
+                                        ),
+                                        SizedBox(width: 10),
+                                        Container(
+                                          padding: EdgeInsets.symmetric(
+                                              horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: _getStatusColor(bus.status),
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            bus.status.toUpperCase(),
+                                            style: TextStyle(
+                                              fontSize: 9,
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    ElevatedButton(
+                                      onPressed: () {
+                                        // TODO: Implement board functionality
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.blue[600],
+                                        foregroundColor: Colors.white,
+                                        padding: EdgeInsets.symmetric(
+                                            horizontal: 20, vertical: 10),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                        minimumSize: Size(0, 0),
+                                      ),
+                                      child: Text(
+                                        'Board',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                child: Text(
-                                  bus.status.toUpperCase(),
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue[50],
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Icon(
+                                        Icons.people,
+                                        color: Colors.blue[600],
+                                        size: 16,
+                                      ),
+                                    ),
+                                    SizedBox(width: 10),
+                                    Text(
+                                      '${bus.currentPassengerCount}/${bus.totalPassengerCapacity}',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey[800],
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                            ],
-                          ),
-                        ],
+                                SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Container(
+                                        padding: EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.green[50],
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              Icons.location_on,
+                                              color: Colors.green[600],
+                                              size: 18,
+                                            ),
+                                            SizedBox(width: 6),
+                                            Text(
+                                              '${_calculateDistanceFromSource(bus).toStringAsFixed(1)} km',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700,
+                                                color: Colors.green[800],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(width: 8),
+                                    Expanded(
+                                      child: Container(
+                                        padding: EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.orange[50],
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              Icons.access_time,
+                                              color: Colors.orange[600],
+                                              size: 18,
+                                            ),
+                                            SizedBox(width: 6),
+                                            Text(
+                                              _calculateETA(bus),
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700,
+                                                color: Colors.orange[800],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
-              );
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text('Close'),
+                    ),
+                  ],
+                );
+              },
             ),
-          ],
+          ),
         );
       },
     );
@@ -235,37 +378,102 @@ class _MapScreenState extends State<MapScreen> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('${bus.busName} - Stops'),
-          content: Container(
-            width: double.maxFinite,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: bus.stops.length,
-              itemBuilder: (context, index) {
-                final stop = bus.stops[index];
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.blue,
-                    child: Text(
-                      '${index + 1}',
+        return Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.85,
+            height: MediaQuery.of(context).size.height * 0.6,
+            padding: EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '${bus.busName} - Stops',
                       style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold),
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[800],
+                      ),
                     ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: Icon(Icons.close, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+                Divider(height: 24),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: bus.stops.length,
+                    itemBuilder: (context, index) {
+                      final stop = bus.stops[index];
+                      return Container(
+                        margin: EdgeInsets.only(bottom: 16),
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey[200]!),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 4,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: Colors.blue,
+                              radius: 20,
+                              child: Text(
+                                '${index + 1}',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    stop.name,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey[800],
+                                    ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    '${stop.latitude.toStringAsFixed(4)}, ${stop.longitude.toStringAsFixed(4)}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
-                  title: Text(stop.name),
-                  subtitle: Text(
-                      '${stop.latitude.toStringAsFixed(4)}, ${stop.longitude.toStringAsFixed(4)}'),
-                );
-              },
+                ),
+              ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text('Close'),
-            ),
-          ],
         );
       },
     );
@@ -602,6 +810,47 @@ class _MapScreenState extends State<MapScreen> {
       sourceStop.longitude,
       destStop.latitude,
       destStop.longitude,
+    );
+  }
+
+  String _calculateETA(IndividualBus bus) {
+    if (_sourcePoint == null) return 'N/A';
+
+    final distance = distance_calc.DistanceCalculator.calculateDistance(
+      _sourcePoint!.latitude,
+      _sourcePoint!.longitude,
+      bus.latitude,
+      bus.longitude,
+    );
+
+    if (bus.averageSpeedKmh <= 0) return 'N/A';
+
+    final timeInHours = distance / bus.averageSpeedKmh;
+    final timeInMinutes = (timeInHours * 60).round();
+
+    if (timeInMinutes < 1) {
+      return 'Less than 1 min';
+    } else if (timeInMinutes < 60) {
+      return '${timeInMinutes} min';
+    } else {
+      final hours = (timeInMinutes / 60).floor();
+      final minutes = timeInMinutes % 60;
+      if (minutes == 0) {
+        return '${hours}h';
+      } else {
+        return '${hours}h ${minutes}m';
+      }
+    }
+  }
+
+  double _calculateDistanceFromSource(IndividualBus bus) {
+    if (_sourcePoint == null) return 0.0;
+
+    return distance_calc.DistanceCalculator.calculateDistance(
+      _sourcePoint!.latitude,
+      _sourcePoint!.longitude,
+      bus.latitude,
+      bus.longitude,
     );
   }
 

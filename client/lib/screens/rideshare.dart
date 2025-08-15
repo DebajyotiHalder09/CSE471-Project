@@ -1193,7 +1193,7 @@ class _RideshareScreenState extends State<RideshareScreen> {
                                                       ],
                                                     ),
                                                   ))
-                                              .toList(),
+                                              ,
                                         ],
                                       ),
                                     ),
@@ -1945,7 +1945,7 @@ class _RideshareScreenState extends State<RideshareScreen> {
                                                     ],
                                                   ),
                                                 ))
-                                            .toList(),
+                                            ,
                                       ],
                                     ),
                                   ),

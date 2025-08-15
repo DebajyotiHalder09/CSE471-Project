@@ -142,7 +142,7 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
 
     print('Current user data: ${_currentUser?.toJson()}');
     print(
-        'Form data - Name: "${newName}", Email: "${newEmail}", Gender: "${_selectedGender}"');
+        'Form data - Name: "$newName", Email: "$newEmail", Gender: "$_selectedGender"');
 
     // Only add fields that have actually changed and have valid values
     if (newName != _currentUser?.name && newName.isNotEmpty) {

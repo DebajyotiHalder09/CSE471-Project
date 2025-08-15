@@ -28,7 +28,11 @@ class TripHistory {
       busId: json['busId'] ?? '',
       busName: json['busName'] ?? '',
       distance: (json['distance'] ?? 0.0).toDouble(),
-      fare: (json['fare'] ?? 0.0).toDouble(),
+      fare: json['fare'] is double
+          ? json['fare']
+          : (json['fare'] is int
+              ? json['fare'].toDouble()
+              : double.tryParse(json['fare'].toString()) ?? 0.0),
       source: json['source'] ?? '',
       destination: json['destination'] ?? '',
       createdAt:

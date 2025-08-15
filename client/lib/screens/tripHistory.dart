@@ -18,7 +18,13 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
 
   double get _totalDistance =>
       _trips.fold(0.0, (sum, trip) => sum + trip.distance);
-  double get _totalFare => _trips.fold(0.0, (sum, trip) => sum + trip.fare);
+  double get _totalFare {
+    double total = 0.0;
+    for (var trip in _trips) {
+      total += trip.fare;
+    }
+    return total;
+  }
 
   @override
   void initState() {
@@ -130,7 +136,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
                       ),
                       SizedBox(height: 4),
                       Text(
-                        '${_totalDistance.toStringAsFixed(1)} km',
+                        '${_totalDistance.toStringAsFixed(3)} km',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
@@ -169,7 +175,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
                       ),
                       SizedBox(height: 4),
                       Text(
-                        '৳${_totalFare.toStringAsFixed(0)}',
+                        '৳${_totalFare.toStringAsFixed(2)}',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
@@ -426,7 +432,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
                             ),
                             SizedBox(width: 6),
                             Text(
-                              '${trip.distance.toStringAsFixed(1)} km',
+                              '${trip.distance.toStringAsFixed(3)} km',
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
@@ -456,7 +462,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
                             ),
                             SizedBox(width: 6),
                             Text(
-                              '৳${trip.fare.toStringAsFixed(0)}',
+                              '৳${trip.fare.toStringAsFixed(2)}',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w700,

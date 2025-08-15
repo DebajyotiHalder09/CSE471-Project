@@ -944,87 +944,129 @@ class _MapScreenState extends State<MapScreen> {
                                     final totalFare =
                                         bus.calculateFare(distance);
 
-                                    return Column(
-                                      children: [
-                                        ListTile(
-                                          leading: Icon(
-                                            Icons.directions_bus,
-                                            color: Colors.blue,
+                                    return Container(
+                                      margin: EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 8),
+                                      padding: EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                            color: Colors.grey[100]!),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black
+                                                .withValues(alpha: 0.06),
+                                            blurRadius: 8,
+                                            offset: Offset(0, 2),
                                           ),
-                                          title: Row(
-                                            children: [
-                                              Expanded(
-                                                  child: Text(bus.busName)),
-                                              if (isFavorited)
-                                                Icon(
-                                                  Icons.favorite,
-                                                  color: Colors.red,
-                                                  size: 16,
-                                                ),
-                                            ],
-                                          ),
-                                          subtitle: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                  '${bus.stopNames.length} stops'),
-                                              Text(
-                                                'Distance: ${distance.toStringAsFixed(1)} km',
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  color: Colors.grey[600],
-                                                ),
+                                        ],
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              bus.busName,
+                                              style: TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.grey[900],
                                               ),
-                                            ],
+                                            ),
                                           ),
-                                          trailing: Row(
+                                          SizedBox(width: 12),
+                                          Container(
+                                            padding: EdgeInsets.symmetric(
+                                                horizontal: 10, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: Colors.blue[50],
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: Border.all(
+                                                  color: Colors.blue[200]!),
+                                            ),
+                                            child: Text(
+                                              '${distance.toStringAsFixed(1)} km',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.blue[700],
+                                              ),
+                                            ),
+                                          ),
+                                          SizedBox(width: 12),
+                                          Container(
+                                            padding: EdgeInsets.symmetric(
+                                                horizontal: 12, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: Colors.green[50],
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              border: Border.all(
+                                                  color: Colors.green[200]!),
+                                            ),
+                                            child: Text(
+                                              '৳${totalFare.toStringAsFixed(0)}',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w700,
+                                                color: Colors.green[700],
+                                              ),
+                                            ),
+                                          ),
+                                          SizedBox(width: 16),
+                                          Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              IconButton(
-                                                icon: Icon(
-                                                  Icons.info_outline,
-                                                  color: Colors.blue,
-                                                ),
-                                                onPressed: () {
-                                                  _toggleIndividualBuses(
-                                                      bus.id);
-                                                },
-                                                tooltip:
-                                                    'Show individual buses',
-                                              ),
-                                              IconButton(
-                                                icon: Icon(
-                                                  Icons.route,
-                                                  color: Colors.green,
-                                                ),
-                                                onPressed: () {
-                                                  _showStopsDialog(bus);
-                                                },
-                                                tooltip: 'Show stops',
-                                              ),
                                               Container(
-                                                padding: EdgeInsets.symmetric(
-                                                  horizontal: 12,
-                                                  vertical: 6,
-                                                ),
+                                                padding: EdgeInsets.all(6),
                                                 decoration: BoxDecoration(
-                                                  color: Colors.green[100],
+                                                  color: Colors.blue[50],
                                                   borderRadius:
-                                                      BorderRadius.circular(12),
+                                                      BorderRadius.circular(8),
                                                 ),
-                                                child: Text(
-                                                  '৳${totalFare.toStringAsFixed(0)}',
-                                                  style: TextStyle(
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Colors.green[800],
+                                                child: IconButton(
+                                                  icon: Icon(
+                                                    Icons.info_outline,
+                                                    color: Colors.blue[600],
+                                                    size: 16,
                                                   ),
+                                                  onPressed: () {
+                                                    _toggleIndividualBuses(
+                                                        bus.id);
+                                                  },
+                                                  tooltip:
+                                                      'Show individual buses',
+                                                  padding: EdgeInsets.zero,
+                                                  constraints: BoxConstraints(),
+                                                ),
+                                              ),
+                                              SizedBox(width: 6),
+                                              Container(
+                                                padding: EdgeInsets.all(6),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.green[50],
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                ),
+                                                child: IconButton(
+                                                  icon: Icon(
+                                                    Icons.route,
+                                                    color: Colors.green[600],
+                                                    size: 16,
+                                                  ),
+                                                  onPressed: () {
+                                                    _showStopsDialog(bus);
+                                                  },
+                                                  tooltip: 'Show stops',
+                                                  padding: EdgeInsets.zero,
+                                                  constraints: BoxConstraints(),
                                                 ),
                                               ),
                                             ],
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     );
                                   },
                                 ),

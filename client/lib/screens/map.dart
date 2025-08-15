@@ -5,7 +5,9 @@ import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import '../services/auth_service.dart';
 import '../services/fav_bus_service.dart';
+import '../services/individual_bus_service.dart';
 import '../models/bus.dart';
+import '../models/individual_bus.dart';
 import '../utils/distance_calculator.dart' as distance_calc;
 
 class MapScreen extends StatefulWidget {
@@ -99,6 +101,191 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  void _toggleIndividualBuses(String busInfoId) {
+    print('Toggling individual buses for: $busInfoId');
+    _showIndividualBusesDialog(busInfoId);
+  }
+
+  void _showIndividualBusesDialog(String busInfoId) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Individual Buses'),
+          content: FutureBuilder<Map<String, dynamic>>(
+            future: IndividualBusService.getIndividualBuses(busInfoId),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return Container(
+                  height: 100,
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+
+              if (snapshot.hasError) {
+                return Text(
+                    'Error loading individual buses: ${snapshot.error}');
+              }
+
+              if (!snapshot.hasData || !snapshot.data!['success']) {
+                return Text('No individual buses found');
+              }
+
+              final List<IndividualBus> buses = snapshot.data!['data'];
+
+              if (buses.isEmpty) {
+                return Text('No individual buses available');
+              }
+
+              return Container(
+                width: double.maxFinite,
+                height: 300,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: buses.length,
+                  itemBuilder: (context, index) {
+                    final bus = buses[index];
+                    return Container(
+                      margin: EdgeInsets.only(bottom: 12),
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  bus.busCode,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  'Passengers: ${bus.currentPassengerCount}/${bus.totalPassengerCapacity}',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                Text(
+                                  'Status: ${bus.status}',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                Text(
+                                  'ETA: N/A',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Container(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: _getStatusColor(bus.status),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  bus.status.toUpperCase(),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showStopsDialog(Bus bus) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('${bus.busName} - Stops'),
+          content: Container(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: bus.stops.length,
+              itemBuilder: (context, index) {
+                final stop = bus.stops[index];
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.blue,
+                    child: Text(
+                      '${index + 1}',
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  title: Text(stop.name),
+                  subtitle: Text(
+                      '${stop.latitude.toStringAsFixed(4)}, ${stop.longitude.toStringAsFixed(4)}'),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'running':
+        return Colors.green;
+      case 'stopped':
+        return Colors.orange;
+      case 'maintenance':
+        return Colors.red;
+      case 'offline':
+        return Colors.grey;
+      default:
+        return Colors.grey;
+    }
+  }
+
   List<Bus> _getSortedBuses() {
     final sortedBuses = List<Bus>.from(_availableBuses);
     sortedBuses.sort((a, b) {
@@ -114,8 +301,17 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _loadAllBusStops() async {
     try {
+      final token = await AuthService.getToken();
+      if (token == null) return;
+
       final uri = Uri.parse('${AuthService.baseUrl}/bus/all');
-      final response = await http.get(uri);
+      final response = await http.get(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
       if (response.statusCode == 200) {
         final data = json.decode(response.body) as Map<String, dynamic>;
         final List<dynamic> buses = data['data'] as List<dynamic>? ?? [];
@@ -326,9 +522,25 @@ class _MapScreenState extends State<MapScreen> {
     });
 
     try {
+      final token = await AuthService.getToken();
+      if (token == null) {
+        setState(() {
+          _availableBuses = [];
+          _busesLoading = false;
+          _busesError = 'Authentication required';
+        });
+        return;
+      }
+
       final uri = Uri.parse(
           '${AuthService.baseUrl}/bus/search-by-route?startLocation=${Uri.encodeComponent(startLocation)}&endLocation=${Uri.encodeComponent(endLocation)}');
-      final response = await http.get(uri);
+      final response = await http.get(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
       if (response.statusCode == 200) {
         final data = json.decode(response.body) as Map<String, dynamic>;
         final List<dynamic> list = data['data'] as List<dynamic>? ?? [];
@@ -345,6 +557,12 @@ class _MapScreenState extends State<MapScreen> {
           _availableBuses = [];
           _busesLoading = false;
           _busesError = null;
+        });
+      } else if (response.statusCode == 401) {
+        setState(() {
+          _availableBuses = [];
+          _busesLoading = false;
+          _busesError = 'Authentication required';
         });
       } else {
         setState(() {
@@ -477,54 +695,87 @@ class _MapScreenState extends State<MapScreen> {
                                     final totalFare =
                                         bus.calculateFare(distance);
 
-                                    return ListTile(
-                                      leading: Icon(
-                                        Icons.directions_bus,
-                                        color: Colors.blue,
-                                      ),
-                                      title: Row(
-                                        children: [
-                                          Expanded(child: Text(bus.busName)),
-                                          if (isFavorited)
-                                            Icon(
-                                              Icons.favorite,
-                                              color: Colors.red,
-                                              size: 16,
-                                            ),
-                                        ],
-                                      ),
-                                      subtitle: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text('${bus.stopNames.length} stops'),
-                                          Text(
-                                            'Distance: ${distance.toStringAsFixed(1)} km',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey[600],
-                                            ),
+                                    return Column(
+                                      children: [
+                                        ListTile(
+                                          leading: Icon(
+                                            Icons.directions_bus,
+                                            color: Colors.blue,
                                           ),
-                                        ],
-                                      ),
-                                      trailing: Container(
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.green[100],
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                        ),
-                                        child: Text(
-                                          '৳${totalFare.toStringAsFixed(0)}',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.green[800],
+                                          title: Row(
+                                            children: [
+                                              Expanded(
+                                                  child: Text(bus.busName)),
+                                              if (isFavorited)
+                                                Icon(
+                                                  Icons.favorite,
+                                                  color: Colors.red,
+                                                  size: 16,
+                                                ),
+                                            ],
+                                          ),
+                                          subtitle: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                  '${bus.stopNames.length} stops'),
+                                              Text(
+                                                'Distance: ${distance.toStringAsFixed(1)} km',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey[600],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          trailing: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              IconButton(
+                                                icon: Icon(
+                                                  Icons.info_outline,
+                                                  color: Colors.blue,
+                                                ),
+                                                onPressed: () {
+                                                  _toggleIndividualBuses(
+                                                      bus.id);
+                                                },
+                                                tooltip:
+                                                    'Show individual buses',
+                                              ),
+                                              IconButton(
+                                                icon: Icon(
+                                                  Icons.route,
+                                                  color: Colors.green,
+                                                ),
+                                                onPressed: () {
+                                                  _showStopsDialog(bus);
+                                                },
+                                                tooltip: 'Show stops',
+                                              ),
+                                              Container(
+                                                padding: EdgeInsets.symmetric(
+                                                  horizontal: 12,
+                                                  vertical: 6,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.green[100],
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                                child: Text(
+                                                  '৳${totalFare.toStringAsFixed(0)}',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.green[800],
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
-                                      ),
+                                      ],
                                     );
                                   },
                                 ),

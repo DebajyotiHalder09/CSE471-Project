@@ -7,6 +7,7 @@ import 'screens/navDriver.dart';
 import 'screens/profile.dart';
 import 'screens/pinfo.dart';
 import 'screens/map.dart';
+import 'screens/tripHistory.dart';
 
 void main() {
   runApp(const MyApp());
@@ -34,6 +35,7 @@ class MyApp extends StatelessWidget {
         ProfileScreen.routeName: (context) => ProfileScreen(),
         PersonalInfoScreen.routeName: (context) => PersonalInfoScreen(),
         '/map': (context) => MapScreen(),
+        TripHistoryScreen.routeName: (context) => TripHistoryScreen(),
       },
       onUnknownRoute: (settings) {
         print('Unknown route: ${settings.name}');

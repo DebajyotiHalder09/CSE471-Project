@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../services/auth_service.dart';
 import '../services/fav_bus_service.dart';
 import '../services/individual_bus_service.dart';
+import '../services/trip_history_service.dart';
 import '../models/bus.dart';
 import '../models/individual_bus.dart';
 import '../utils/distance_calculator.dart' as distance_calc;
@@ -104,6 +105,14 @@ class _MapScreenState extends State<MapScreen> {
   void _toggleIndividualBuses(String busInfoId) {
     print('Toggling individual buses for: $busInfoId');
     _showIndividualBusesDialog(busInfoId);
+  }
+
+  Bus? _getBusInfoById(String busInfoId) {
+    try {
+      return _availableBuses.firstWhere((bus) => bus.id == busInfoId);
+    } catch (e) {
+      return null;
+    }
   }
 
   void _showIndividualBusesDialog(String busInfoId) {
@@ -242,8 +251,67 @@ class _MapScreenState extends State<MapScreen> {
                                       ],
                                     ),
                                     ElevatedButton(
-                                      onPressed: () {
-                                        // TODO: Implement board functionality
+                                      onPressed: () async {
+                                        final source =
+                                            _sourceController.text.trim();
+                                        final destination =
+                                            _destinationController.text.trim();
+
+                                        if (source.isEmpty ||
+                                            destination.isEmpty) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                  'Please set source and destination first'),
+                                              backgroundColor: Colors.orange,
+                                            ),
+                                          );
+                                          return;
+                                        }
+
+                                        final busInfo =
+                                            _getBusInfoById(busInfoId);
+                                        if (busInfo != null) {
+                                          final distance =
+                                              _calculateRouteDistance(busInfo);
+                                          final fare =
+                                              busInfo.calculateFare(distance);
+
+                                          final result =
+                                              await TripHistoryService.addTrip(
+                                            busId: busInfoId,
+                                            busName: busInfo.busName,
+                                            distance: distance,
+                                            fare: fare,
+                                            source: source,
+                                            destination: destination,
+                                          );
+
+                                          if (result['success']) {
+                                            Navigator.of(context).pop();
+                                            _showBoardingPopup();
+                                          } else {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                content: Text(result[
+                                                        'message'] ??
+                                                    'Failed to record trip'),
+                                                backgroundColor: Colors.red,
+                                              ),
+                                            );
+                                          }
+                                        } else {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                  'Bus information not found'),
+                                              backgroundColor: Colors.red,
+                                            ),
+                                          );
+                                        }
                                       },
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Colors.blue[600],
@@ -372,6 +440,74 @@ class _MapScreenState extends State<MapScreen> {
         );
       },
     );
+  }
+
+  void _showBoardingPopup() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.2),
+                  blurRadius: 20,
+                  offset: Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.green[50],
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.check_circle,
+                    size: 48,
+                    color: Colors.green[600],
+                  ),
+                ),
+                SizedBox(height: 20),
+                Text(
+                  'Thanks for boarding!',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey[800],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Your trip has been recorded',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    Future.delayed(Duration(milliseconds: 1500), () {
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+    });
   }
 
   void _showStopsDialog(Bus bus) {

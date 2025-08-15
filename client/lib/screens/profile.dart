@@ -95,7 +95,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     SizedBox(height: 32),
-                    _buildProfileItem(Icons.person, 'Personal Information', onTap: () {
+                    _buildProfileItem(Icons.person, 'Personal Information',
+                        onTap: () {
                       print('Navigating to personal info page');
                       try {
                         Navigator.push(
@@ -114,7 +115,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         );
                       }
                     }),
-                    _buildProfileItem(Icons.history, 'Trip History'),
+                    _buildProfileItem(Icons.history, 'Trip History', onTap: () {
+                      Navigator.pushNamed(context, '/trip-history');
+                    }),
                     _buildProfileItem(Icons.favorite, 'Favorites'),
                     _buildProfileItem(Icons.settings, 'Settings'),
                     _buildProfileItem(Icons.help, 'Help & Support'),
@@ -151,9 +154,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         trailing: Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-        onTap: onTap ?? () {
-          // Handle navigation for each item
-        },
+        onTap: onTap ??
+            () {
+              // Handle navigation for each item
+            },
       ),
     );
   }

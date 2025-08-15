@@ -37,6 +37,7 @@ class _MapScreenState extends State<MapScreen> {
   String? _busesError;
   String? _currentUserId;
   final Map<String, bool> _favoriteStatus = {};
+  final Map<String, bool> _boardedBuses = {};
 
   List<BusStop> _allBusStops = [];
 
@@ -178,17 +179,70 @@ class _MapScreenState extends State<MapScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Individual Buses',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey[800],
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Individual Buses',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey[800],
+                              ),
+                            ),
+                            if (_boardedBuses.values.any((boarded) => boarded))
+                              Container(
+                                margin: EdgeInsets.only(top: 4),
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange[50],
+                                  borderRadius: BorderRadius.circular(12),
+                                  border:
+                                      Border.all(color: Colors.orange[200]!),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.directions_bus,
+                                      size: 14,
+                                      color: Colors.orange[600],
+                                    ),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Currently on a bus',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.orange[700],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
                         ),
-                        IconButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: Icon(Icons.close, color: Colors.grey[600]),
+                        Row(
+                          children: [
+                            IconButton(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                Future.delayed(Duration(milliseconds: 100), () {
+                                  if (mounted) {
+                                    _showIndividualBusesDialog(busInfoId);
+                                  }
+                                });
+                              },
+                              icon:
+                                  Icon(Icons.refresh, color: Colors.blue[600]),
+                              tooltip: 'Refresh',
+                            ),
+                            IconButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              icon: Icon(Icons.close, color: Colors.grey[600]),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -250,87 +304,129 @@ class _MapScreenState extends State<MapScreen> {
                                         ),
                                       ],
                                     ),
-                                    ElevatedButton(
-                                      onPressed: () async {
-                                        final source =
-                                            _sourceController.text.trim();
-                                        final destination =
-                                            _destinationController.text.trim();
+                                    AnimatedSwitcher(
+                                      duration: Duration(milliseconds: 300),
+                                      child: !(_boardedBuses[bus.id] ?? false)
+                                          ? ElevatedButton(
+                                              key: ValueKey('board_${bus.id}'),
+                                              onPressed: () async {
+                                                final source = _sourceController
+                                                    .text
+                                                    .trim();
+                                                final destination =
+                                                    _destinationController.text
+                                                        .trim();
 
-                                        if (source.isEmpty ||
-                                            destination.isEmpty) {
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                  'Please set source and destination first'),
-                                              backgroundColor: Colors.orange,
-                                            ),
-                                          );
-                                          return;
-                                        }
+                                                if (source.isEmpty ||
+                                                    destination.isEmpty) {
+                                                  ScaffoldMessenger.of(context)
+                                                      .showSnackBar(
+                                                    SnackBar(
+                                                      content: Text(
+                                                          'Please set source and destination first'),
+                                                      backgroundColor:
+                                                          Colors.orange,
+                                                    ),
+                                                  );
+                                                  return;
+                                                }
 
-                                        final busInfo =
-                                            _getBusInfoById(busInfoId);
-                                        if (busInfo != null) {
-                                          final distance =
-                                              _calculateRouteDistance(busInfo);
-                                          final fare =
-                                              busInfo.calculateFare(distance);
-
-                                          final result =
-                                              await TripHistoryService.addTrip(
-                                            busId: busInfoId,
-                                            busName: busInfo.busName,
-                                            distance: distance,
-                                            fare: fare,
-                                            source: source,
-                                            destination: destination,
-                                          );
-
-                                          if (result['success']) {
-                                            Navigator.of(context).pop();
-                                            _showBoardingPopup();
-                                          } else {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              SnackBar(
-                                                content: Text(result[
-                                                        'message'] ??
-                                                    'Failed to record trip'),
-                                                backgroundColor: Colors.red,
+                                                await _boardBus(
+                                                    bus.id, busInfoId);
+                                              },
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: _boardedBuses
+                                                        .values
+                                                        .any((boarded) =>
+                                                            boarded)
+                                                    ? Colors.grey[400]
+                                                    : Colors.blue[600],
+                                                foregroundColor: Colors.white,
+                                                padding: EdgeInsets.symmetric(
+                                                    horizontal: 20,
+                                                    vertical: 10),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                                minimumSize: Size(0, 0),
                                               ),
-                                            );
-                                          }
-                                        } else {
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                  'Bus information not found'),
-                                              backgroundColor: Colors.red,
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(Icons.directions_bus,
+                                                      size: 16),
+                                                  SizedBox(width: 8),
+                                                  Text(
+                                                    'Board',
+                                                    style: TextStyle(
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            )
+                                          : ElevatedButton(
+                                              key: ValueKey('end_${bus.id}'),
+                                              onPressed: () async {
+                                                final source = _sourceController
+                                                    .text
+                                                    .trim();
+                                                final destination =
+                                                    _destinationController.text
+                                                        .trim();
+
+                                                if (source.isEmpty ||
+                                                    destination.isEmpty) {
+                                                  ScaffoldMessenger.of(context)
+                                                      .showSnackBar(
+                                                    SnackBar(
+                                                      content: Text(
+                                                          'Please set source and destination first'),
+                                                      backgroundColor:
+                                                          Colors.orange,
+                                                    ),
+                                                  );
+                                                  return;
+                                                }
+
+                                                await _endTrip(
+                                                    bus.id,
+                                                    busInfoId,
+                                                    source,
+                                                    destination);
+                                              },
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    Colors.red[600],
+                                                foregroundColor: Colors.white,
+                                                padding: EdgeInsets.symmetric(
+                                                    horizontal: 20,
+                                                    vertical: 10),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                                minimumSize: Size(0, 0),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(Icons.stop, size: 16),
+                                                  SizedBox(width: 8),
+                                                  Text(
+                                                    'End Trip',
+                                                    style: TextStyle(
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
                                             ),
-                                          );
-                                        }
-                                      },
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.blue[600],
-                                        foregroundColor: Colors.white,
-                                        padding: EdgeInsets.symmetric(
-                                            horizontal: 20, vertical: 10),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                        ),
-                                        minimumSize: Size(0, 0),
-                                      ),
-                                      child: Text(
-                                        'Board',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
                                     ),
                                   ],
                                 ),
@@ -442,6 +538,161 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  Future<void> _boardBus(String busId, String busInfoId) async {
+    try {
+      // Check if user is already on another bus
+      if (_boardedBuses.values.any((boarded) => boarded)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'You are already on a bus. Please end your current trip first.'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      final token = await AuthService.getToken();
+      if (token == null) return;
+
+      final uri = Uri.parse('${AuthService.baseUrl}/individual-bus/board');
+      final response = await http.post(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode({
+          'busId': busId,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        setState(() {
+          _boardedBuses[busId] = true;
+        });
+
+        Navigator.of(context).pop();
+        _showBoardingPopup();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Successfully boarded!'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+
+        Future.delayed(Duration(milliseconds: 2000), () {
+          if (mounted) {
+            _showIndividualBusesDialog(busInfoId);
+          }
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to board bus'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error boarding bus'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _endTrip(
+      String busId, String busInfoId, String source, String destination) async {
+    try {
+      final token = await AuthService.getToken();
+      if (token == null) return;
+
+      final uri = Uri.parse('${AuthService.baseUrl}/individual-bus/end-trip');
+      final response = await http.post(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode({
+          'busId': busId,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        setState(() {
+          _boardedBuses.clear();
+        });
+
+        final busInfo = _getBusInfoById(busInfoId);
+        if (busInfo != null) {
+          final distance = _calculateRouteDistance(busInfo);
+          final fare = busInfo.calculateFare(distance);
+
+          final result = await TripHistoryService.addTrip(
+            busId: busInfoId,
+            busName: busInfo.busName,
+            distance: distance,
+            fare: fare,
+            source: source,
+            destination: destination,
+          );
+
+          if (result['success']) {
+            Navigator.of(context).pop();
+            _showTripEndedPopup();
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Trip ended successfully!'),
+                backgroundColor: Colors.green,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+
+            Future.delayed(Duration(milliseconds: 2000), () {
+              if (mounted) {
+                _showIndividualBusesDialog(busInfoId);
+              }
+            });
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(result['message'] ?? 'Failed to record trip'),
+                backgroundColor: Colors.red,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to end trip'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error ending trip'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   void _showBoardingPopup() {
     showDialog(
       context: context,
@@ -480,6 +731,74 @@ class _MapScreenState extends State<MapScreen> {
                 SizedBox(height: 20),
                 Text(
                   'Thanks for boarding!',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey[800],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Your trip has been recorded',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    Future.delayed(Duration(milliseconds: 1500), () {
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+    });
+  }
+
+  void _showTripEndedPopup() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.2),
+                  blurRadius: 20,
+                  offset: Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50],
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.directions_bus,
+                    size: 48,
+                    color: Colors.orange[600],
+                  ),
+                ),
+                SizedBox(height: 20),
+                Text(
+                  'Trip Ended!',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w700,

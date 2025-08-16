@@ -5,6 +5,7 @@ class Bus {
   final String? routeNumber;
   final String? operator;
   final String? frequency;
+  final String busType;
   final double baseFare;
   final double perKmFare;
 
@@ -15,6 +16,7 @@ class Bus {
     this.routeNumber,
     this.operator,
     this.frequency,
+    required this.busType,
     required this.baseFare,
     required this.perKmFare,
   });
@@ -36,6 +38,7 @@ class Bus {
       routeNumber: json['routeNumber'],
       operator: json['operator'],
       frequency: json['frequency'],
+      busType: json['busType'] ?? 'general',
       baseFare: (json['base_fare'] ?? 0.0).toDouble(),
       perKmFare: (json['per_km_fare'] ?? 0.0).toDouble(),
     );
@@ -49,6 +52,7 @@ class Bus {
       'routeNumber': routeNumber,
       'operator': operator,
       'frequency': frequency,
+      'busType': busType,
       'base_fare': baseFare,
       'per_km_fare': perKmFare,
     };

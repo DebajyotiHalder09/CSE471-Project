@@ -18,6 +18,12 @@ const busSchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
+  busType: {
+    type: String,
+    enum: ['general', 'women'],
+    default: 'general',
+    trim: true,
+  },
   stops: [{
     name: {
       type: String,

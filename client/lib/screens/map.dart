@@ -36,6 +36,7 @@ class _MapScreenState extends State<MapScreen> {
   List<Bus> _availableBuses = [];
   String? _busesError;
   String? _currentUserId;
+  String? _currentUserGender;
   final Map<String, bool> _favoriteStatus = {};
   final Map<String, bool> _boardedBuses = {};
 
@@ -77,6 +78,7 @@ class _MapScreenState extends State<MapScreen> {
     if (user != null) {
       setState(() {
         _currentUserId = user.id;
+        _currentUserGender = user.gender;
       });
     }
   }
@@ -165,7 +167,40 @@ class _MapScreenState extends State<MapScreen> {
                   );
                 }
 
-                final sortedBuses = List<IndividualBus>.from(buses);
+                List<IndividualBus> filteredBuses =
+                    List<IndividualBus>.from(buses);
+                if (_currentUserGender?.toLowerCase() == 'male') {
+                  filteredBuses =
+                      buses.where((bus) => bus.busType != 'women').toList();
+                }
+
+                if (filteredBuses.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.directions_bus,
+                          size: 48,
+                          color: Colors.grey[400],
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          _currentUserGender?.toLowerCase() == 'male'
+                              ? 'No available buses for male passengers'
+                              : 'No individual buses available',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 16,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                final sortedBuses = List<IndividualBus>.from(filteredBuses);
                 if (_sourcePoint != null) {
                   sortedBuses.sort((a, b) {
                     final aDistance = _calculateDistanceFromSource(a);
@@ -271,20 +306,18 @@ class _MapScreenState extends State<MapScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
                                   children: [
+                                    Text(
+                                      bus.busCode,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 18,
+                                        color: Colors.grey[900],
+                                      ),
+                                    ),
+                                    SizedBox(width: 10),
                                     Row(
                                       children: [
-                                        Text(
-                                          bus.busCode,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 18,
-                                            color: Colors.grey[900],
-                                          ),
-                                        ),
-                                        SizedBox(width: 10),
                                         Container(
                                           padding: EdgeInsets.symmetric(
                                               horizontal: 10, vertical: 6),
@@ -302,6 +335,59 @@ class _MapScreenState extends State<MapScreen> {
                                             ),
                                           ),
                                         ),
+                                        if (bus.busType == 'women') ...[
+                                          SizedBox(width: 8),
+                                          Container(
+                                            padding: EdgeInsets.symmetric(
+                                                horizontal: 8, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: Colors.pink[400],
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                            child: Text(
+                                              'WOMEN',
+                                              style: TextStyle(
+                                                fontSize: 8,
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 12),
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: Colors.blue[50],
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                          ),
+                                          child: Icon(
+                                            Icons.people,
+                                            color: Colors.blue[600],
+                                            size: 16,
+                                          ),
+                                        ),
+                                        SizedBox(width: 10),
+                                        Text(
+                                          '${bus.currentPassengerCount}/${bus.totalPassengerCapacity}',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.grey[800],
+                                          ),
+                                        ),
                                       ],
                                     ),
                                     AnimatedSwitcher(
@@ -310,6 +396,14 @@ class _MapScreenState extends State<MapScreen> {
                                           ? ElevatedButton(
                                               key: ValueKey('board_${bus.id}'),
                                               onPressed: () async {
+                                                if (_currentUserGender?.toLowerCase() ==
+                                                        'male' &&
+                                                    bus.busType == 'women') {
+                                                  Navigator.of(context).pop();
+                                                  _showWomenBusPopup();
+                                                  return;
+                                                }
+
                                                 final source = _sourceController
                                                     .text
                                                     .trim();
@@ -343,11 +437,11 @@ class _MapScreenState extends State<MapScreen> {
                                                     : Colors.blue[600],
                                                 foregroundColor: Colors.white,
                                                 padding: EdgeInsets.symmetric(
-                                                    horizontal: 20,
-                                                    vertical: 10),
+                                                    horizontal: 16,
+                                                    vertical: 8),
                                                 shape: RoundedRectangleBorder(
                                                   borderRadius:
-                                                      BorderRadius.circular(12),
+                                                      BorderRadius.circular(8),
                                                 ),
                                                 minimumSize: Size(0, 0),
                                               ),
@@ -355,12 +449,12 @@ class _MapScreenState extends State<MapScreen> {
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
                                                   Icon(Icons.directions_bus,
-                                                      size: 16),
-                                                  SizedBox(width: 8),
+                                                      size: 14),
+                                                  SizedBox(width: 6),
                                                   Text(
                                                     'Board',
                                                     style: TextStyle(
-                                                      fontSize: 14,
+                                                      fontSize: 12,
                                                       fontWeight:
                                                           FontWeight.w600,
                                                     ),
@@ -368,9 +462,17 @@ class _MapScreenState extends State<MapScreen> {
                                                 ],
                                               ),
                                             )
-                                          : ElevatedButton(
+                                                                                      : ElevatedButton(
                                               key: ValueKey('end_${bus.id}'),
                                               onPressed: () async {
+                                                if (_currentUserGender?.toLowerCase() ==
+                                                        'male' &&
+                                                    bus.busType == 'women') {
+                                                  Navigator.of(context).pop();
+                                                  _showWomenBusPopup();
+                                                  return;
+                                                }
+
                                                 final source = _sourceController
                                                     .text
                                                     .trim();
@@ -403,23 +505,23 @@ class _MapScreenState extends State<MapScreen> {
                                                     Colors.red[600],
                                                 foregroundColor: Colors.white,
                                                 padding: EdgeInsets.symmetric(
-                                                    horizontal: 20,
-                                                    vertical: 10),
+                                                    horizontal: 16,
+                                                    vertical: 8),
                                                 shape: RoundedRectangleBorder(
                                                   borderRadius:
-                                                      BorderRadius.circular(12),
+                                                      BorderRadius.circular(8),
                                                 ),
                                                 minimumSize: Size(0, 0),
                                               ),
                                               child: Row(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
-                                                  Icon(Icons.stop, size: 16),
-                                                  SizedBox(width: 8),
+                                                  Icon(Icons.stop, size: 14),
+                                                  SizedBox(width: 6),
                                                   Text(
                                                     'End Trip',
                                                     style: TextStyle(
-                                                      fontSize: 14,
+                                                      fontSize: 12,
                                                       fontWeight:
                                                           FontWeight.w600,
                                                     ),
@@ -427,32 +529,6 @@ class _MapScreenState extends State<MapScreen> {
                                                 ],
                                               ),
                                             ),
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    Container(
-                                      padding: EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: Colors.blue[50],
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Icon(
-                                        Icons.people,
-                                        color: Colors.blue[600],
-                                        size: 16,
-                                      ),
-                                    ),
-                                    SizedBox(width: 10),
-                                    Text(
-                                      '${bus.currentPassengerCount}/${bus.totalPassengerCapacity}',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.grey[800],
-                                      ),
                                     ),
                                   ],
                                 ),
@@ -759,6 +835,87 @@ class _MapScreenState extends State<MapScreen> {
         Navigator.of(context).pop();
       }
     });
+  }
+
+  void _showWomenBusPopup() {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.2),
+                  blurRadius: 20,
+                  offset: Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.pink[50],
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.woman,
+                    size: 48,
+                    color: Colors.pink[600],
+                  ),
+                ),
+                SizedBox(height: 20),
+                Text(
+                  'Women Only Bus',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey[800],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'This bus is exclusively for female passengers. Male passengers are not allowed to board.',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.pink[600],
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    'Got it',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _showTripEndedPopup() {
@@ -1209,8 +1366,15 @@ class _MapScreenState extends State<MapScreen> {
         final List<dynamic> list = data['data'] as List<dynamic>? ?? [];
         final buses =
             list.map((e) => Bus.fromJson(e as Map<String, dynamic>)).toList();
+
+        List<Bus> filteredBuses = buses;
+
+        if (_currentUserGender?.toLowerCase() == 'male') {
+          filteredBuses = buses.where((bus) => bus.busType != 'women').toList();
+        }
+
         setState(() {
-          _availableBuses = buses;
+          _availableBuses = filteredBuses;
           _busesLoading = false;
           _busesError = null;
         });
@@ -1399,123 +1563,237 @@ class _MapScreenState extends State<MapScreen> {
                                     final totalFare =
                                         bus.calculateFare(distance);
 
+                                    final isWomenBus = bus.busType == 'women';
+                                    final isGreyedOut =
+                                        _currentUserGender?.toLowerCase() == 'male' &&
+                                            isWomenBus;
+
                                     return Container(
                                       margin: EdgeInsets.symmetric(
                                           horizontal: 16, vertical: 8),
                                       padding: EdgeInsets.all(16),
                                       decoration: BoxDecoration(
-                                        color: Colors.white,
+                                        color: isGreyedOut
+                                            ? Colors.grey[100]
+                                            : Colors.white,
                                         borderRadius: BorderRadius.circular(16),
                                         border: Border.all(
-                                            color: Colors.grey[100]!),
+                                            color: isGreyedOut
+                                                ? Colors.grey[300]!
+                                                : Colors.grey[100]!),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: Colors.black
-                                                .withValues(alpha: 0.06),
+                                            color: Colors.black.withValues(
+                                                alpha:
+                                                    isGreyedOut ? 0.03 : 0.06),
                                             blurRadius: 8,
                                             offset: Offset(0, 2),
                                           ),
                                         ],
                                       ),
-                                      child: Row(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          Expanded(
-                                            child: Text(
-                                              bus.busName,
-                                              style: TextStyle(
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.w600,
-                                                color: Colors.grey[900],
-                                              ),
-                                            ),
-                                          ),
-                                          SizedBox(width: 12),
-                                          Container(
-                                            padding: EdgeInsets.symmetric(
-                                                horizontal: 10, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: Colors.blue[50],
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                              border: Border.all(
-                                                  color: Colors.blue[200]!),
-                                            ),
-                                            child: Text(
-                                              '${distance.toStringAsFixed(1)} km',
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w600,
-                                                color: Colors.blue[700],
-                                              ),
-                                            ),
-                                          ),
-                                          SizedBox(width: 12),
-                                          Container(
-                                            padding: EdgeInsets.symmetric(
-                                                horizontal: 12, vertical: 6),
-                                            decoration: BoxDecoration(
-                                              color: Colors.green[50],
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                              border: Border.all(
-                                                  color: Colors.green[200]!),
-                                            ),
-                                            child: Text(
-                                              '৳${totalFare.toStringAsFixed(0)}',
-                                              style: TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w700,
-                                                color: Colors.green[700],
-                                              ),
-                                            ),
-                                          ),
-                                          SizedBox(width: 16),
                                           Row(
-                                            mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              Container(
-                                                padding: EdgeInsets.all(6),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.blue[50],
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                ),
-                                                child: IconButton(
-                                                  icon: Icon(
-                                                    Icons.info_outline,
-                                                    color: Colors.blue[600],
-                                                    size: 16,
+                                              Expanded(
+                                                child: Text(
+                                                  bus.busName,
+                                                  style: TextStyle(
+                                                    fontSize: 18,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: isGreyedOut
+                                                        ? Colors.grey[500]
+                                                        : Colors.grey[900],
                                                   ),
-                                                  onPressed: () {
-                                                    _toggleIndividualBuses(
-                                                        bus.id);
-                                                  },
-                                                  tooltip:
-                                                      'Show individual buses',
-                                                  padding: EdgeInsets.zero,
-                                                  constraints: BoxConstraints(),
                                                 ),
                                               ),
-                                              SizedBox(width: 6),
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Container(
+                                                    padding: EdgeInsets.all(6),
+                                                    decoration: BoxDecoration(
+                                                      color: isGreyedOut
+                                                          ? Colors.grey[200]
+                                                          : Colors.blue[50],
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              8),
+                                                      border: Border.all(
+                                                        color: isGreyedOut
+                                                            ? Colors.grey[400]!
+                                                            : Colors
+                                                                .transparent,
+                                                        width: 1,
+                                                      ),
+                                                    ),
+                                                    child: IconButton(
+                                                      icon: Icon(
+                                                        Icons.info_outline,
+                                                        color: isGreyedOut
+                                                            ? Colors.grey[500]
+                                                            : Colors.blue[600],
+                                                        size: 16,
+                                                      ),
+                                                      onPressed: () {
+                                                        if (_currentUserGender?.toLowerCase() ==
+                                                                'male' &&
+                                                            bus.busType ==
+                                                                'women') {
+                                                          _showWomenBusPopup();
+                                                        } else {
+                                                          _toggleIndividualBuses(
+                                                              bus.id);
+                                                        }
+                                                      },
+                                                      tooltip: isGreyedOut
+                                                          ? 'Women only bus - Not available for male passengers'
+                                                          : 'Show individual buses',
+                                                      padding: EdgeInsets.zero,
+                                                      constraints:
+                                                          BoxConstraints(),
+                                                      style:
+                                                          IconButton.styleFrom(
+                                                        disabledForegroundColor:
+                                                            Colors.grey[500],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  SizedBox(width: 6),
+                                                  Container(
+                                                    padding: EdgeInsets.all(6),
+                                                    decoration: BoxDecoration(
+                                                      color: isGreyedOut
+                                                          ? Colors.grey[200]
+                                                          : Colors.green[50],
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              8),
+                                                      border: Border.all(
+                                                        color: isGreyedOut
+                                                            ? Colors.grey[400]!
+                                                            : Colors
+                                                                .transparent,
+                                                        width: 1,
+                                                      ),
+                                                    ),
+                                                    child: IconButton(
+                                                      icon: Icon(
+                                                        Icons.route,
+                                                        color: isGreyedOut
+                                                            ? Colors.grey[500]
+                                                            : Colors.green[600],
+                                                        size: 16,
+                                                      ),
+                                                      onPressed: () {
+                                                        if (_currentUserGender?.toLowerCase() ==
+                                                                'male' &&
+                                                            bus.busType ==
+                                                                'women') {
+                                                          _showWomenBusPopup();
+                                                        } else {
+                                                          _showStopsDialog(bus);
+                                                        }
+                                                      },
+                                                      tooltip: isGreyedOut
+                                                          ? 'Women only bus - Not available for male passengers'
+                                                          : 'Show stops',
+                                                      padding: EdgeInsets.zero,
+                                                      constraints:
+                                                          BoxConstraints(),
+                                                      style:
+                                                          IconButton.styleFrom(
+                                                        disabledForegroundColor:
+                                                            Colors.grey[500],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                          SizedBox(height: 12),
+                                          Row(
+                                            children: [
+                                              if (isWomenBus)
+                                                Container(
+                                                  padding: EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.pink[50],
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8),
+                                                    border: Border.all(
+                                                        color:
+                                                            Colors.pink[200]!),
+                                                  ),
+                                                  child: Text(
+                                                    'Women Only',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: Colors.pink[700],
+                                                    ),
+                                                  ),
+                                                ),
+                                              if (isWomenBus)
+                                                SizedBox(width: 12),
                                               Container(
-                                                padding: EdgeInsets.all(6),
+                                                padding: EdgeInsets.symmetric(
+                                                    horizontal: 10,
+                                                    vertical: 4),
                                                 decoration: BoxDecoration(
-                                                  color: Colors.green[50],
+                                                  color: isGreyedOut
+                                                      ? Colors.grey[100]
+                                                      : Colors.blue[50],
                                                   borderRadius:
                                                       BorderRadius.circular(8),
+                                                  border: Border.all(
+                                                      color: isGreyedOut
+                                                          ? Colors.grey[300]!
+                                                          : Colors.blue[200]!),
                                                 ),
-                                                child: IconButton(
-                                                  icon: Icon(
-                                                    Icons.route,
-                                                    color: Colors.green[600],
-                                                    size: 16,
+                                                child: Text(
+                                                  '${distance.toStringAsFixed(1)} km',
+                                                  style: TextStyle(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: isGreyedOut
+                                                        ? Colors.grey[500]
+                                                        : Colors.blue[700],
                                                   ),
-                                                  onPressed: () {
-                                                    _showStopsDialog(bus);
-                                                  },
-                                                  tooltip: 'Show stops',
-                                                  padding: EdgeInsets.zero,
-                                                  constraints: BoxConstraints(),
+                                                ),
+                                              ),
+                                              SizedBox(width: 12),
+                                              Container(
+                                                padding: EdgeInsets.symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 6),
+                                                decoration: BoxDecoration(
+                                                  color: isGreyedOut
+                                                      ? Colors.grey[100]
+                                                      : Colors.green[50],
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                  border: Border.all(
+                                                      color: isGreyedOut
+                                                          ? Colors.grey[300]!
+                                                          : Colors.green[200]!),
+                                                ),
+                                                child: Text(
+                                                  '৳${totalFare.toStringAsFixed(0)}',
+                                                  style: TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: isGreyedOut
+                                                        ? Colors.grey[500]
+                                                        : Colors.green[700],
+                                                  ),
                                                 ),
                                               ),
                                             ],

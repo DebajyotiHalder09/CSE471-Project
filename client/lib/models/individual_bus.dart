@@ -8,6 +8,7 @@ class IndividualBus {
   final double longitude;
   final double averageSpeedKmh;
   final String status;
+  final String busType;
 
   IndividualBus({
     required this.id,
@@ -19,6 +20,7 @@ class IndividualBus {
     required this.longitude,
     required this.averageSpeedKmh,
     required this.status,
+    required this.busType,
   });
 
   factory IndividualBus.fromJson(Map<String, dynamic> json) {
@@ -32,6 +34,7 @@ class IndividualBus {
       longitude: (json['longitude'] ?? 0.0).toDouble(),
       averageSpeedKmh: (json['averageSpeedKmh'] ?? 25.0).toDouble(),
       status: json['status'] ?? 'offline',
+      busType: json['busType'] ?? 'general',
     );
   }
 
@@ -46,6 +49,7 @@ class IndividualBus {
       'longitude': longitude,
       'averageSpeedKmh': averageSpeedKmh,
       'status': status,
+      'busType': busType,
     };
   }
 }

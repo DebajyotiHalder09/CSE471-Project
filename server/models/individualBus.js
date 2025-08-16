@@ -39,6 +39,12 @@ const individualBusSchema = new mongoose.Schema({
     enum: ['running', 'stopped', 'maintenance', 'offline'],
     default: 'offline',
   },
+  busType: {
+    type: String,
+    enum: ['general', 'women'],
+    default: 'general',
+    trim: true,
+  },
 }, {
   timestamps: true,
 });

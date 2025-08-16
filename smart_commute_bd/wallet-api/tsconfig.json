@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",              // Modern JavaScript output
+    "module": "CommonJS",            // Ensures Node.js compatibility
+    "rootDir": "src",                // Your source code folder
+    "outDir": "dist",                 // Compiled output folder
+    "esModuleInterop": true,         // Allows `import express from 'express'`
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true
+  }
+}
+

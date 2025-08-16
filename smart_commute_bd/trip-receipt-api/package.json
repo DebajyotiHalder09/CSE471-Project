@@ -1,0 +1,22 @@
+{
+  "name": "trip-receipt-api",
+  "version": "1.0.0",
+  "main": "server.js",
+  "description": "Trip receipt generator API",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.1.0",
+    "mongoose": "^8.17.1",
+    "pdfkit": "^0.17.1",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'auth_service.dart';
 
 class FavBusService {
   static const String baseUrl = 'http://10.0.2.2:3000';
@@ -12,11 +13,10 @@ class FavBusService {
     String? operator,
   }) async {
     try {
+      final headers = await AuthService.getAuthHeaders();
       final response = await http.post(
         Uri.parse('$baseUrl/api/favbus/add'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
         body: json.encode({
           'userId': userId,
           'busId': busId,
@@ -42,11 +42,10 @@ class FavBusService {
     required String busId,
   }) async {
     try {
+      final headers = await AuthService.getAuthHeaders();
       final response = await http.delete(
         Uri.parse('$baseUrl/api/favbus/remove'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
         body: json.encode({
           'userId': userId,
           'busId': busId,
@@ -67,11 +66,10 @@ class FavBusService {
 
   static Future<Map<String, dynamic>> getUserFavorites(String userId) async {
     try {
+      final headers = await AuthService.getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/api/favbus/user/$userId'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -90,11 +88,10 @@ class FavBusService {
     required String busId,
   }) async {
     try {
+      final headers = await AuthService.getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/api/favbus/check?userId=$userId&busId=$busId'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
       );
 
       if (response.statusCode == 200) {

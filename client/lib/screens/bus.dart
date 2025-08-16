@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/bus_service.dart';
 import '../services/fav_bus_service.dart';
 import '../services/auth_service.dart';
+import '../services/individual_bus_service.dart';
 import '../models/bus.dart';
 import 'review.dart';
 
@@ -13,7 +14,7 @@ class BusScreen extends StatefulWidget {
 }
 
 class _BusScreenState extends State<BusScreen> {
-  String selectedSearchType = 'bus'; // 'bus' or 'route'
+  String selectedSearchType = 'bus';
   TextEditingController busNameController = TextEditingController();
   TextEditingController startLocationController = TextEditingController();
   TextEditingController endLocationController = TextEditingController();
@@ -24,6 +25,7 @@ class _BusScreenState extends State<BusScreen> {
   bool isLoadingAll = false;
   String? errorMessage;
   String? currentUserId;
+  String? currentUserGender;
   Map<String, bool> favoriteStatus = {};
 
   @override
@@ -46,6 +48,7 @@ class _BusScreenState extends State<BusScreen> {
     if (user != null) {
       setState(() {
         currentUserId = user.id;
+        currentUserGender = user.gender;
       });
       _loadFavoriteStatuses();
     }
@@ -75,6 +78,16 @@ class _BusScreenState extends State<BusScreen> {
 
   Future<void> _toggleFavorite(Bus bus) async {
     if (currentUserId == null) return;
+
+    if (bus.busType == 'women' && currentUserGender == 'male') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Male users cannot favorite women-designated buses'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
 
     try {
       if (favoriteStatus[bus.id] == true) {
@@ -235,6 +248,13 @@ class _BusScreenState extends State<BusScreen> {
 
     for (final bus in searchResults) {
       try {
+        if (bus.busType == 'women' && currentUserGender == 'male') {
+          setState(() {
+            favoriteStatus[bus.id] = false;
+          });
+          continue;
+        }
+
         final response = await FavBusService.checkIfFavorited(
           userId: currentUserId!,
           busId: bus.id,
@@ -261,7 +281,6 @@ class _BusScreenState extends State<BusScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Filter and Search Section
             Container(
               padding: EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -453,10 +472,7 @@ class _BusScreenState extends State<BusScreen> {
                 ],
               ),
             ),
-
             SizedBox(height: 16),
-
-            // Error Message
             if (errorMessage != null)
               Container(
                 width: double.infinity,
@@ -474,10 +490,7 @@ class _BusScreenState extends State<BusScreen> {
                   ),
                 ),
               ),
-
             SizedBox(height: 16),
-
-            // Results Section
             Expanded(
               child: searchResults.isNotEmpty
                   ? ListView.builder(
@@ -558,6 +571,35 @@ class BusResultCard extends StatefulWidget {
 
 class _BusResultCardState extends State<BusResultCard> {
   bool isExpanded = false;
+  bool isLoadingIndividualBuses = false;
+  List<Map<String, dynamic>> individualBuses = [];
+
+  Future<void> _loadIndividualBuses() async {
+    if (isLoadingIndividualBuses) return;
+
+    setState(() {
+      isLoadingIndividualBuses = true;
+    });
+
+    try {
+      final response =
+          await IndividualBusService.getIndividualBuses(widget.bus.id);
+      if (response['success']) {
+        setState(() {
+          individualBuses = List<Map<String, dynamic>>.from(response['data']);
+          isLoadingIndividualBuses = false;
+        });
+      } else {
+        setState(() {
+          isLoadingIndividualBuses = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        isLoadingIndividualBuses = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -611,12 +653,52 @@ class _BusResultCardState extends State<BusResultCard> {
                       fontSize: 14,
                     ),
                   ),
-                Text(
-                  '${widget.bus.stops.length} stops',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
+                if (widget.bus.frequency != null)
+                  Text(
+                    'Frequency: ${widget.bus.frequency}',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 14,
+                    ),
                   ),
+                Row(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: widget.bus.busType == 'women'
+                            ? Colors.pink[100]
+                            : Colors.blue[100],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        widget.bus.busType.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: widget.bus.busType == 'women'
+                              ? Colors.pink[700]
+                              : Colors.blue[700],
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.green[100],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '\$${widget.bus.baseFare.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.green[700],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -640,9 +722,21 @@ class _BusResultCardState extends State<BusResultCard> {
                 IconButton(
                   icon: Icon(
                     widget.isFavorited ? Icons.favorite : Icons.favorite_border,
-                    color: Colors.red,
+                    color: widget.bus.busType == 'women' &&
+                            (context
+                                    .findAncestorStateOfType<_BusScreenState>()
+                                    ?.currentUserGender ==
+                                'male')
+                        ? Colors.grey
+                        : Colors.red,
                   ),
-                  onPressed: widget.onFavoriteToggle,
+                  onPressed: widget.bus.busType == 'women' &&
+                          (context
+                                  .findAncestorStateOfType<_BusScreenState>()
+                                  ?.currentUserGender ==
+                              'male')
+                      ? null
+                      : widget.onFavoriteToggle,
                 ),
                 IconButton(
                   icon: Icon(
@@ -653,6 +747,9 @@ class _BusResultCardState extends State<BusResultCard> {
                     setState(() {
                       isExpanded = !isExpanded;
                     });
+                    if (isExpanded && individualBuses.isEmpty) {
+                      _loadIndividualBuses();
+                    }
                   },
                 ),
               ],
@@ -665,13 +762,26 @@ class _BusResultCardState extends State<BusResultCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Divider(),
-                  Text(
-                    'Stops:',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                      color: Colors.grey[700],
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        'Route Information',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      Spacer(),
+                      Text(
+                        'Per km: \$${widget.bus.perKmFare.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                   SizedBox(height: 12),
                   Container(
@@ -761,6 +871,104 @@ class _BusResultCardState extends State<BusResultCard> {
                       }).toList(),
                     ),
                   ),
+                  SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Text(
+                        'Available Buses',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      Spacer(),
+                      if (isLoadingIndividualBuses)
+                        SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                    ],
+                  ),
+                  SizedBox(height: 8),
+                  if (individualBuses.isNotEmpty)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.blue[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue[200]!),
+                      ),
+                      child: Column(
+                        children: individualBuses.map((bus) {
+                          return Container(
+                            padding: EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: bus != individualBuses.last
+                                  ? Border(
+                                      bottom: BorderSide(
+                                        color: Colors.blue[200]!,
+                                        width: 0.5,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.directions_bus,
+                                  color: Colors.blue[600],
+                                  size: 20,
+                                ),
+                                SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Bus ID: ${bus['_id'] ?? 'N/A'}',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.grey[800],
+                                        ),
+                                      ),
+                                      if (bus['status'] != null)
+                                        Text(
+                                          'Status: ${bus['status']}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey[600],
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    )
+                  else if (!isLoadingIndividualBuses)
+                    Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[200]!),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'No individual buses available',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),

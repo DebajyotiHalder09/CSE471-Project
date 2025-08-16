@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'auth_service.dart';
 
 class BusService {
   static const String baseUrl = 'http://10.0.2.2:3000'; // For Android emulator
@@ -7,11 +8,10 @@ class BusService {
 
   static Future<Map<String, dynamic>> getAllBuses() async {
     try {
+      final headers = await AuthService.getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/bus/all'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -28,11 +28,10 @@ class BusService {
   // Search bus by name
   static Future<Map<String, dynamic>> searchBusByName(String busName) async {
     try {
+      final headers = await AuthService.getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/bus/search-by-name?busName=$busName'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -50,12 +49,11 @@ class BusService {
   static Future<Map<String, dynamic>> searchBusByRoute(
       String startLocation, String endLocation) async {
     try {
+      final headers = await AuthService.getAuthHeaders();
       final response = await http.get(
         Uri.parse(
             '$baseUrl/bus/search-by-route?startLocation=$startLocation&endLocation=$endLocation'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
       );
 
       if (response.statusCode == 200) {

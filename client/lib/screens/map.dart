@@ -396,7 +396,8 @@ class _MapScreenState extends State<MapScreen> {
                                           ? ElevatedButton(
                                               key: ValueKey('board_${bus.id}'),
                                               onPressed: () async {
-                                                if (_currentUserGender?.toLowerCase() ==
+                                                if (_currentUserGender
+                                                            ?.toLowerCase() ==
                                                         'male' &&
                                                     bus.busType == 'women') {
                                                   Navigator.of(context).pop();
@@ -462,10 +463,11 @@ class _MapScreenState extends State<MapScreen> {
                                                 ],
                                               ),
                                             )
-                                                                                      : ElevatedButton(
+                                          : ElevatedButton(
                                               key: ValueKey('end_${bus.id}'),
                                               onPressed: () async {
-                                                if (_currentUserGender?.toLowerCase() ==
+                                                if (_currentUserGender
+                                                            ?.toLowerCase() ==
                                                         'male' &&
                                                     bus.busType == 'women') {
                                                   Navigator.of(context).pop();
@@ -1565,7 +1567,8 @@ class _MapScreenState extends State<MapScreen> {
 
                                     final isWomenBus = bus.busType == 'women';
                                     final isGreyedOut =
-                                        _currentUserGender?.toLowerCase() == 'male' &&
+                                        _currentUserGender?.toLowerCase() ==
+                                                'male' &&
                                             isWomenBus;
 
                                     return Container(
@@ -1638,7 +1641,8 @@ class _MapScreenState extends State<MapScreen> {
                                                         size: 16,
                                                       ),
                                                       onPressed: () {
-                                                        if (_currentUserGender?.toLowerCase() ==
+                                                        if (_currentUserGender
+                                                                    ?.toLowerCase() ==
                                                                 'male' &&
                                                             bus.busType ==
                                                                 'women') {
@@ -1688,7 +1692,8 @@ class _MapScreenState extends State<MapScreen> {
                                                         size: 16,
                                                       ),
                                                       onPressed: () {
-                                                        if (_currentUserGender?.toLowerCase() ==
+                                                        if (_currentUserGender
+                                                                    ?.toLowerCase() ==
                                                                 'male' &&
                                                             bus.busType ==
                                                                 'women') {

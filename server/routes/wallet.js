@@ -1,0 +1,11 @@
+const express = require('express');
+const router = express.Router();
+const { getWalletBalance, testWallet, debugWallets, initializeAllUserWallets } = require('../controllers/walletController');
+const { authenticateToken } = require('../middleware/auth');
+
+router.get('/test', authenticateToken, testWallet);
+router.get('/debug', authenticateToken, debugWallets);
+router.get('/balance', authenticateToken, getWalletBalance);
+router.post('/initialize-all', authenticateToken, initializeAllUserWallets);
+
+module.exports = router;

@@ -77,6 +77,23 @@ router.post('/signup', async (req, res) => {
     });
 
     await user.save();
+    
+    // Automatically create wallet for new user
+    try {
+      const Wallet = require('../models/wallet');
+      const newWallet = new Wallet({
+        userId: user._id,
+        balance: 0,
+        currency: 'BDT',
+        lastUpdated: new Date()
+      });
+      await newWallet.save();
+      console.log(`Wallet created automatically for new user: ${user.name} (${user._id})`);
+    } catch (walletError) {
+      console.error('Error creating wallet for new user:', walletError);
+      // Don't fail the signup if wallet creation fails
+    }
+    
     res.status(200).json({ message: 'User created successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });

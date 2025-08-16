@@ -116,33 +116,79 @@ class NavScreenState extends State<NavScreen> {
                       ),
                     ),
 
-                    // Circular avatar on the right
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.pushNamed(context, '/profile');
-                      },
-                      child: CircleAvatar(
-                        radius: 20,
-                        backgroundColor: Colors.blue[100],
-                        child: _isLoading
-                            ? SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.blue[700]!),
-                                ),
-                              )
-                            : Text(
-                                _currentUser?.firstNameInitial ?? 'U',
+                    // Wallet info and profile picture on the right
+                    Row(
+                      children: [
+                        // Wallet balance display
+                        Container(
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Colors.green[50]!, Colors.green[100]!],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(25),
+                            border: Border.all(color: Colors.green[200]!),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.green.withValues(alpha: 0.2),
+                                blurRadius: 8,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.account_balance_wallet,
+                                size: 18,
+                                color: Colors.green[700],
+                              ),
+                              SizedBox(width: 6),
+                              Text(
+                                '৳500',
                                 style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue[700],
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.green[800],
                                 ),
                               ),
-                      ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        // Circular avatar
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.pushNamed(context, '/profile');
+                          },
+                          child: CircleAvatar(
+                            radius: 20,
+                            backgroundColor: Colors.blue[100],
+                            child: _isLoading
+                                ? SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                          Colors.blue[700]!),
+                                    ),
+                                  )
+                                : Text(
+                                    _currentUser?.firstNameInitial ?? 'U',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue[700],
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

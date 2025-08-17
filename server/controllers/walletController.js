@@ -146,6 +146,66 @@ const addGemsToUser = async (userId, gemAmount = 10) => {
   }
 };
 
+const convertGemsToBalance = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    console.log(`Converting gems to balance for user ID: ${userId}`);
+    
+    let wallet = await Wallet.findOne({ userId });
+    if (!wallet) {
+      return res.status(404).json({
+        success: false,
+        message: 'Wallet not found'
+      });
+    }
+    
+    const currentGems = wallet.gems;
+    const currentBalance = wallet.balance;
+    
+    console.log(`Current gems: ${currentGems}, Current balance: ${currentBalance}`);
+    
+    if (currentGems < 50) {
+      return res.status(400).json({
+        success: false,
+        message: 'You need at least 50 gems to convert to balance'
+      });
+    }
+    
+    // Calculate conversion: 50 gems = 1 BDT
+    const gemsToConvert = Math.floor(currentGems / 50) * 50;
+    const balanceToAdd = gemsToConvert / 50;
+    
+    console.log(`Converting ${gemsToConvert} gems to ${balanceToAdd} BDT`);
+    
+    // Update wallet
+    wallet.gems -= gemsToConvert;
+    wallet.balance += balanceToAdd;
+    wallet.lastUpdated = new Date();
+    
+    await wallet.save();
+    
+    console.log(`Successfully converted ${gemsToConvert} gems to ${balanceToAdd} BDT`);
+    console.log(`New gems: ${wallet.gems}, New balance: ${wallet.balance}`);
+    
+    res.status(200).json({
+      success: true,
+      message: `Successfully converted ${gemsToConvert} gems to ৳${balanceToAdd}`,
+      balance: wallet.balance,
+      gems: wallet.gems,
+      convertedAmount: balanceToAdd,
+      gemsUsed: gemsToConvert
+    });
+    
+  } catch (error) {
+    console.error('Error converting gems to balance:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error converting gems to balance',
+      error: error.message
+    });
+  }
+};
+
 const testWallet = async (req, res) => {
   try {
     console.log('Testing wallet API...');
@@ -208,6 +268,7 @@ module.exports = {
   initializeAllUserWallets,
   createWalletForNewUser,
   addGemsToUser,
+  convertGemsToBalance,
   testWallet,
   debugWallets
 };

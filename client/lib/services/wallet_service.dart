@@ -250,4 +250,70 @@ class WalletService {
       };
     }
   }
+
+  static Future<Map<String, dynamic>> convertGemsToBalance() async {
+    try {
+      print('WalletService: Converting gems to balance...');
+      final token = await AuthService.getToken();
+      if (token == null) {
+        return {
+          'success': false,
+          'message': 'No token found',
+        };
+      }
+
+      final uri = Uri.parse('${AuthService.baseUrl}/wallet/convert-gems');
+      print('WalletService: Convert gems API URL: $uri');
+
+      final response = await http.post(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      print(
+          'WalletService: Convert gems response status: ${response.statusCode}');
+      print('WalletService: Convert gems response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        final balance = (data['balance'] ?? 0.0).toDouble();
+        final gems = (data['gems'] ?? 0).toInt();
+        final convertedAmount = (data['convertedAmount'] ?? 0.0).toDouble();
+        final gemsUsed = (data['gemsUsed'] ?? 0).toInt();
+
+        print('WalletService: Converted $gemsUsed gems to ৳$convertedAmount');
+
+        // Notify listeners of wallet update
+        notifyWalletUpdate(balance, gems);
+
+        return {
+          'success': true,
+          'balance': balance,
+          'gems': gems,
+          'convertedAmount': convertedAmount,
+          'gemsUsed': gemsUsed,
+          'message': data['message'] ?? 'Gems converted successfully',
+        };
+      } else {
+        final errorData = json.decode(response.body) as Map<String, dynamic>;
+        return {
+          'success': false,
+          'message': errorData['message'] ?? 'Failed to convert gems',
+          'balance': 0.0,
+          'gems': 0,
+        };
+      }
+    } catch (e) {
+      print('WalletService: Convert gems exception: $e');
+      return {
+        'success': false,
+        'message': 'Error converting gems: $e',
+        'balance': 0.0,
+        'gems': 0,
+      };
+    }
+  }
 }

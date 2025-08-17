@@ -6,6 +6,7 @@ import 'driverDash.dart';
 import '../services/auth_service.dart';
 import '../services/wallet_service.dart';
 import '../models/user.dart';
+import 'wallet_popup.dart';
 
 class NavScreen extends StatefulWidget {
   static const routeName = '/nav';
@@ -96,6 +97,19 @@ class NavScreenState extends State<NavScreen> {
         _isRefreshingWallet = false;
       });
     }
+  }
+
+  void _showWalletPopup() {
+    showDialog(
+      context: context,
+      builder: (context) => WalletPopup(
+        currentBalance: _walletBalance,
+        currentGems: _gems,
+        onWalletUpdated: () async {
+          await _refreshWalletData();
+        },
+      ),
+    );
   }
 
   @override
@@ -255,43 +269,46 @@ class NavScreenState extends State<NavScreen> {
                         ),
                         SizedBox(width: 8),
                         // Wallet balance display
-                        Container(
-                          padding:
-                              EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [Colors.green[50]!, Colors.green[100]!],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(25),
-                            border: Border.all(color: Colors.green[200]!),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.green.withValues(alpha: 0.2),
-                                blurRadius: 8,
-                                offset: Offset(0, 2),
+                        GestureDetector(
+                          onTap: _showWalletPopup,
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Colors.green[50]!, Colors.green[100]!],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
                               ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.account_balance_wallet,
-                                size: 18,
-                                color: Colors.green[700],
-                              ),
-                              SizedBox(width: 6),
-                              Text(
-                                '৳${_walletBalance.toStringAsFixed(0)}',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.green[800],
+                              borderRadius: BorderRadius.circular(25),
+                              border: Border.all(color: Colors.green[200]!),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.green.withValues(alpha: 0.2),
+                                  blurRadius: 8,
+                                  offset: Offset(0, 2),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.account_balance_wallet,
+                                  size: 18,
+                                  color: Colors.green[700],
+                                ),
+                                SizedBox(width: 6),
+                                Text(
+                                  '৳${_walletBalance.toStringAsFixed(0)}',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.green[800],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                         SizedBox(width: 12),

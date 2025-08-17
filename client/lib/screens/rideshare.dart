@@ -37,11 +37,21 @@ class _RideshareScreenState extends State<RideshareScreen>
   bool isYourRideExpanded = false;
   List<Map<String, dynamic>> friends = [];
   bool isLoadingFriends = false;
+  Map<String, String> userRequestStatus = {};
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (_tabController.index == 0) {
+        _loadRidePosts();
+        _loadUserRides();
+        if (currentUser != null) {
+          _loadUserRequestStatus();
+        }
+      }
+    });
     _loadCurrentUser();
     _loadRidePosts();
     _loadUserRides();
@@ -51,6 +61,14 @@ class _RideshareScreenState extends State<RideshareScreen>
     }
     if (widget.destination != null) {
       destinationController.text = widget.destination!;
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (currentUser != null) {
+      _loadUserRequestStatus();
     }
   }
 
@@ -66,7 +84,9 @@ class _RideshareScreenState extends State<RideshareScreen>
 
   Future<void> _loadCurrentUser() async {
     try {
+      print('Loading current user...');
       final user = await AuthService.getUser();
+      print('Current user loaded: ${user?.id}, ${user?.name}');
       setState(() {
         currentUser = user;
       });
@@ -74,10 +94,71 @@ class _RideshareScreenState extends State<RideshareScreen>
       if (user != null) {
         await _loadUserRides();
         await _loadFriends();
+        await _loadUserRequestStatus();
       }
     } catch (e) {
       print('Error loading current user: $e');
     }
+  }
+
+  Future<void> _loadUserRequestStatus() async {
+    if (currentUser == null) return;
+
+    try {
+      final response = await RideRequestService.getUserRequests(currentUser!.id);
+      if (response['success']) {
+        final requests = List<Map<String, dynamic>>.from(response['data']);
+        final statusMap = <String, String>{};
+        
+        for (final request in requests) {
+          statusMap[request['ridePostId']] = request['status'];
+        }
+        
+        setState(() {
+          userRequestStatus = statusMap;
+        });
+      }
+    } catch (e) {
+      print('Error loading user request status: $e');
+    }
+  }
+
+  void _applySearch() {
+    print('Applying search. Source: "${searchSourceController.text}", Destination: "${searchDestinationController.text}"');
+    print('Total ride posts: ${ridePosts.length}');
+    
+    if (searchSourceController.text.isEmpty && searchDestinationController.text.isEmpty) {
+      setState(() {
+        filteredRidePosts = ridePosts.where((post) {
+          if (currentUser != null && post['userId'] == currentUser!.id) {
+            return false;
+          }
+          return true;
+        }).toList();
+        isSearching = false;
+      });
+    } else {
+      setState(() {
+        filteredRidePosts = ridePosts.where((post) {
+          if (currentUser != null && post['userId'] == currentUser!.id) {
+            return false;
+          }
+
+          final source = post['source']?.toString().toLowerCase() ?? '';
+          final destination = post['destination']?.toString().toLowerCase() ?? '';
+          final searchSource = searchSourceController.text.toLowerCase();
+          final searchDestination = searchDestinationController.text.toLowerCase();
+
+          bool matchesSource = searchSource.isEmpty || source.contains(searchSource);
+          bool matchesDestination = searchDestination.isEmpty || destination.contains(searchDestination);
+
+          return matchesSource && matchesDestination;
+        }).toList();
+        isSearching = true;
+      });
+    }
+    
+    print('Filtered ride posts: ${filteredRidePosts.length}');
   }
 
   Future<void> _loadRidePosts() async {
@@ -87,7 +168,9 @@ class _RideshareScreenState extends State<RideshareScreen>
     });
 
     try {
+      print('Loading ride posts...');
       final response = await RideshareService.getAllRidePosts();
+      print('Ride posts API response: $response');
       if (response['success']) {
         setState(() {
           ridePosts = List<Map<String, dynamic>>.from(response['data']);
@@ -96,20 +179,22 @@ class _RideshareScreenState extends State<RideshareScreen>
               return false;
             }
 
-            if (currentUser != null && post['participants'] != null) {
-              final isParticipant = post['participants'].any(
-                  (participant) => participant['userId'] == currentUser!.id);
-              if (isParticipant) {
-                return false;
-              }
-            }
-
             return true;
           }).toList();
           isLoading = false;
         });
+        
+        print('Loaded ${ridePosts.length} ride posts, filtered to ${filteredRidePosts.length}');
+        print('Current user ID: ${currentUser?.id}');
+        for (final post in ridePosts.take(3)) {
+          print('Post: ${post['_id']}, userId: ${post['userId']}, source: ${post['source']}, destination: ${post['destination']}');
+        }
 
         await _loadRideRequests();
+        if (currentUser != null) {
+          await _loadUserRequestStatus();
+        }
+        _applySearch();
       } else {
         setState(() {
           errorMessage = response['message'] ?? 'Failed to load ride posts';
@@ -135,6 +220,9 @@ class _RideshareScreenState extends State<RideshareScreen>
         });
 
         await _loadRideRequests();
+        if (currentUser != null) {
+          await _loadUserRequestStatus();
+        }
       }
     } catch (e) {
       print('Error loading user rides: $e');
@@ -189,6 +277,314 @@ class _RideshareScreenState extends State<RideshareScreen>
       });
       print('Error loading friends: $e');
     }
+  }
+
+  Future<void> _sendRideRequest(String ridePostId) async {
+    if (currentUser == null) return;
+
+    try {
+      final response = await RideRequestService.sendRideRequest(
+        ridePostId: ridePostId,
+        requesterId: currentUser!.id,
+        requesterName: currentUser!.name,
+        requesterGender: currentUser!.gender ?? 'Not specified',
+      );
+
+      if (response['success']) {
+        setState(() {
+          userRequestStatus[ridePostId] = 'pending';
+        });
+        await _loadRideRequests();
+        await _loadUserRequestStatus();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ride request sent successfully!')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response['message'] ?? 'Failed to send ride request'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error sending ride request'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _acceptRideRequest(String requestId, String ridePostId) async {
+    try {
+      final response = await RideRequestService.acceptRideRequest(
+        requestId: requestId,
+        ridePostId: ridePostId,
+      );
+
+      if (response['success']) {
+        await _loadRideRequests();
+        await _loadRidePosts();
+        await _loadUserRides();
+        if (currentUser != null) {
+          await _loadUserRequestStatus();
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ride request accepted!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response['message'] ?? 'Failed to accept ride request'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error accepting ride request'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _rejectRideRequest(String requestId) async {
+    try {
+      final response = await RideRequestService.rejectRideRequest(requestId);
+
+      if (response['success']) {
+        await _loadRideRequests();
+        if (currentUser != null) {
+          await _loadUserRequestStatus();
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ride request rejected'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response['message'] ?? 'Failed to reject ride request'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error rejecting ride request'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Widget _buildRequestButton(Map<String, dynamic> post) {
+    if (currentUser == null) return SizedBox.shrink();
+    
+    final postId = post['_id'];
+    final requestStatus = userRequestStatus[postId];
+    
+    print('Building request button for post: $postId, status: $requestStatus, currentUser: ${currentUser?.id}');
+    
+    if (requestStatus == 'pending') {
+      return Container(
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.orange[100],
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.orange[300]!),
+        ),
+        child: Text(
+          'Request Pending',
+          style: TextStyle(
+            color: Colors.orange[700],
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    } else if (requestStatus == 'accepted') {
+      return Container(
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.green[100],
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.green[300]!),
+        ),
+        child: Text(
+          'Request Accepted',
+          style: TextStyle(
+            color: Colors.green[700],
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    } else if (requestStatus == 'rejected') {
+      return Container(
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.red[100],
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.red[300]!),
+        ),
+        child: Text(
+          'Request Rejected',
+          style: TextStyle(
+            color: Colors.red[700],
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    }
+
+    return ElevatedButton(
+      onPressed: () => _sendRideRequest(postId),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.blue,
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(6),
+        ),
+      ),
+      child: Text(
+        'Request to Join',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRideRequestsSection(Map<String, dynamic> post) {
+    final requests = rideRequests[post['_id']] ?? [];
+    final pendingRequests = requests.where((req) => req['status'] == 'pending').toList();
+    
+    if (pendingRequests.isEmpty) return SizedBox.shrink();
+
+    return Container(
+      margin: EdgeInsets.only(top: 12),
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.blue[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue[200]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Pending Requests (${pendingRequests.length})',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.blue[700],
+            ),
+          ),
+          SizedBox(height: 8),
+          ...pendingRequests.map((request) => Container(
+            margin: EdgeInsets.only(bottom: 8),
+            padding: EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: Colors.blue[100],
+                  radius: 16,
+                  child: Text(
+                    request['requesterName']?[0]?.toUpperCase() ?? 'U',
+                    style: TextStyle(
+                      color: Colors.blue[700],
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        request['requesterName'] ?? 'Unknown User',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        'Gender: ${request['requesterGender'] ?? 'Not specified'}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Row(
+                  children: [
+                    ElevatedButton(
+                      onPressed: () => _acceptRideRequest(request['_id'], post['_id']),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      child: Text(
+                        'Accept',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: () => _rejectRideRequest(request['_id']),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      child: Text(
+                        'Reject',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          )).toList(),
+        ],
+      ),
+    );
   }
 
   bool _hasExistingPost() {
@@ -295,6 +691,9 @@ class _RideshareScreenState extends State<RideshareScreen>
         await _loadRidePosts();
         await _loadUserRides();
         await _loadRideRequests();
+        if (currentUser != null) {
+          await _loadUserRequestStatus();
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Ride posted successfully!')),
         );
@@ -319,6 +718,9 @@ class _RideshareScreenState extends State<RideshareScreen>
         await _loadRidePosts();
         await _loadUserRides();
         await _loadRideRequests();
+        if (currentUser != null) {
+          await _loadUserRequestStatus();
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Ride post deleted successfully!')),
         );
@@ -566,6 +968,7 @@ class _RideshareScreenState extends State<RideshareScreen>
                               fontStyle: FontStyle.italic,
                             ),
                           ),
+                          if (isOwnPost) _buildRideRequestsSection(post),
                         ],
                       ),
                     ),
@@ -691,13 +1094,7 @@ class _RideshareScreenState extends State<RideshareScreen>
                     children: [
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: () {
-                            setState(() {
-                              isSearching = searchSourceController
-                                      .text.isNotEmpty ||
-                                  searchDestinationController.text.isNotEmpty;
-                            });
-                          },
+                          onPressed: _applySearch,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.blue,
                             padding: EdgeInsets.symmetric(vertical: 12),
@@ -718,11 +1115,9 @@ class _RideshareScreenState extends State<RideshareScreen>
                       Expanded(
                         child: ElevatedButton(
                           onPressed: () {
-                            setState(() {
-                              searchSourceController.clear();
-                              searchDestinationController.clear();
-                              isSearching = false;
-                            });
+                            searchSourceController.clear();
+                            searchDestinationController.clear();
+                            _applySearch();
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.grey,
@@ -771,6 +1166,33 @@ class _RideshareScreenState extends State<RideshareScreen>
                 ),
               ),
             SizedBox(height: 12),
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.yellow[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.yellow[300]!),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Debug Info',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.yellow[700],
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text('Total ride posts: ${ridePosts.length}'),
+                  Text('Filtered ride posts: ${filteredRidePosts.length}'),
+                  Text('Current user: ${currentUser?.id ?? 'null'}'),
+                  Text('Is searching: $isSearching'),
+                ],
+              ),
+            ),
+            SizedBox(height: 12),
             if (isLoading)
               Center(child: CircularProgressIndicator())
             else if (filteredRidePosts.isEmpty)
@@ -814,6 +1236,8 @@ class _RideshareScreenState extends State<RideshareScreen>
                 itemBuilder: (context, index) {
                   final post = filteredRidePosts[index];
                   final isOwnPost = currentUser?.id == post['userId'];
+                  
+                  print('Building ride post item $index: ${post['_id']}, source: ${post['source']}, destination: ${post['destination']}');
 
                   return Container(
                     margin: EdgeInsets.only(bottom: 12),
@@ -951,14 +1375,22 @@ class _RideshareScreenState extends State<RideshareScreen>
                             ],
                           ),
                           SizedBox(height: 12),
-                          Text(
-                            'Posted ${_formatDate(DateTime.parse(post['createdAt'] ?? DateTime.now().toIso8601String()))}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[500],
-                              fontStyle: FontStyle.italic,
-                            ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Posted ${_formatDate(DateTime.parse(post['createdAt'] ?? DateTime.now().toIso8601String()))}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[500],
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ),
+                              _buildRequestButton(post),
+                            ],
                           ),
+                          _buildRideRequestsSection(post),
                         ],
                       ),
                     ),
@@ -1013,9 +1445,17 @@ class _RideshareScreenState extends State<RideshareScreen>
   }
 
   Widget _buildPostScreen() {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _loadRidePosts();
+        await _loadUserRides();
+        if (currentUser != null) {
+          await _loadUserRequestStatus();
+        }
+      },
+      child: SingleChildScrollView(
+        child: Column(
+          children: [
           Container(
             width: double.infinity,
             padding: EdgeInsets.all(16),
@@ -1195,6 +1635,7 @@ class _RideshareScreenState extends State<RideshareScreen>
           _buildYourRideSection(),
           _buildFindRideSection(),
         ],
+      ),
       ),
     );
   }

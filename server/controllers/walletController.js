@@ -16,6 +16,7 @@ const getWalletBalance = async (req, res) => {
       wallet = new Wallet({
         userId: userId,
         balance: 0,
+        gems: 0,
         currency: 'BDT',
         lastUpdated: new Date()
       });
@@ -27,6 +28,7 @@ const getWalletBalance = async (req, res) => {
     res.status(200).json({
       success: true,
       balance: wallet.balance,
+      gems: wallet.gems,
       currency: wallet.currency,
       lastUpdated: wallet.lastUpdated,
       message: 'Wallet balance retrieved successfully'
@@ -102,6 +104,7 @@ const createWalletForNewUser = async (userId) => {
     const newWallet = new Wallet({
       userId: userId,
       balance: 0,
+      gems: 0,
       currency: 'BDT',
       lastUpdated: new Date()
     });
@@ -111,6 +114,34 @@ const createWalletForNewUser = async (userId) => {
     return newWallet;
   } catch (error) {
     console.error(`Error creating wallet for user ${userId}:`, error);
+    throw error;
+  }
+};
+
+const addGemsToUser = async (userId, gemAmount = 10) => {
+  try {
+    console.log(`Adding ${gemAmount} gems to user: ${userId}`);
+    
+    let wallet = await Wallet.findOne({ userId });
+    if (!wallet) {
+      console.log(`Creating new wallet for user: ${userId}`);
+      wallet = new Wallet({
+        userId: userId,
+        balance: 0,
+        gems: gemAmount,
+        currency: 'BDT',
+        lastUpdated: new Date()
+      });
+    } else {
+      wallet.gems += gemAmount;
+      wallet.lastUpdated = new Date();
+    }
+    
+    await wallet.save();
+    console.log(`Successfully added ${gemAmount} gems to user ${userId}. New gem count: ${wallet.gems}`);
+    return wallet;
+  } catch (error) {
+    console.error(`Error adding gems to user ${userId}:`, error);
     throw error;
   }
 };
@@ -176,6 +207,7 @@ module.exports = {
   getWalletBalance,
   initializeAllUserWallets,
   createWalletForNewUser,
+  addGemsToUser,
   testWallet,
   debugWallets
 };

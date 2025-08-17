@@ -4,6 +4,7 @@ import 'bus.dart';
 import 'rideshare.dart';
 import 'driverDash.dart';
 import '../services/auth_service.dart';
+import '../services/wallet_service.dart';
 import '../models/user.dart';
 
 class NavScreen extends StatefulWidget {
@@ -21,6 +22,8 @@ class NavScreenState extends State<NavScreen> {
   int _currentIndex = 0;
   User? _currentUser;
   bool _isLoading = true;
+  double _walletBalance = 0.0;
+  int _gems = 0;
 
   String? _rideSource;
   String? _rideDestination;
@@ -39,10 +42,28 @@ class NavScreenState extends State<NavScreen> {
         _currentUser = user;
         _isLoading = false;
       });
+
+      if (user != null) {
+        await _loadWalletData();
+      }
     } catch (e) {
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _loadWalletData() async {
+    try {
+      final walletResponse = await WalletService.getWalletBalance();
+      if (walletResponse['success']) {
+        setState(() {
+          _walletBalance = walletResponse['balance'] ?? 0.0;
+          _gems = walletResponse['gems'] ?? 0;
+        });
+      }
+    } catch (e) {
+      print('Error loading wallet data: $e');
     }
   }
 
@@ -119,7 +140,7 @@ class NavScreenState extends State<NavScreen> {
                     // Wallet info and profile picture on the right
                     Row(
                       children: [
-                        // Gem icon
+                        // Gem icon with count
                         Container(
                           padding: EdgeInsets.all(8),
                           decoration: BoxDecoration(
@@ -138,10 +159,35 @@ class NavScreenState extends State<NavScreen> {
                               ),
                             ],
                           ),
-                          child: Icon(
-                            Icons.diamond,
-                            size: 20,
-                            color: Colors.purple[700],
+                          child: Stack(
+                            children: [
+                              Icon(
+                                Icons.diamond,
+                                size: 20,
+                                color: Colors.purple[700],
+                              ),
+                              if (_gems > 0)
+                                Positioned(
+                                  right: -2,
+                                  top: -2,
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: 4, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      '$_gems',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                         SizedBox(width: 8),
@@ -175,7 +221,7 @@ class NavScreenState extends State<NavScreen> {
                               ),
                               SizedBox(width: 6),
                               Text(
-                                '৳500',
+                                '৳${_walletBalance.toStringAsFixed(0)}',
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,

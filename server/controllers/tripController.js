@@ -1,5 +1,6 @@
 const Trip = require('../models/trip');
 const jwt = require('jsonwebtoken');
+const { addGemsToUser } = require('./walletController');
 
 const addTrip = async (req, res) => {
   try {
@@ -32,9 +33,18 @@ const addTrip = async (req, res) => {
 
     await newTrip.save();
 
+    // Add 10 gems to user's wallet for completing the trip
+    try {
+      await addGemsToUser(userId, 10);
+      console.log(`Added 10 gems to user ${userId} for completing trip`);
+    } catch (gemError) {
+      console.error(`Error adding gems to user ${userId}:`, gemError);
+      // Don't fail the trip completion if gem addition fails
+    }
+
     res.status(201).json({
       success: true,
-      message: 'Trip recorded successfully',
+      message: 'Trip recorded successfully and 10 gems added to your wallet!',
       data: newTrip
     });
 

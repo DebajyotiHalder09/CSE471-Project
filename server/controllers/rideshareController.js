@@ -1,4 +1,5 @@
 const RidePost = require('../models/rideshare');
+const { addGemsToUser } = require('./walletController');
 
 const rideshareController = {
   createRidePost: async (req, res) => {
@@ -130,6 +131,62 @@ const rideshareController = {
       res.status(500).json({
         success: false,
         message: 'Error fetching user rides',
+        error: error.message,
+      });
+    }
+  },
+
+  completeRideshareTrip: async (req, res) => {
+    try {
+      const { postId, userId } = req.body;
+      
+      if (!postId || !userId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Post ID and User ID are required',
+        });
+      }
+
+      // Find the ride post
+      const ridePost = await RidePost.findById(postId);
+      if (!ridePost) {
+        return res.status(404).json({
+          success: false,
+          message: 'Ride post not found',
+        });
+      }
+
+      // Verify user is part of this ride (creator or participant)
+      const isCreator = ridePost.userId.toString() === userId;
+      const isParticipant = ridePost.participants?.some(p => p.userId.toString() === userId);
+      
+      if (!isCreator && !isParticipant) {
+        return res.status(403).json({
+          success: false,
+          message: 'User is not part of this ride',
+        });
+      }
+
+      // Add 10 gems to user's wallet for completing the rideshare trip
+      try {
+        await addGemsToUser(userId, 10);
+        console.log(`Added 10 gems to user ${userId} for completing rideshare trip`);
+      } catch (gemError) {
+        console.error(`Error adding gems to user ${userId}:`, gemError);
+        // Don't fail the trip completion if gem addition fails
+      }
+
+      res.json({
+        success: true,
+        message: 'Rideshare trip completed successfully and 10 gems added to your wallet!',
+        postId: postId,
+        userId: userId,
+      });
+    } catch (error) {
+      console.error('Error completing rideshare trip:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error completing rideshare trip',
         error: error.message,
       });
     }

@@ -53,10 +53,12 @@ class WalletService {
         final data = json.decode(response.body) as Map<String, dynamic>;
         print('WalletService: Parsed data: $data');
         final balance = (data['balance'] ?? 0.0).toDouble();
-        print('WalletService: Extracted balance: $balance');
+        final gems = (data['gems'] ?? 0).toInt();
+        print('WalletService: Extracted balance: $balance, gems: $gems');
         return {
           'success': true,
           'balance': balance,
+          'gems': gems,
           'message': data['message'] ?? 'Wallet balance retrieved successfully',
         };
       } else if (response.statusCode == 404) {

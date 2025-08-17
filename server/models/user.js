@@ -26,7 +26,7 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-const User = mongoose.model('users', userSchema);
+const User = mongoose.model('User', userSchema);
 
 // Add some debugging to see what collection is being used
 console.log('User model created with collection name:', User.collection.name);

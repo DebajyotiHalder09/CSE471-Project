@@ -14,6 +14,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   User? _currentUser;
+  String? _friendCode;
   bool _isLoading = true;
 
   @override
@@ -25,8 +26,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadUserData() async {
     try {
       final user = await AuthService.getUser();
+      final friendCode = await AuthService.getCurrentUserFriendCode();
       setState(() {
         _currentUser = user;
+        _friendCode = friendCode;
         _isLoading = false;
       });
     } catch (e) {
@@ -91,6 +94,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               color: Colors.black87,
                             ),
                           ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Friend Code: ${_friendCode ?? 'Loading...'}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -118,7 +129,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _buildProfileItem(Icons.history, 'Trip History', onTap: () {
                       Navigator.pushNamed(context, '/trip-history');
                     }),
-                    _buildProfileItem(Icons.favorite, 'Favorites'),
+                    _buildProfileItem(Icons.people, 'Friends', onTap: () {
+                      Navigator.pushNamed(context, '/friends');
+                    }),
                     _buildProfileItem(Icons.settings, 'Settings'),
                     _buildProfileItem(Icons.help, 'Help & Support'),
                     _buildProfileItem(Icons.logout, 'Logout', onTap: _logout),

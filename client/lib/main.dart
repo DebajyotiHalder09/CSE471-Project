@@ -9,6 +9,7 @@ import 'screens/pinfo.dart';
 import 'screens/map.dart';
 import 'screens/tripHistory.dart';
 import 'screens/top.dart';
+import 'screens/friends.dart';
 
 void main() {
   runApp(const MyApp());
@@ -38,6 +39,7 @@ class MyApp extends StatelessWidget {
         '/map': (context) => MapScreen(),
         TripHistoryScreen.routeName: (context) => TripHistoryScreen(),
         TopScreen.routeName: (context) => TopScreen(),
+        FriendsScreen.routeName: (context) => FriendsScreen(),
       },
       onUnknownRoute: (settings) {
         print('Unknown route: ${settings.name}');

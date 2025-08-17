@@ -105,15 +105,16 @@ class _RideshareScreenState extends State<RideshareScreen>
     if (currentUser == null) return;
 
     try {
-      final response = await RideRequestService.getUserRequests(currentUser!.id);
+      final response =
+          await RideRequestService.getUserRequests(currentUser!.id);
       if (response['success']) {
         final requests = List<Map<String, dynamic>>.from(response['data']);
         final statusMap = <String, String>{};
-        
+
         for (final request in requests) {
           statusMap[request['ridePostId']] = request['status'];
         }
-        
+
         setState(() {
           userRequestStatus = statusMap;
         });
@@ -124,10 +125,12 @@ class _RideshareScreenState extends State<RideshareScreen>
   }
 
   void _applySearch() {
-    print('Applying search. Source: "${searchSourceController.text}", Destination: "${searchDestinationController.text}"');
+    print(
+        'Applying search. Source: "${searchSourceController.text}", Destination: "${searchDestinationController.text}"');
     print('Total ride posts: ${ridePosts.length}');
-    
-    if (searchSourceController.text.isEmpty && searchDestinationController.text.isEmpty) {
+
+    if (searchSourceController.text.isEmpty &&
+        searchDestinationController.text.isEmpty) {
       setState(() {
         filteredRidePosts = ridePosts.where((post) {
           if (currentUser != null && post['userId'] == currentUser!.id) {
@@ -145,19 +148,23 @@ class _RideshareScreenState extends State<RideshareScreen>
           }
 
           final source = post['source']?.toString().toLowerCase() ?? '';
-          final destination = post['destination']?.toString().toLowerCase() ?? '';
+          final destination =
+              post['destination']?.toString().toLowerCase() ?? '';
           final searchSource = searchSourceController.text.toLowerCase();
-          final searchDestination = searchDestinationController.text.toLowerCase();
+          final searchDestination =
+              searchDestinationController.text.toLowerCase();
 
-          bool matchesSource = searchSource.isEmpty || source.contains(searchSource);
-          bool matchesDestination = searchDestination.isEmpty || destination.contains(searchDestination);
+          bool matchesSource =
+              searchSource.isEmpty || source.contains(searchSource);
+          bool matchesDestination = searchDestination.isEmpty ||
+              destination.contains(searchDestination);
 
           return matchesSource && matchesDestination;
         }).toList();
         isSearching = true;
       });
     }
-    
+
     print('Filtered ride posts: ${filteredRidePosts.length}');
   }
 
@@ -183,11 +190,13 @@ class _RideshareScreenState extends State<RideshareScreen>
           }).toList();
           isLoading = false;
         });
-        
-        print('Loaded ${ridePosts.length} ride posts, filtered to ${filteredRidePosts.length}');
+
+        print(
+            'Loaded ${ridePosts.length} ride posts, filtered to ${filteredRidePosts.length}');
         print('Current user ID: ${currentUser?.id}');
         for (final post in ridePosts.take(3)) {
-          print('Post: ${post['_id']}, userId: ${post['userId']}, source: ${post['source']}, destination: ${post['destination']}');
+          print(
+              'Post: ${post['_id']}, userId: ${post['userId']}, source: ${post['source']}, destination: ${post['destination']}');
         }
 
         await _loadRideRequests();
@@ -255,10 +264,10 @@ class _RideshareScreenState extends State<RideshareScreen>
       isLoadingFriends = true;
     });
 
-          try {
-        final response = await FriendsService.getFriends();
-        print('Friends API response: $response');
-      
+    try {
+      final response = await FriendsService.getFriends();
+      print('Friends API response: $response');
+
       if (response['success']) {
         setState(() {
           friends = List<Map<String, dynamic>>.from(response['data']);
@@ -340,7 +349,8 @@ class _RideshareScreenState extends State<RideshareScreen>
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(response['message'] ?? 'Failed to accept ride request'),
+            content:
+                Text(response['message'] ?? 'Failed to accept ride request'),
             backgroundColor: Colors.red,
           ),
         );
@@ -373,7 +383,8 @@ class _RideshareScreenState extends State<RideshareScreen>
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(response['message'] ?? 'Failed to reject ride request'),
+            content:
+                Text(response['message'] ?? 'Failed to reject ride request'),
             backgroundColor: Colors.red,
           ),
         );
@@ -390,12 +401,13 @@ class _RideshareScreenState extends State<RideshareScreen>
 
   Widget _buildRequestButton(Map<String, dynamic> post) {
     if (currentUser == null) return SizedBox.shrink();
-    
+
     final postId = post['_id'];
     final requestStatus = userRequestStatus[postId];
-    
-    print('Building request button for post: $postId, status: $requestStatus, currentUser: ${currentUser?.id}');
-    
+
+    print(
+        'Building request button for post: $postId, status: $requestStatus, currentUser: ${currentUser?.id}');
+
     if (requestStatus == 'pending') {
       return Container(
         padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -469,10 +481,118 @@ class _RideshareScreenState extends State<RideshareScreen>
     );
   }
 
+  Widget _buildAcceptedParticipantsSection(Map<String, dynamic> post) {
+    final requests = rideRequests[post['_id']] ?? [];
+    final acceptedRequests =
+        requests.where((req) => req['status'] == 'accepted').toList();
+
+    // Create a list of all participants including the ride creator
+    final allParticipants = <Map<String, dynamic>>[];
+
+    // Add the ride creator as the first participant
+    allParticipants.add({
+      'requesterName': post['userName'] ?? 'Unknown User',
+      'isCreator': true,
+    });
+
+    // Add accepted participants
+    allParticipants.addAll(acceptedRequests.map((req) => {
+          ...req,
+          'isCreator': false,
+        }));
+
+    if (allParticipants.length <= 1) return SizedBox.shrink();
+
+    return Container(
+      margin: EdgeInsets.only(top: 12),
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.green[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.green[200]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green[700], size: 16),
+              SizedBox(width: 8),
+              Text(
+                'Participants (${allParticipants.length})',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.green[700],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: allParticipants
+                .map((participant) => Container(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: participant['isCreator'] == true
+                            ? Colors.orange[100]
+                            : Colors.green[100],
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: participant['isCreator'] == true
+                              ? Colors.orange[300]!
+                              : Colors.green[300]!,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircleAvatar(
+                            backgroundColor: participant['isCreator'] == true
+                                ? Colors.orange[200]
+                                : Colors.green[200],
+                            radius: 12,
+                            child: Text(
+                              participant['requesterName']?[0]?.toUpperCase() ??
+                                  'U',
+                              style: TextStyle(
+                                color: participant['isCreator'] == true
+                                    ? Colors.orange[700]
+                                    : Colors.green[700],
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            '${participant['requesterName'] ?? 'Unknown User'}${participant['isCreator'] == true ? ' (Creator)' : ''}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: participant['isCreator'] == true
+                                  ? Colors.orange[700]
+                                  : Colors.green[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ))
+                .toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRideRequestsSection(Map<String, dynamic> post) {
     final requests = rideRequests[post['_id']] ?? [];
-    final pendingRequests = requests.where((req) => req['status'] == 'pending').toList();
-    
+    final pendingRequests =
+        requests.where((req) => req['status'] == 'pending').toList();
+
     if (pendingRequests.isEmpty) return SizedBox.shrink();
 
     return Container(
@@ -495,93 +615,99 @@ class _RideshareScreenState extends State<RideshareScreen>
             ),
           ),
           SizedBox(height: 8),
-          ...pendingRequests.map((request) => Container(
-            margin: EdgeInsets.only(bottom: 8),
-            padding: EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: Colors.blue[100],
-                  radius: 16,
-                  child: Text(
-                    request['requesterName']?[0]?.toUpperCase() ?? 'U',
-                    style: TextStyle(
-                      color: Colors.blue[700],
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+          ...pendingRequests
+              .map((request) => Container(
+                    margin: EdgeInsets.only(bottom: 8),
+                    padding: EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(6),
                     ),
-                  ),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        request['requesterName'] ?? 'Unknown User',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: Colors.blue[100],
+                          radius: 16,
+                          child: Text(
+                            request['requesterName']?[0]?.toUpperCase() ?? 'U',
+                            style: TextStyle(
+                              color: Colors.blue[700],
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
-                      ),
-                      Text(
-                        'Gender: ${request['requesterGender'] ?? 'Not specified'}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                request['requesterName'] ?? 'Unknown User',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                'Gender: ${request['requesterGender'] ?? 'Not specified'}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                Row(
-                  children: [
-                    ElevatedButton(
-                      onPressed: () => _acceptRideRequest(request['_id'], post['_id']),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(4),
+                        Row(
+                          children: [
+                            ElevatedButton(
+                              onPressed: () => _acceptRideRequest(
+                                  request['_id'], post['_id']),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 6),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                              child: Text(
+                                'Accept',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            ElevatedButton(
+                              onPressed: () =>
+                                  _rejectRideRequest(request['_id']),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 6),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                              child: Text(
+                                'Reject',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                      child: Text(
-                        'Accept',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      ],
                     ),
-                    SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: () => _rejectRideRequest(request['_id']),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                      child: Text(
-                        'Reject',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          )).toList(),
+                  ))
+              .toList(),
         ],
       ),
     );
@@ -968,7 +1094,10 @@ class _RideshareScreenState extends State<RideshareScreen>
                               fontStyle: FontStyle.italic,
                             ),
                           ),
-                          if (isOwnPost) _buildRideRequestsSection(post),
+                          if (isOwnPost) ...[
+                            _buildAcceptedParticipantsSection(post),
+                            _buildRideRequestsSection(post),
+                          ],
                         ],
                       ),
                     ),
@@ -1236,8 +1365,9 @@ class _RideshareScreenState extends State<RideshareScreen>
                 itemBuilder: (context, index) {
                   final post = filteredRidePosts[index];
                   final isOwnPost = currentUser?.id == post['userId'];
-                  
-                  print('Building ride post item $index: ${post['_id']}, source: ${post['source']}, destination: ${post['destination']}');
+
+                  print(
+                      'Building ride post item $index: ${post['_id']}, source: ${post['source']}, destination: ${post['destination']}');
 
                   return Container(
                     margin: EdgeInsets.only(bottom: 12),
@@ -1390,6 +1520,7 @@ class _RideshareScreenState extends State<RideshareScreen>
                               _buildRequestButton(post),
                             ],
                           ),
+                          _buildAcceptedParticipantsSection(post),
                           _buildRideRequestsSection(post),
                         ],
                       ),
@@ -1456,186 +1587,188 @@ class _RideshareScreenState extends State<RideshareScreen>
       child: SingleChildScrollView(
         child: Column(
           children: [
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.1),
-                  spreadRadius: 1,
-                  blurRadius: 4,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Post a Ride',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-                SizedBox(height: 12),
-                if (_hasExistingPost()) ...[
-                  Container(
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.orange[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.orange[200]!),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.info_outline,
-                                color: Colors.orange[700], size: 20),
-                            SizedBox(width: 8),
-                            Text(
-                              'You already have an active ride post',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.orange[700],
-                              ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 12),
-                        _buildExistingPostCard(_getExistingPost()!),
-                        SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: () =>
-                                _deleteRidePost(_getExistingPost()!['_id']),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            child: Text(
-                              'Delete Current Post',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ] else ...[
-                  TextField(
-                    controller: sourceController,
-                    decoration: InputDecoration(
-                      hintText: 'Enter source location',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[50],
-                      prefixIcon: Icon(Icons.location_on, color: Colors.green),
-                    ),
-                  ),
-                  SizedBox(height: 12),
-                  TextField(
-                    controller: destinationController,
-                    decoration: InputDecoration(
-                      hintText: 'Enter destination location',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[50],
-                      prefixIcon: Icon(Icons.flag, color: Colors.red),
-                    ),
-                  ),
-                  SizedBox(height: 12),
-                  if (currentUser != null) ...[
-                    Row(
-                      children: [
-                        Icon(Icons.person, color: Colors.blue, size: 16),
-                        SizedBox(width: 8),
-                        Text(
-                          'Posted by: ${currentUser!.name}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        SizedBox(width: 16),
-                        Icon(Icons.wc, color: Colors.purple, size: 16),
-                        SizedBox(width: 8),
-                        Text(
-                          'Gender: ${currentUser!.gender ?? 'Not specified'}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 12),
-                  ],
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed:
-                          (isLoading || currentUser == null) ? null : _postRide,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            currentUser == null ? Colors.grey : Colors.blue,
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text(
-                        currentUser == null ? 'Login Required' : 'Post Ride',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (errorMessage != null)
             Container(
               width: double.infinity,
-              margin: EdgeInsets.all(16),
-              padding: EdgeInsets.all(12),
+              padding: EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.red[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red[200]!),
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.1),
+                    spreadRadius: 1,
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
               ),
-              child: Text(
-                errorMessage!,
-                style: TextStyle(
-                  color: Colors.red[700],
-                  fontWeight: FontWeight.w500,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Post a Ride',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  SizedBox(height: 12),
+                  if (_hasExistingPost()) ...[
+                    Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.orange[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange[200]!),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.info_outline,
+                                  color: Colors.orange[700], size: 20),
+                              SizedBox(width: 8),
+                              Text(
+                                'You already have an active ride post',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.orange[700],
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 12),
+                          _buildExistingPostCard(_getExistingPost()!),
+                          SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: () =>
+                                  _deleteRidePost(_getExistingPost()!['_id']),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: Text(
+                                'Delete Current Post',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    TextField(
+                      controller: sourceController,
+                      decoration: InputDecoration(
+                        hintText: 'Enter source location',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                        prefixIcon:
+                            Icon(Icons.location_on, color: Colors.green),
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    TextField(
+                      controller: destinationController,
+                      decoration: InputDecoration(
+                        hintText: 'Enter destination location',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                        prefixIcon: Icon(Icons.flag, color: Colors.red),
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    if (currentUser != null) ...[
+                      Row(
+                        children: [
+                          Icon(Icons.person, color: Colors.blue, size: 16),
+                          SizedBox(width: 8),
+                          Text(
+                            'Posted by: ${currentUser!.name}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                          SizedBox(width: 16),
+                          Icon(Icons.wc, color: Colors.purple, size: 16),
+                          SizedBox(width: 8),
+                          Text(
+                            'Gender: ${currentUser!.gender ?? 'Not specified'}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 12),
+                    ],
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: (isLoading || currentUser == null)
+                            ? null
+                            : _postRide,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              currentUser == null ? Colors.grey : Colors.blue,
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: Text(
+                          currentUser == null ? 'Login Required' : 'Post Ride',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-          _buildYourRideSection(),
-          _buildFindRideSection(),
-        ],
-      ),
+            if (errorMessage != null)
+              Container(
+                width: double.infinity,
+                margin: EdgeInsets.all(16),
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red[200]!),
+                ),
+                child: Text(
+                  errorMessage!,
+                  style: TextStyle(
+                    color: Colors.red[700],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            _buildYourRideSection(),
+            _buildFindRideSection(),
+          ],
+        ),
       ),
     );
   }

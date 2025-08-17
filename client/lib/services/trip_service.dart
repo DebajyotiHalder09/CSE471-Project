@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'wallet_service.dart';
 
 class TripService {
   static const String baseUrl = 'http://10.0.2.2:3000';
@@ -39,6 +40,14 @@ class TripService {
 
       if (response.statusCode == 201) {
         final data = json.decode(response.body);
+
+        // Refresh wallet data to get updated gems count
+        try {
+          await WalletService.refreshWalletData();
+        } catch (e) {
+          print('Error refreshing wallet data: $e');
+        }
+
         return data;
       } else {
         return {
@@ -77,6 +86,14 @@ class TripService {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+
+        // Refresh wallet data to get updated gems count
+        try {
+          await WalletService.refreshWalletData();
+        } catch (e) {
+          print('Error refreshing wallet data: $e');
+        }
+
         return data;
       } else {
         return {

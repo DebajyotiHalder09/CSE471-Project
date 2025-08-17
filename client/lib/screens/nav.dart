@@ -24,6 +24,7 @@ class NavScreenState extends State<NavScreen> {
   bool _isLoading = true;
   double _walletBalance = 0.0;
   int _gems = 0;
+  bool _isRefreshingWallet = false;
 
   String? _rideSource;
   String? _rideDestination;
@@ -33,6 +34,14 @@ class NavScreenState extends State<NavScreen> {
     super.initState();
     _currentIndex = widget.initialIndex;
     _loadUserData();
+
+    // Register wallet update callback
+    WalletService.setWalletUpdateCallback((balance, gems) {
+      setState(() {
+        _walletBalance = balance;
+        _gems = gems;
+      });
+    });
   }
 
   Future<void> _loadUserData() async {
@@ -65,6 +74,35 @@ class NavScreenState extends State<NavScreen> {
     } catch (e) {
       print('Error loading wallet data: $e');
     }
+  }
+
+  Future<void> _refreshWalletData() async {
+    setState(() {
+      _isRefreshingWallet = true;
+    });
+
+    try {
+      final walletResponse = await WalletService.refreshWalletData();
+      if (walletResponse['success']) {
+        setState(() {
+          _walletBalance = walletResponse['balance'] ?? 0.0;
+          _gems = walletResponse['gems'] ?? 0;
+        });
+      }
+    } catch (e) {
+      print('Error refreshing wallet data: $e');
+    } finally {
+      setState(() {
+        _isRefreshingWallet = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    // Clear wallet update callback
+    WalletService.setWalletUpdateCallback(null);
+    super.dispose();
   }
 
   Widget _getScreenAtIndex(int index) {
@@ -141,53 +179,78 @@ class NavScreenState extends State<NavScreen> {
                     Row(
                       children: [
                         // Gem icon with count
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [Colors.purple[50]!, Colors.purple[100]!],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
+                        GestureDetector(
+                          onTap: () async {
+                            await _refreshWalletData();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Wallet refreshed!'),
+                                duration: Duration(seconds: 1),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            padding: EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.purple[50]!,
+                                  Colors.purple[100]!
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: Colors.purple[200]!),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.purple.withValues(alpha: 0.2),
+                                  blurRadius: 8,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
                             ),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.purple[200]!),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.purple.withValues(alpha: 0.2),
-                                blurRadius: 8,
-                                offset: Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Stack(
-                            children: [
-                              Icon(
-                                Icons.diamond,
-                                size: 20,
-                                color: Colors.purple[700],
-                              ),
-                              if (_gems > 0)
-                                Positioned(
-                                  right: -2,
-                                  top: -2,
-                                  child: Container(
-                                    padding: EdgeInsets.symmetric(
-                                        horizontal: 4, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.red,
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Text(
-                                      '$_gems',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
+                            child: Stack(
+                              children: [
+                                _isRefreshingWallet
+                                    ? SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                  Colors.purple[700]!),
+                                        ),
+                                      )
+                                    : Icon(
+                                        Icons.diamond,
+                                        size: 20,
+                                        color: Colors.purple[700],
+                                      ),
+                                if (_gems > 0)
+                                  Positioned(
+                                    right: -2,
+                                    top: -2,
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                          horizontal: 4, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Text(
+                                        '$_gems',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                         SizedBox(width: 8),
@@ -269,7 +332,12 @@ class NavScreenState extends State<NavScreen> {
 
             // Main content area
             Expanded(
-              child: _getScreenAtIndex(_currentIndex),
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  await _refreshWalletData();
+                },
+                child: _getScreenAtIndex(_currentIndex),
+              ),
             ),
           ],
         ),

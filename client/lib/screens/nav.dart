@@ -119,6 +119,32 @@ class NavScreenState extends State<NavScreen> {
                     // Wallet info and profile picture on the right
                     Row(
                       children: [
+                        // Gem icon
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Colors.purple[50]!, Colors.purple[100]!],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.purple[200]!),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.purple.withValues(alpha: 0.2),
+                                blurRadius: 8,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            Icons.diamond,
+                            size: 20,
+                            color: Colors.purple[700],
+                          ),
+                        ),
+                        SizedBox(width: 8),
                         // Wallet balance display
                         Container(
                           padding:

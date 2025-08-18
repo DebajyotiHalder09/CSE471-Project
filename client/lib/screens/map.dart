@@ -1205,10 +1205,19 @@ class _MapScreenState extends State<MapScreen> {
       }
     }
 
+    try {
+      final geocodingSuggestions = await _getGeocodingSuggestions(query);
+      suggestions.addAll(geocodingSuggestions);
+    } catch (e) {
+      print('Error getting geocoding suggestions: $e');
+    }
+
     final sortedSuggestions = suggestions.toList();
     sortedSuggestions.sort((a, b) {
       if (a['isExactMatch'] == true && b['isExactMatch'] != true) return -1;
       if (a['isExactMatch'] != true && b['isExactMatch'] == true) return 1;
+      if (a['type'] == 'bus_stop' && b['type'] != 'bus_stop') return -1;
+      if (a['type'] != 'bus_stop' && b['type'] == 'bus_stop') return 1;
       return a['name'].toLowerCase().compareTo(b['name'].toLowerCase());
     });
 
@@ -1223,13 +1232,68 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
+  Future<List<Map<String, dynamic>>> _getGeocodingSuggestions(
+      String query) async {
+    if (query.trim().isEmpty) return [];
+
+    try {
+      final encodedQuery = Uri.encodeComponent('$query, Dhaka, Bangladesh');
+      final url =
+          'https://nominatim.openstreetmap.org/search?q=$encodedQuery&format=json&limit=5&addressdetails=1&countrycodes=bd';
+
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        final List<Map<String, dynamic>> suggestions = [];
+
+        for (final item in data) {
+          if (item is Map<String, dynamic>) {
+            final lat = item['lat']?.toString();
+            final lon = item['lon']?.toString();
+
+            if (lat != null && lon != null) {
+              final displayName = item['display_name']?.toString() ?? '';
+              final name = displayName.split(',').take(2).join(', ');
+
+              suggestions.add({
+                'name': name,
+                'type': 'location',
+                'latitude': double.tryParse(lat) ?? 0.0,
+                'longitude': double.tryParse(lon) ?? 0.0,
+                'isExactMatch': false,
+                'fullAddress': displayName,
+              });
+            }
+          }
+        }
+
+        return suggestions;
+      }
+    } catch (e) {
+      print('Geocoding error: $e');
+    }
+
+    return [];
+  }
+
   void _selectSourceSuggestion(Map<String, dynamic> suggestion) {
-    _sourceController.text = suggestion['name'];
+    if (suggestion['type'] == 'bus_stop') {
+      _sourceController.text = suggestion['name'];
+    } else {
+      _sourceController.text = suggestion['fullAddress'] ?? suggestion['name'];
+    }
+
     _sourcePoint = LatLng(suggestion['latitude'], suggestion['longitude']);
     if (_mapController != null && _mapReady) {
       _mapController!.move(_sourcePoint!, 15.0);
     }
-    _updateRoute();
+
+    if (suggestion['type'] == 'bus_stop') {
+      _updateRoute();
+    } else {
+      _updateRouteForCustomLocation();
+    }
 
     setState(() {
       _showSourceSuggestions = false;
@@ -1238,12 +1302,23 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _selectDestinationSuggestion(Map<String, dynamic> suggestion) {
-    _destinationController.text = suggestion['name'];
+    if (suggestion['type'] == 'bus_stop') {
+      _destinationController.text = suggestion['name'];
+    } else {
+      _destinationController.text =
+          suggestion['fullAddress'] ?? suggestion['name'];
+    }
+
     _destinationPoint = LatLng(suggestion['latitude'], suggestion['longitude']);
     if (_mapController != null && _mapReady) {
       _mapController!.move(_destinationPoint!, 15.0);
     }
-    _updateRoute();
+
+    if (suggestion['type'] == 'bus_stop') {
+      _updateRoute();
+    } else {
+      _updateRouteForCustomLocation();
+    }
 
     setState(() {
       _showDestinationSuggestions = false;
@@ -1321,6 +1396,61 @@ class _MapScreenState extends State<MapScreen> {
     await _fetchAvailableBuses();
     if (mounted) {
       _showResultsSheet();
+    }
+  }
+
+  Future<void> _updateRouteForCustomLocation() async {
+    if (_sourcePoint == null || _destinationPoint == null) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final routeUrl = Uri.parse(
+          'https://router.project-osrm.org/route/v1/driving/${_sourcePoint!.longitude},${_sourcePoint!.latitude};${_destinationPoint!.longitude},${_destinationPoint!.latitude}?overview=full&geometries=geojson');
+
+      final response = await http.get(routeUrl);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['routes'] != null && data['routes'].isNotEmpty) {
+          final route = data['routes'][0];
+          final geometry = route['geometry'];
+
+          if (geometry['coordinates'] != null) {
+            final coordinates = geometry['coordinates'] as List;
+            final routePoints = coordinates.map((coord) {
+              return LatLng(coord[1].toDouble(), coord[0].toDouble());
+            }).toList();
+
+            setState(() {
+              _routePoints = routePoints;
+            });
+
+            _fitMapToRoute();
+          }
+        }
+      } else {
+        setState(() {
+          _routePoints = [_sourcePoint!, _destinationPoint!];
+        });
+        _fitMapToRoute();
+      }
+    } catch (e) {
+      print('Error getting route: $e');
+      setState(() {
+        _routePoints = [_sourcePoint!, _destinationPoint!];
+      });
+      _fitMapToRoute();
+    }
+
+    setState(() {
+      _isLoading = false;
+    });
+
+    if (mounted) {
+      _showResultsSheetForCustomLocation();
     }
   }
 
@@ -1817,6 +1947,111 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  void _showResultsSheetForCustomLocation() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.25,
+          minChildSize: 0.25,
+          maxChildSize: 0.4,
+          expand: false,
+          builder: (context, scrollController) {
+            return Column(
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(top: 12, bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade400,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Custom Location',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).maybePop();
+                          if (widget.onOpenRideshare != null) {
+                            widget.onOpenRideshare!(
+                              _sourceController.text.trim(),
+                              _destinationController.text.trim(),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.directions_car, size: 18),
+                            SizedBox(width: 8),
+                            Text('RideShare',
+                                style: TextStyle(fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      )
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  margin: EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.blue[200]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: Colors.blue[600],
+                        size: 24,
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'This location is not served by public buses. Use RideShare to find a ride to your destination.',
+                          style: TextStyle(
+                            color: Colors.blue[800],
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _fitMapToRoute() {
     if (_routePoints.isEmpty || _mapController == null || !_mapReady) return;
 
@@ -1975,14 +2210,16 @@ class _MapScreenState extends State<MapScreen> {
                           const Icon(Icons.location_on, color: Colors.green),
                       suffixIcon: IconButton(
                         icon: const Icon(Icons.search),
-                        onPressed: () {
+                        onPressed: () async {
+                          final query = _sourceController.text.trim();
+                          if (query.isEmpty) return;
+
                           final stop = _allBusStops.firstWhere(
-                            (s) =>
-                                s.name.toLowerCase() ==
-                                _sourceController.text.trim().toLowerCase(),
+                            (s) => s.name.toLowerCase() == query.toLowerCase(),
                             orElse: () => BusStop(
                                 name: '', latitude: 0.0, longitude: 0.0),
                           );
+
                           if (stop.name.isNotEmpty) {
                             _sourcePoint =
                                 LatLng(stop.latitude, stop.longitude);
@@ -1990,6 +2227,20 @@ class _MapScreenState extends State<MapScreen> {
                               _mapController!.move(_sourcePoint!, 15.0);
                             }
                             _updateRoute();
+                          } else {
+                            final geocodingSuggestions =
+                                await _getGeocodingSuggestions(query);
+                            if (geocodingSuggestions.isNotEmpty) {
+                              final location = geocodingSuggestions.first;
+                              _sourcePoint = LatLng(
+                                  location['latitude'], location['longitude']);
+                              _sourceController.text =
+                                  location['fullAddress'] ?? location['name'];
+                              if (_mapController != null && _mapReady) {
+                                _mapController!.move(_sourcePoint!, 15.0);
+                              }
+                              _updateRouteForCustomLocation();
+                            }
                           }
                         },
                       ),
@@ -2000,11 +2251,12 @@ class _MapScreenState extends State<MapScreen> {
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 12),
                     ),
-                    onSubmitted: (_) {
+                    onSubmitted: (_) async {
+                      final query = _sourceController.text.trim();
+                      if (query.isEmpty) return;
+
                       final stop = _allBusStops.firstWhere(
-                        (s) =>
-                            s.name.toLowerCase() ==
-                            _sourceController.text.trim().toLowerCase(),
+                        (s) => s.name.toLowerCase() == query.toLowerCase(),
                         orElse: () =>
                             BusStop(name: '', latitude: 0.0, longitude: 0.0),
                       );
@@ -2014,6 +2266,20 @@ class _MapScreenState extends State<MapScreen> {
                           _mapController!.move(_sourcePoint!, 15.0);
                         }
                         _updateRoute();
+                      } else {
+                        final geocodingSuggestions =
+                            await _getGeocodingSuggestions(query);
+                        if (geocodingSuggestions.isNotEmpty) {
+                          final location = geocodingSuggestions.first;
+                          _sourcePoint = LatLng(
+                              location['latitude'], location['longitude']);
+                          _sourceController.text =
+                              location['fullAddress'] ?? location['name'];
+                          if (_mapController != null && _mapReady) {
+                            _mapController!.move(_sourcePoint!, 15.0);
+                          }
+                          _updateRouteForCustomLocation();
+                        }
                       }
                     },
                   ),
@@ -2041,8 +2307,12 @@ class _MapScreenState extends State<MapScreen> {
                             child: ListTile(
                               dense: true,
                               leading: Icon(
-                                Icons.directions_bus,
-                                color: Colors.blue,
+                                suggestion['type'] == 'bus_stop'
+                                    ? Icons.directions_bus
+                                    : Icons.location_on,
+                                color: suggestion['type'] == 'bus_stop'
+                                    ? Colors.blue
+                                    : Colors.green,
                                 size: 20,
                               ),
                               title: Text(
@@ -2056,6 +2326,17 @@ class _MapScreenState extends State<MapScreen> {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
+                              subtitle: suggestion['type'] == 'location'
+                                  ? Text(
+                                      suggestion['fullAddress'] ?? '',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    )
+                                  : null,
                             ),
                           );
                         },
@@ -2071,16 +2352,16 @@ class _MapScreenState extends State<MapScreen> {
                       prefixIcon: const Icon(Icons.flag, color: Colors.red),
                       suffixIcon: IconButton(
                         icon: const Icon(Icons.search),
-                        onPressed: () {
+                        onPressed: () async {
+                          final query = _destinationController.text.trim();
+                          if (query.isEmpty) return;
+
                           final stop = _allBusStops.firstWhere(
-                            (s) =>
-                                s.name.toLowerCase() ==
-                                _destinationController.text
-                                    .trim()
-                                    .toLowerCase(),
+                            (s) => s.name.toLowerCase() == query.toLowerCase(),
                             orElse: () => BusStop(
                                 name: '', latitude: 0.0, longitude: 0.0),
                           );
+
                           if (stop.name.isNotEmpty) {
                             _destinationPoint =
                                 LatLng(stop.latitude, stop.longitude);
@@ -2088,6 +2369,20 @@ class _MapScreenState extends State<MapScreen> {
                               _mapController!.move(_destinationPoint!, 15.0);
                             }
                             _updateRoute();
+                          } else {
+                            final geocodingSuggestions =
+                                await _getGeocodingSuggestions(query);
+                            if (geocodingSuggestions.isNotEmpty) {
+                              final location = geocodingSuggestions.first;
+                              _destinationPoint = LatLng(
+                                  location['latitude'], location['longitude']);
+                              _destinationController.text =
+                                  location['fullAddress'] ?? location['name'];
+                              if (_mapController != null && _mapReady) {
+                                _mapController!.move(_destinationPoint!, 15.0);
+                              }
+                              _updateRouteForCustomLocation();
+                            }
                           }
                         },
                       ),
@@ -2098,11 +2393,12 @@ class _MapScreenState extends State<MapScreen> {
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 12),
                     ),
-                    onSubmitted: (_) {
+                    onSubmitted: (_) async {
+                      final query = _destinationController.text.trim();
+                      if (query.isEmpty) return;
+
                       final stop = _allBusStops.firstWhere(
-                        (s) =>
-                            s.name.toLowerCase() ==
-                            _destinationController.text.trim().toLowerCase(),
+                        (s) => s.name.toLowerCase() == query.toLowerCase(),
                         orElse: () =>
                             BusStop(name: '', latitude: 0.0, longitude: 0.0),
                       );
@@ -2113,6 +2409,20 @@ class _MapScreenState extends State<MapScreen> {
                           _mapController!.move(_destinationPoint!, 15.0);
                         }
                         _updateRoute();
+                      } else {
+                        final geocodingSuggestions =
+                            await _getGeocodingSuggestions(query);
+                        if (geocodingSuggestions.isNotEmpty) {
+                          final location = geocodingSuggestions.first;
+                          _destinationPoint = LatLng(
+                              location['latitude'], location['longitude']);
+                          _destinationController.text =
+                              location['fullAddress'] ?? location['name'];
+                          if (_mapController != null && _mapReady) {
+                            _mapController!.move(_destinationPoint!, 15.0);
+                          }
+                          _updateRouteForCustomLocation();
+                        }
                       }
                     },
                   ),
@@ -2142,8 +2452,12 @@ class _MapScreenState extends State<MapScreen> {
                             child: ListTile(
                               dense: true,
                               leading: Icon(
-                                Icons.directions_bus,
-                                color: Colors.blue,
+                                suggestion['type'] == 'bus_stop'
+                                    ? Icons.directions_bus
+                                    : Icons.location_on,
+                                color: suggestion['type'] == 'bus_stop'
+                                    ? Colors.blue
+                                    : Colors.green,
                                 size: 20,
                               ),
                               title: Text(
@@ -2157,6 +2471,17 @@ class _MapScreenState extends State<MapScreen> {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
+                              subtitle: suggestion['type'] == 'location'
+                                  ? Text(
+                                      suggestion['fullAddress'] ?? '',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    )
+                                  : null,
                             ),
                           );
                         },

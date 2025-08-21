@@ -5,6 +5,7 @@ import '../models/bus.dart';
 import '../models/individual_bus.dart';
 import '../services/auth_service.dart';
 import '../services/wallet_service.dart';
+import '../services/receipt_service.dart';
 
 class PayScreen extends StatefulWidget {
   final IndividualBus bus;
@@ -31,6 +32,7 @@ class PayScreen extends StatefulWidget {
 class _PayScreenState extends State<PayScreen> {
   bool _isLoading = true;
   bool _isProcessingPayment = false;
+  bool _isDownloadingReceipt = false;
   double _walletBalance = 0.0;
   int _gems = 0;
   String? _error;
@@ -80,6 +82,66 @@ class _PayScreenState extends State<PayScreen> {
 
   Future<void> _refreshWalletData() async {
     await _loadWalletData();
+  }
+
+  Future<void> _downloadReceipt() async {
+    setState(() {
+      _isDownloadingReceipt = true;
+    });
+
+    try {
+      final currentDate = DateTime.now();
+      final formattedDate =
+          '${currentDate.day}/${currentDate.month}/${currentDate.year} at ${currentDate.hour}:${currentDate.minute.toString().padLeft(2, '0')}';
+
+      final receiptPath = await ReceiptService.generateAndSaveReceipt(
+        busName: widget.busInfo.busName,
+        busCode: widget.bus.busCode,
+        source: widget.source,
+        destination: widget.destination,
+        distance: widget.distance,
+        fare: widget.fare,
+        date: formattedDate,
+      );
+
+      final fileName = receiptPath.split('/').last;
+
+      await ReceiptService.openReceipt(receiptPath);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Receipt downloaded successfully!'),
+              Text(
+                'File: $fileName',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.green[600],
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 4),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to download receipt: $e'),
+          backgroundColor: Colors.red[600],
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      setState(() {
+        _isDownloadingReceipt = false;
+      });
+    }
   }
 
   Future<void> _processPayment() async {
@@ -508,6 +570,44 @@ class _PayScreenState extends State<PayScreen> {
                         ],
                       ),
                     ],
+                  ),
+                ),
+                SizedBox(height: 20),
+                Container(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _isDownloadingReceipt ? null : _downloadReceipt,
+                    icon: _isDownloadingReceipt
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : Icon(Icons.download, size: 20),
+                    label: Text(
+                      _isDownloadingReceipt
+                          ? 'Generating Receipt...'
+                          : 'Download Receipt (PDF)',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _isDownloadingReceipt
+                          ? Colors.grey[400]
+                          : Colors.blue[600],
+                      foregroundColor: Colors.white,
+                      padding:
+                          EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                   ),
                 ),
                 SizedBox(height: 20),

@@ -10,6 +10,7 @@ import '../services/trip_history_service.dart';
 import '../models/bus.dart';
 import '../models/individual_bus.dart';
 import '../utils/distance_calculator.dart' as distance_calc;
+import 'pay.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key, this.onOpenRideshare});
@@ -113,6 +114,32 @@ class _MapScreenState extends State<MapScreen> {
   Bus? _getBusInfoById(String busInfoId) {
     try {
       return _availableBuses.firstWhere((bus) => bus.id == busInfoId);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<IndividualBus?> _getIndividualBusById(String busId) async {
+    try {
+      final token = await AuthService.getToken();
+      if (token == null) return null;
+
+      final uri = Uri.parse('${AuthService.baseUrl}/individual-bus/$busId');
+      final response = await http.get(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success']) {
+          return IndividualBus.fromJson(data['data']);
+        }
+      }
+      return null;
     } catch (e) {
       return null;
     }
@@ -631,55 +658,46 @@ class _MapScreenState extends State<MapScreen> {
         return;
       }
 
-      final token = await AuthService.getToken();
-      if (token == null) return;
+      final busInfo = _getBusInfoById(busInfoId);
+      if (busInfo == null) return;
 
-      final uri = Uri.parse('${AuthService.baseUrl}/individual-bus/board');
-      final response = await http.post(
-        uri,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: json.encode({
-          'busId': busId,
-        }),
-      );
+      final source = _sourceController.text.trim();
+      final destination = _destinationController.text.trim();
 
-      if (response.statusCode == 200) {
-        setState(() {
-          _boardedBuses[busId] = true;
-        });
-
-        Navigator.of(context).pop();
-        _showBoardingPopup();
-
+      if (source.isEmpty || destination.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Successfully boarded!'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
+            content: Text('Please set source and destination first'),
+            backgroundColor: Colors.orange,
           ),
         );
-
-        Future.delayed(Duration(milliseconds: 2000), () {
-          if (mounted) {
-            _showIndividualBusesDialog(busInfoId);
-          }
-        });
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to board bus'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        return;
       }
+
+      final distance = _calculateRouteDistance(busInfo);
+      final fare = busInfo.calculateFare(distance);
+
+      final individualBus = await _getIndividualBusById(busId);
+      if (individualBus == null) return;
+
+      Navigator.of(context).pop();
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => PayScreen(
+            bus: individualBus,
+            busInfo: busInfo,
+            source: source,
+            destination: destination,
+            distance: distance,
+            fare: fare,
+          ),
+        ),
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error boarding bus'),
+          content: Text('Error processing boarding'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
         ),

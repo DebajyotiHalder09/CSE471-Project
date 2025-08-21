@@ -109,7 +109,52 @@ const endTrip = async (req, res) => {
   }
 };
 
+const getIndividualBusById = async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const { busId } = req.params;
+
+    if (!busId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Missing required field: busId' 
+      });
+    }
+
+    const bus = await IndividualBus.findById(busId);
+    if (!bus) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Bus not found' 
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Individual bus retrieved successfully',
+      data: bus
+    });
+
+  } catch (error) {
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ success: false, message: 'Invalid token' });
+    }
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ success: false, message: 'Invalid token' });
+    }
+    
+    console.error('Error getting individual bus:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
 module.exports = {
   boardBus,
-  endTrip
+  endTrip,
+  getIndividualBusById
 };

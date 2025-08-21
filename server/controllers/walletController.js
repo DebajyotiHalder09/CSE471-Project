@@ -263,6 +263,57 @@ const debugWallets = async (req, res) => {
   }
 };
 
+const deductFromWallet = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { amount, description } = req.body;
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid amount provided'
+      });
+    }
+
+    let wallet = await Wallet.findOne({ userId });
+    if (!wallet) {
+      return res.status(404).json({
+        success: false,
+        message: 'Wallet not found'
+      });
+    }
+
+    if (wallet.balance < amount) {
+      return res.status(400).json({
+        success: false,
+        message: 'Insufficient balance',
+        currentBalance: wallet.balance,
+        requiredAmount: amount
+      });
+    }
+
+    wallet.balance -= amount;
+    wallet.lastUpdated = new Date();
+    await wallet.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Amount deducted successfully',
+      deductedAmount: amount,
+      newBalance: wallet.balance,
+      description: description || 'Payment deduction'
+    });
+
+  } catch (error) {
+    console.error('Error deducting from wallet:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deducting from wallet',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getWalletBalance,
   initializeAllUserWallets,
@@ -270,5 +321,6 @@ module.exports = {
   addGemsToUser,
   convertGemsToBalance,
   testWallet,
-  debugWallets
+  debugWallets,
+  deductFromWallet
 };

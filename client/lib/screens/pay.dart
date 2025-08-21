@@ -42,6 +42,12 @@ class _PayScreenState extends State<PayScreen> {
     _loadWalletData();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadWalletData();
+  }
+
   Future<void> _loadWalletData() async {
     try {
       setState(() {
@@ -70,6 +76,10 @@ class _PayScreenState extends State<PayScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  Future<void> _refreshWalletData() async {
+    await _loadWalletData();
   }
 
   Future<void> _processPayment() async {
@@ -104,8 +114,14 @@ class _PayScreenState extends State<PayScreen> {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success']) {
-          await _deductFare();
-          _showSuccessDialog();
+          final deductionResult = await _deductFare();
+          if (deductionResult) {
+            await _loadWalletData();
+            _showSuccessDialog();
+          } else {
+            _showError(
+                'Payment processed but wallet deduction failed. Please contact support.');
+          }
         } else {
           _showError(data['message'] ?? 'Failed to board bus');
         }
@@ -121,10 +137,10 @@ class _PayScreenState extends State<PayScreen> {
     }
   }
 
-  Future<void> _deductFare() async {
+  Future<bool> _deductFare() async {
     try {
       final token = await AuthService.getToken();
-      if (token == null) return;
+      if (token == null) return false;
 
       final uri = Uri.parse('${AuthService.baseUrl}/wallet/deduct');
       final response = await http.post(
@@ -140,10 +156,36 @@ class _PayScreenState extends State<PayScreen> {
       );
 
       if (response.statusCode == 200) {
-        await _loadWalletData();
+        final data = json.decode(response.body);
+        if (data['success']) {
+          setState(() {
+            _walletBalance = (data['newBalance'] ?? _walletBalance).toDouble();
+            _insufficientBalance = _walletBalance < widget.fare;
+          });
+          return true;
+        } else {
+          _showError(data['message'] ?? 'Failed to deduct fare from wallet');
+          return false;
+        }
+      } else if (response.statusCode == 400) {
+        final data = json.decode(response.body);
+        if (data['message'] == 'Insufficient balance') {
+          setState(() {
+            _insufficientBalance = true;
+          });
+          _showError('Insufficient balance in wallet');
+          return false;
+        } else {
+          _showError(data['message'] ?? 'Failed to deduct fare from wallet');
+          return false;
+        }
+      } else {
+        _showError('Failed to deduct fare from wallet');
+        return false;
       }
     } catch (e) {
-      print('Error deducting fare: $e');
+      _showError('Error deducting fare from wallet');
+      return false;
     }
   }
 
@@ -404,6 +446,69 @@ class _PayScreenState extends State<PayScreen> {
                     color: Colors.grey[600],
                   ),
                   textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 16),
+                Container(
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.blue[200]!),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Transaction Details',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.blue[800],
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Fare Paid:',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                          Text(
+                            '৳${widget.fare.toStringAsFixed(0)}',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.red[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'New Balance:',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                          Text(
+                            '৳${_walletBalance.toStringAsFixed(0)}',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.green[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
                 SizedBox(height: 20),
                 ElevatedButton(
@@ -699,13 +804,24 @@ class _PayScreenState extends State<PayScreen> {
                 ),
               ),
               SizedBox(width: 16),
-              Text(
-                'Wallet Balance',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[800],
+              Expanded(
+                child: Text(
+                  'Wallet Balance',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[800],
+                  ),
                 ),
+              ),
+              IconButton(
+                onPressed: _refreshWalletData,
+                icon: Icon(
+                  Icons.refresh,
+                  color: Colors.blue[600],
+                  size: 20,
+                ),
+                tooltip: 'Refresh wallet balance',
               ),
             ],
           ),
@@ -797,7 +913,9 @@ class _PayScreenState extends State<PayScreen> {
     return Container(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: _isProcessingPayment ? null : _processPayment,
+        onPressed: _isProcessingPayment || _insufficientBalance
+            ? null
+            : _processPayment,
         style: ElevatedButton.styleFrom(
           backgroundColor:
               _insufficientBalance ? Colors.grey[400] : Colors.green[600],
@@ -822,7 +940,7 @@ class _PayScreenState extends State<PayScreen> {
                   ),
                   SizedBox(width: 12),
                   Text(
-                    'Processing...',
+                    'Processing Payment...',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,

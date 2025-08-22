@@ -254,21 +254,15 @@ class _GpayScreenState extends State<GpayScreen> {
           width: double.infinity,
           child: ElevatedButton.icon(
             onPressed: () {
-              // TODO: Implement send money functionality
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Send money feature coming soon!'),
-                  backgroundColor: Colors.blue,
-                ),
-              );
+              Navigator.pushNamed(context, '/recharge');
             },
-            icon: Icon(Icons.send),
+            icon: Icon(Icons.add_circle),
             label: Text(
-              'Send Money',
+              'Recharge',
               style: TextStyle(fontSize: 16),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue[600],
+              backgroundColor: Colors.green[600],
               foregroundColor: Colors.white,
               padding: EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
@@ -282,45 +276,17 @@ class _GpayScreenState extends State<GpayScreen> {
           width: double.infinity,
           child: OutlinedButton.icon(
             onPressed: () {
-              // TODO: Implement request money functionality
+              // TODO: Implement pay functionality
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Request money feature coming soon!'),
-                  backgroundColor: Colors.grey[600],
+                  content: Text('Pay feature coming soon!'),
+                  backgroundColor: Colors.orange[600],
                 ),
               );
             },
-            icon: Icon(Icons.request_page),
+            icon: Icon(Icons.payment),
             label: Text(
-              'Request Money',
-              style: TextStyle(fontSize: 16),
-            ),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.green[600],
-              side: BorderSide(color: Colors.green[600]!),
-              padding: EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-        ),
-        SizedBox(height: 16),
-        Container(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: () {
-              // TODO: Implement transaction history functionality
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Transaction history feature coming soon!'),
-                  backgroundColor: Colors.grey[600],
-                ),
-              );
-            },
-            icon: Icon(Icons.history),
-            label: Text(
-              'Transaction History',
+              'Pay',
               style: TextStyle(fontSize: 16),
             ),
             style: OutlinedButton.styleFrom(

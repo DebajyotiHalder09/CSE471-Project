@@ -148,8 +148,76 @@ const getGpayBalance = async (req, res) => {
   }
 };
 
+const rechargeWallet = async (req, res) => {
+  try {
+    const { amount } = req.body;
+    const userId = req.user._id;
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Valid amount is required' 
+      });
+    }
+
+    const gpayAccount = await Gpay.findOne({ userId });
+    if (!gpayAccount) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Gpay account not found' 
+      });
+    }
+
+    if (gpayAccount.balance < amount) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Insufficient Gpay balance' 
+      });
+    }
+
+    const wallet = await Wallet.findOne({ userId });
+    if (!wallet) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Wallet not found' 
+      });
+    }
+
+    const session = await Wallet.startSession();
+    try {
+      await session.withTransaction(async () => {
+        gpayAccount.balance -= amount;
+        gpayAccount.lastUpdated = new Date();
+        await gpayAccount.save({ session });
+
+        wallet.balance += amount;
+        wallet.lastUpdated = new Date();
+        await wallet.save({ session });
+      });
+
+      res.status(200).json({
+        success: true,
+        message: `Successfully recharged ৳${amount} to wallet`,
+        data: {
+          gpayBalance: gpayAccount.balance,
+          walletBalance: wallet.balance
+        }
+      });
+    } finally {
+      await session.endSession();
+    }
+  } catch (error) {
+    console.error('Error in rechargeWallet:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error' 
+    });
+  }
+};
+
 module.exports = {
   registerGpay,
   loginGpay,
-  getGpayBalance
+  getGpayBalance,
+  rechargeWallet
 };

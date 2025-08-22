@@ -13,6 +13,7 @@ import 'screens/friends.dart';
 import 'screens/offers.dart';
 import 'screens/qr.dart';
 import 'screens/gpayreglog.dart';
+import 'screens/recharge.dart';
 
 void main() {
   runApp(const MyApp());
@@ -46,6 +47,7 @@ class MyApp extends StatelessWidget {
         OffersScreen.routeName: (context) => OffersScreen(),
         QRScreen.routeName: (context) => QRScreen(),
         GpayRegLogScreen.routeName: (context) => GpayRegLogScreen(),
+        RechargeScreen.routeName: (context) => RechargeScreen(),
       },
       onUnknownRoute: (settings) {
         print('Unknown route: ${settings.name}');

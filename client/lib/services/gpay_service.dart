@@ -84,4 +84,31 @@ class GpayService {
       throw Exception('Failed to get Gpay balance: $e');
     }
   }
+
+  static Future<Map<String, dynamic>> rechargeWallet(double amount) async {
+    try {
+      final token = await AuthService.getToken();
+      if (token == null) {
+        throw Exception('Authentication required');
+      }
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/gpay/recharge'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({'amount': amount}),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        final errorData = json.decode(response.body);
+        throw Exception(errorData['message'] ?? 'Failed to recharge wallet');
+      }
+    } catch (e) {
+      throw Exception('Failed to recharge wallet: $e');
+    }
+  }
 }

@@ -8,6 +8,7 @@ const User = require('../models/user');
 const FriendRequest = require('../models/friendRequest');
 const Friends = require('../models/friends');
 const Wallet = require('../models/wallet');
+const { createOffersForUser } = require('../controllers/offersController');
 
 const verifyToken = async (req, res, next) => {
   try {
@@ -62,8 +63,9 @@ router.post('/signup', async (req, res) => {
 
     await user.save();
     
+    let newWallet;
     try {
-      const newWallet = new Wallet({
+      newWallet = new Wallet({
         userId: user._id,
         balance: 0,
         currency: 'BDT',
@@ -72,6 +74,15 @@ router.post('/signup', async (req, res) => {
       await newWallet.save();
     } catch (walletError) {
       console.error('Error creating wallet for new user:', walletError);
+    }
+    
+    try {
+      if (newWallet) {
+        await createOffersForUser(user._id, newWallet._id);
+        console.log(`Offers created automatically for new user: ${user.name}`);
+      }
+    } catch (offersError) {
+      console.error('Error creating offers for new user:', offersError);
     }
     
     try {

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getWalletBalance, testWallet, debugWallets, initializeAllUserWallets, convertGemsToBalance, deductFromWallet } = require('../controllers/walletController');
-const { authenticateToken } = require('../middleware/auth');
+const authenticateToken = require('../middleware/auth');
 
 router.get('/test', authenticateToken, testWallet);
 router.get('/debug', authenticateToken, debugWallets);

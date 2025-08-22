@@ -132,6 +132,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _buildProfileItem(Icons.people, 'Friends', onTap: () {
                       Navigator.pushNamed(context, '/friends');
                     }),
+                    _buildProfileItem(Icons.local_offer, 'Offers', onTap: () {
+                      Navigator.pushNamed(context, '/offers');
+                    }),
                     _buildProfileItem(Icons.settings, 'Settings'),
                     _buildProfileItem(Icons.help, 'Help & Support'),
                     _buildProfileItem(Icons.logout, 'Logout', onTap: _logout),

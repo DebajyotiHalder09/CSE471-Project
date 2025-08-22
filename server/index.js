@@ -58,6 +58,7 @@ app.use('/api/friends', require('./routes/friends'));
 app.use('/trip', require('./routes/trip'));
 app.use('/individual-bus', require('./routes/individualBus'));
 app.use('/wallet', require('./routes/wallet'));
+app.use('/offers', require('./routes/offers'));
 
 // Test route to verify server is working
 app.get('/test', (req, res) => {

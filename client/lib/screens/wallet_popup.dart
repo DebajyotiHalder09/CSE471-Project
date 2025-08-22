@@ -222,13 +222,13 @@ class _WalletPopupState extends State<WalletPopup> {
             ),
             SizedBox(height: 16),
 
-            // Pay with bKash Button
+            // Pay with Gpay Button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _showBkashOptions,
+                onPressed: _showGpayOptions,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange[600],
+                  backgroundColor: Colors.purple[600],
                   foregroundColor: Colors.white,
                   padding: EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
@@ -236,7 +236,7 @@ class _WalletPopupState extends State<WalletPopup> {
                   ),
                 ),
                 child: Text(
-                  'Pay with bKash',
+                  'Pay with Gpay',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -343,19 +343,8 @@ class _WalletPopupState extends State<WalletPopup> {
     );
   }
 
-  void _showBkashOptions() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Pay with bKash'),
-        content: Text('bKash payment options will be implemented here.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text('OK'),
-          ),
-        ],
-      ),
-    );
+  void _showGpayOptions() {
+    Navigator.of(context).pop();
+    Navigator.pushNamed(context, '/gpay-reglog');
   }
 }

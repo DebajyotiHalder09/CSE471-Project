@@ -88,6 +88,7 @@ class _TopScreenState extends State<TopScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _loadWalletBalance() async {
+    print('DEBUG: _loadWalletBalance called');
     try {
       setState(() {
         _isLoadingWallet = true;
@@ -164,6 +165,107 @@ class _TopScreenState extends State<TopScreen> with WidgetsBindingObserver {
     _refreshWallet();
   }
 
+  void _showWalletPopup() {
+    print('DEBUG: _showWalletPopup called');
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: EdgeInsets.only(top: 12, bottom: 8),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade400,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    Text(
+                      'Wallet Options',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                    SizedBox(height: 20),
+                    Text(
+                      'Current Balance: ৳${_walletBalance.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    SizedBox(height: 24),
+                    Container(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          print('DEBUG: Pay with Gpay button pressed');
+                          Navigator.pop(context);
+                          Navigator.pushNamed(context, '/gpay-reglog');
+                        },
+                        icon: Icon(Icons.payment),
+                        label: Text(
+                          'Pay with Gpay',
+                          style: TextStyle(fontSize: 16),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.purple[600],
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _refreshWallet();
+                        },
+                        icon: Icon(Icons.refresh),
+                        label: Text(
+                          'Refresh Balance',
+                          style: TextStyle(fontSize: 16),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.blue[600],
+                          side: BorderSide(color: Colors.blue[600]!),
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -197,9 +299,12 @@ class _TopScreenState extends State<TopScreen> with WidgetsBindingObserver {
                   Row(
                     children: [
                       Tooltip(
-                        message: 'Tap to refresh wallet balance',
+                        message: 'Tap to open wallet options',
                         child: GestureDetector(
-                          onTap: _refreshWallet,
+                          onTap: () {
+                            print('DEBUG: Wallet icon tapped');
+                            _showWalletPopup();
+                          },
                           child: Container(
                             padding: EdgeInsets.all(12),
                             decoration: BoxDecoration(

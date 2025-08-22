@@ -8,6 +8,7 @@ import '../services/wallet_service.dart';
 import '../services/receipt_service.dart';
 import '../services/offers_service.dart';
 import '../models/offers.dart';
+import 'gpayreglog.dart';
 
 class PayScreen extends StatefulWidget {
   final IndividualBus bus;
@@ -219,6 +220,119 @@ class _PayScreenState extends State<PayScreen> {
             _showError(
                 'Payment processed but wallet deduction failed. Please contact support.');
           }
+        } else {
+          _showError(data['message'] ?? 'Failed to board bus');
+        }
+      } else {
+        _showError('Failed to board bus');
+      }
+    } catch (e) {
+      _showError('Error processing payment');
+    } finally {
+      setState(() {
+        _isProcessingPayment = false;
+      });
+    }
+  }
+
+  Future<void> _processPaymentWithWallet() async {
+    if (_insufficientBalance) {
+      _showInsufficientBalanceDialog();
+      return;
+    }
+
+    setState(() {
+      _isProcessingPayment = true;
+    });
+
+    try {
+      final token = await AuthService.getToken();
+      if (token == null) {
+        _showError('Authentication required');
+        return;
+      }
+
+      final uri = Uri.parse('${AuthService.baseUrl}/individual-bus/board');
+      final response = await http.post(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode({
+          'busId': widget.bus.id,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success']) {
+          final deductionResult = await _deductFare();
+          if (deductionResult) {
+            await _loadWalletData();
+            await _applyDiscount();
+            _showSuccessDialog();
+          } else {
+            _showError(
+                'Payment processed but wallet deduction failed. Please contact support.');
+          }
+        } else {
+          _showError(data['message'] ?? 'Failed to board bus');
+        }
+      } else {
+        _showError('Failed to board bus');
+      }
+    } catch (e) {
+      _showError('Error processing payment');
+    } finally {
+      setState(() {
+        _isProcessingPayment = false;
+      });
+    }
+  }
+
+  Future<void> _processPaymentWithGpay() async {
+    setState(() {
+      _isProcessingPayment = true;
+    });
+
+    try {
+      final token = await AuthService.getToken();
+      if (token == null) {
+        _showError('Authentication required');
+        return;
+      }
+
+      final uri = Uri.parse('${AuthService.baseUrl}/individual-bus/board');
+      final response = await http.post(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode({
+          'busId': widget.bus.id,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success']) {
+          await _applyDiscount();
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => GpayRegLogScreen(
+                amount: _payableAmount,
+                busId: widget.bus.id,
+                busInfo: widget.busInfo,
+                source: widget.source,
+                destination: widget.destination,
+                distance: widget.distance,
+                fare: widget.fare,
+              ),
+            ),
+          );
         } else {
           _showError(data['message'] ?? 'Failed to board bus');
         }
@@ -1229,61 +1343,107 @@ class _PayScreenState extends State<PayScreen> {
   }
 
   Widget _buildPaymentButton() {
-    return Container(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: _isProcessingPayment || _insufficientBalance
-            ? null
-            : _processPayment,
-        style: ElevatedButton.styleFrom(
-          backgroundColor:
-              _insufficientBalance ? Colors.grey[400] : Colors.green[600],
-          foregroundColor: Colors.white,
-          padding: EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          elevation: 2,
-        ),
-        child: _isProcessingPayment
-            ? Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  Text(
-                    'Processing Payment...',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.payment, size: 24),
-                  SizedBox(width: 12),
-                  Text(
-                    _insufficientBalance
-                        ? 'Insufficient Balance'
-                        : 'Pay ৳${_payableAmount.toStringAsFixed(0)} & Board Bus',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+    return Column(
+      children: [
+        if (_insufficientBalance) ...[
+          Container(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.grey[400],
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 2,
               ),
-      ),
+              child: Text(
+                'Insufficient Balance',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ] else ...[
+          Container(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed:
+                  _isProcessingPayment ? null : _processPaymentWithWallet,
+              icon: Icon(Icons.account_balance_wallet, size: 24),
+              label: Text(
+                'Use Wallet - ৳${_payableAmount.toStringAsFixed(0)}',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green[600],
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 2,
+              ),
+            ),
+          ),
+          SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _isProcessingPayment ? null : _processPaymentWithGpay,
+              icon: Icon(Icons.payment, size: 24),
+              label: Text(
+                'Pay with Gpay - ৳${_payableAmount.toStringAsFixed(0)}',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.purple[600],
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 2,
+              ),
+            ),
+          ),
+        ],
+        if (_isProcessingPayment) ...[
+          SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.grey[600]!),
+                ),
+              ),
+              SizedBox(width: 12),
+              Text(
+                'Processing Payment...',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
     );
   }
 }

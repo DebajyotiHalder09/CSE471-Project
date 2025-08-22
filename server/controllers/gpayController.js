@@ -215,9 +215,57 @@ const rechargeWallet = async (req, res) => {
   }
 };
 
+const deductFromGpay = async (req, res) => {
+  try {
+    const { amount } = req.body;
+    const userId = req.user._id;
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Valid amount is required' 
+      });
+    }
+
+    const gpayAccount = await Gpay.findOne({ userId });
+    if (!gpayAccount) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Gpay account not found' 
+      });
+    }
+
+    if (gpayAccount.balance < amount) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Insufficient Gpay balance' 
+      });
+    }
+
+    gpayAccount.balance -= amount;
+    gpayAccount.lastUpdated = new Date();
+    await gpayAccount.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully deducted ৳${amount} from Gpay`,
+      data: {
+        newBalance: gpayAccount.balance
+      }
+    });
+  } catch (error) {
+    console.error('Error in deductFromGpay:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error' 
+    });
+  }
+};
+
 module.exports = {
   registerGpay,
   loginGpay,
   getGpayBalance,
-  rechargeWallet
+  rechargeWallet,
+  deductFromGpay
 };

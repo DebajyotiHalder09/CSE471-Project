@@ -6,7 +6,24 @@ import 'gpay.dart';
 class GpayRegLogScreen extends StatefulWidget {
   static const routeName = '/gpay-reglog';
 
-  const GpayRegLogScreen({super.key});
+  final double? amount;
+  final String? busId;
+  final dynamic busInfo;
+  final String? source;
+  final String? destination;
+  final double? distance;
+  final double? fare;
+
+  const GpayRegLogScreen({
+    super.key,
+    this.amount,
+    this.busId,
+    this.busInfo,
+    this.source,
+    this.destination,
+    this.distance,
+    this.fare,
+  });
 
   @override
   State<GpayRegLogScreen> createState() => _GpayRegLogScreenState();
@@ -67,20 +84,70 @@ class _GpayRegLogScreenState extends State<GpayRegLogScreen> {
 
       if (result['success']) {
         final data = result['data'];
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => GpayScreen(
-              balance: data['balance'].toDouble(),
-              displayCode: data['displayCode'],
+
+        // Check if this is a payment scenario
+        if (widget.amount != null && widget.busId != null) {
+          // This is a payment scenario, process payment from Gpay
+          await _processPaymentFromGpay(data['balance'].toDouble());
+        } else {
+          // Regular login, navigate to Gpay screen
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => GpayScreen(
+                balance: data['balance'].toDouble(),
+                displayCode: data['displayCode'],
+              ),
             ),
-          ),
-        );
+          );
+        }
       } else {
         _showError(result['message'] ?? 'Login failed');
       }
     } catch (e) {
       _showError('Login failed: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _processPaymentFromGpay(double gpayBalance) async {
+    if (widget.amount == null || widget.busId == null) return;
+
+    if (gpayBalance < widget.amount!) {
+      _showError(
+          'Insufficient Gpay balance. You need ৳${widget.amount!.toStringAsFixed(0)} but have ৳${gpayBalance.toStringAsFixed(0)}');
+      return;
+    }
+
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      // Deduct amount from Gpay
+      final result = await GpayService.deductFromGpay(widget.amount!);
+
+      if (result['success']) {
+        // Show success message and navigate back
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Payment successful! ৳${widget.amount!.toStringAsFixed(0)} deducted from Gpay'),
+            backgroundColor: Colors.green[600],
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+
+        // Navigate back to previous screen
+        Navigator.of(context).pop();
+      } else {
+        _showError(result['message'] ?? 'Payment failed');
+      }
+    } catch (e) {
+      _showError('Payment failed: $e');
     } finally {
       setState(() {
         _isLoading = false;
@@ -173,7 +240,7 @@ class _GpayRegLogScreenState extends State<GpayRegLogScreen> {
           ),
           SizedBox(height: 16),
           Text(
-            'Welcome to Gpay',
+            widget.amount != null ? 'Payment with Gpay' : 'Welcome to Gpay',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w700,
@@ -183,7 +250,9 @@ class _GpayRegLogScreenState extends State<GpayRegLogScreen> {
           ),
           SizedBox(height: 8),
           Text(
-            'Fast, secure, and convenient payments',
+            widget.amount != null
+                ? 'Enter your PIN to complete payment of ৳${widget.amount!.toStringAsFixed(0)}'
+                : 'Fast, secure, and convenient payments',
             style: TextStyle(
               fontSize: 16,
               color: Colors.white.withValues(alpha: 0.9),
@@ -311,7 +380,7 @@ class _GpayRegLogScreenState extends State<GpayRegLogScreen> {
             ),
             SizedBox(height: 16),
             Text(
-              'Login to Gpay',
+              widget.amount != null ? 'Complete Payment' : 'Login to Gpay',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
@@ -320,7 +389,9 @@ class _GpayRegLogScreenState extends State<GpayRegLogScreen> {
             ),
             SizedBox(height: 8),
             Text(
-              'Enter your 4-digit PIN to access your account',
+              widget.amount != null
+                  ? 'Enter your 4-digit PIN to complete payment'
+                  : 'Enter your 4-digit PIN to access your account',
               style: TextStyle(
                 fontSize: 14,
                 color: Colors.grey[600],

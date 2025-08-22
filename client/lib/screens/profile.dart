@@ -135,6 +135,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _buildProfileItem(Icons.local_offer, 'Offers', onTap: () {
                       Navigator.pushNamed(context, '/offers');
                     }),
+                    _buildProfileItem(Icons.qr_code, 'QR Code', onTap: () {
+                      Navigator.pushNamed(context, '/qr');
+                    }),
                     _buildProfileItem(Icons.settings, 'Settings'),
                     _buildProfileItem(Icons.help, 'Help & Support'),
                     _buildProfileItem(Icons.logout, 'Logout', onTap: _logout),

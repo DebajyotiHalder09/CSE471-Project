@@ -11,6 +11,7 @@ import 'screens/tripHistory.dart';
 import 'screens/top.dart';
 import 'screens/friends.dart';
 import 'screens/offers.dart';
+import 'screens/qr.dart';
 
 void main() {
   runApp(const MyApp());
@@ -42,6 +43,7 @@ class MyApp extends StatelessWidget {
         TopScreen.routeName: (context) => TopScreen(),
         FriendsScreen.routeName: (context) => FriendsScreen(),
         OffersScreen.routeName: (context) => OffersScreen(),
+        QRScreen.routeName: (context) => QRScreen(),
       },
       onUnknownRoute: (settings) {
         print('Unknown route: ${settings.name}');

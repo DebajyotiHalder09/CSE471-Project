@@ -275,7 +275,8 @@ class _OffersScreenState extends State<OffersScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: Text(hasCashback ? 'Use Cashback' : 'No Cashback'),
+                  child:
+                      Text(hasCashback ? 'Convert to Wallet' : 'No Cashback'),
                 ),
               ),
             ],
@@ -399,7 +400,7 @@ class _OffersScreenState extends State<OffersScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: Text(hasCoupon ? 'Use Coupon' : 'No Coupon'),
+                  child: Text(hasCoupon ? 'Convert to Wallet' : 'No Coupon'),
                 ),
               ),
             ],
@@ -526,7 +527,8 @@ class _OffersScreenState extends State<OffersScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: Text(hasDiscount ? 'Use Discount' : 'No Discount'),
+                  child:
+                      Text(hasDiscount ? 'Convert to Wallet' : 'No Discount'),
                 ),
               ),
             ],
@@ -549,114 +551,227 @@ class _OffersScreenState extends State<OffersScreen> {
   }
 
   void _showUseDialog(String type, double amount, Color color) {
+    bool isProcessing = false;
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Row(
-            children: [
-              Icon(
-                type == 'Cashback'
-                    ? Icons.monetization_on
-                    : type == 'Coupon'
-                        ? Icons.confirmation_number
-                        : Icons.discount,
-                color: color,
-                size: 28,
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
               ),
-              SizedBox(width: 12),
-              Text(
-                'Use $type',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[800],
-                ),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'How much $type would you like to use?',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[700],
-                ),
-              ),
-              SizedBox(height: 16),
-              Container(
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: color.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.account_balance_wallet,
-                      color: color,
-                      size: 20,
+              title: Row(
+                children: [
+                  Icon(
+                    type == 'Cashback'
+                        ? Icons.monetization_on
+                        : type == 'Coupon'
+                            ? Icons.confirmation_number
+                            : Icons.discount,
+                    color: color,
+                    size: 28,
+                  ),
+                  SizedBox(width: 12),
+                  Text(
+                    'Convert $type to Wallet',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[800],
                     ),
-                    SizedBox(width: 8),
-                    Text(
-                      'Available: ৳${amount.toStringAsFixed(2)}',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: color,
-                      ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'This will convert your entire $type balance to wallet balance.',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey[700],
                     ),
-                  ],
-                ),
+                  ),
+                  SizedBox(height: 16),
+                  Container(
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: color.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.account_balance_wallet,
+                              color: color,
+                              size: 24,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Available $type',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: color,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          '৳${amount.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: color,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Will be added to your wallet',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                'Cancel',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
+              actions: [
+                TextButton(
+                  onPressed:
+                      isProcessing ? null : () => Navigator.of(context).pop(),
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey[600],
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _showSuccessDialog(type, color);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: color,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                ElevatedButton(
+                  onPressed: isProcessing
+                      ? null
+                      : () async {
+                          setState(() {
+                            isProcessing = true;
+                          });
+
+                          try {
+                            await _processOfferUsage(type, amount, color);
+                            Navigator.of(context).pop();
+                          } catch (e) {
+                            setState(() {
+                              isProcessing = false;
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Error: $e'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: color,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: isProcessing
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : Text(
+                          'Convert $type',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
-              ),
-              child: Text(
-                'Use $type',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
+              ],
+            );
+          },
         );
       },
     );
   }
 
-  void _showSuccessDialog(String type, Color color) {
+  Future<void> _processOfferUsage(
+      String type, double amount, Color color) async {
+    try {
+      print(
+          'DEBUG: _processOfferUsage called with type: $type, amount: $amount');
+
+      final token = await AuthService.getToken();
+      if (token == null) {
+        throw Exception('Authentication required');
+      }
+
+      print('DEBUG: Got token: ${token.substring(0, 20)}...');
+
+      Map<String, dynamic> result;
+      switch (type) {
+        case 'Cashback':
+          print('DEBUG: Calling useCashback...');
+          result = await OffersService.useCashback(token, amount);
+          break;
+        case 'Coupon':
+          print('DEBUG: Calling useCoupon...');
+          result = await OffersService.useCoupon(token, amount);
+          break;
+        case 'Discount':
+          print('DEBUG: Calling useDiscount...');
+          result = await OffersService.useDiscount(token, amount);
+          break;
+        default:
+          throw Exception('Invalid offer type');
+      }
+
+      print('DEBUG: Got result: $result');
+
+      setState(() {
+        _userOffers = result['offers'];
+      });
+
+      print('DEBUG: Refreshing offers...');
+      await _loadUserOffers();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text('৳${amount.toStringAsFixed(2)} added to wallet balance!'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 3),
+        ),
+      );
+
+      _showSuccessDialog(type, amount, color);
+    } catch (e) {
+      print('DEBUG: Error in _processOfferUsage: $e');
+      throw Exception('Failed to process $type usage: $e');
+    }
+  }
+
+  void _showSuccessDialog(String type, double amount, Color color) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -696,7 +811,7 @@ class _OffersScreenState extends State<OffersScreen> {
                 ),
                 SizedBox(height: 20),
                 Text(
-                  '$type Applied!',
+                  '$type Converted!',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
@@ -706,7 +821,7 @@ class _OffersScreenState extends State<OffersScreen> {
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'Your $type has been applied to your next ride.',
+                  '৳${amount.toStringAsFixed(2)} has been added to your wallet balance.',
                   style: TextStyle(
                     fontSize: 16,
                     color: Colors.grey[600],

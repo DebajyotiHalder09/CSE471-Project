@@ -142,28 +142,48 @@ class OffersService {
     }
   }
 
-  static Future<Offers> useCashback(String token, double amount) async {
+  static Future<Map<String, dynamic>> useCashback(
+      String token, double amount) async {
     try {
+      print('DEBUG: useCashback called with amount: $amount');
+      print('DEBUG: Token: ${token.substring(0, 20)}...');
+      
+      final requestBody = {'amount': amount};
+      print('DEBUG: Request body: $requestBody');
+      
       final response = await http.post(
         Uri.parse('$baseUrl/use-cashback'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
-        body: json.encode({'amount': amount}),
+        body: json.encode(requestBody),
       );
 
+      print('DEBUG: Response status: ${response.statusCode}');
+      print('DEBUG: Response body: ${response.body}');
+
       if (response.statusCode == 200) {
-        return Offers.fromJson(json.decode(response.body));
+        final responseData = json.decode(response.body);
+        print('DEBUG: Parsed response data: $responseData');
+        
+        return {
+          'offers': Offers.fromJson(responseData['offers']),
+          'wallet': responseData['wallet'],
+          'message': responseData['message'],
+        };
       } else {
-        throw Exception('Failed to use cashback: ${response.statusCode}');
+        print('DEBUG: Request failed with status: ${response.statusCode}');
+        throw Exception('Failed to use cashback: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
+      print('DEBUG: Error in useCashback: $e');
       throw Exception('Failed to use cashback: $e');
     }
   }
 
-  static Future<Offers> useCoupon(String token, double amount) async {
+  static Future<Map<String, dynamic>> useCoupon(
+      String token, double amount) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/use-coupon'),
@@ -175,7 +195,12 @@ class OffersService {
       );
 
       if (response.statusCode == 200) {
-        return Offers.fromJson(json.decode(response.body));
+        final responseData = json.decode(response.body);
+        return {
+          'offers': Offers.fromJson(responseData['offers']),
+          'wallet': responseData['wallet'],
+          'message': responseData['message'],
+        };
       } else {
         throw Exception('Failed to use coupon: ${response.statusCode}');
       }
@@ -184,7 +209,8 @@ class OffersService {
     }
   }
 
-  static Future<Offers> useDiscount(String token, double amount) async {
+  static Future<Map<String, dynamic>> useDiscount(
+      String token, double amount) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/use-discount'),
@@ -196,7 +222,12 @@ class OffersService {
       );
 
       if (response.statusCode == 200) {
-        return Offers.fromJson(json.decode(response.body));
+        final responseData = json.decode(response.body);
+        return {
+          'offers': Offers.fromJson(responseData['offers']),
+          'wallet': responseData['wallet'],
+          'message': responseData['message'],
+        };
       } else {
         throw Exception('Failed to use discount: ${response.statusCode}');
       }

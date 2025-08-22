@@ -138,30 +138,70 @@ const addDiscount = async (req, res) => {
 
 const useCashback = async (req, res) => {
   try {
+    console.log('DEBUG: useCashback called');
+    console.log('DEBUG: Request body:', req.body);
+    console.log('DEBUG: User ID:', req.user._id);
+    
     const { amount } = req.body;
     const userId = req.user._id;
 
     if (!amount || amount <= 0) {
+      console.log('DEBUG: Invalid amount:', amount);
       return res.status(400).json({ error: 'Invalid amount' });
     }
 
+    console.log('DEBUG: Looking for offers with userId:', userId);
     const offers = await Offers.findOne({ userId });
     if (!offers) {
+      console.log('DEBUG: No offers found for user');
       return res.status(404).json({ error: 'No offers found for this user' });
     }
 
+    console.log('DEBUG: Found offers:', offers);
+    console.log('DEBUG: Current cashback balance:', offers.cashback);
+    console.log('DEBUG: Requested amount:', amount);
+
     if (offers.cashback < amount) {
+      console.log('DEBUG: Insufficient cashback balance');
       return res.status(400).json({ error: 'Insufficient cashback balance' });
     }
 
+    console.log('DEBUG: Looking for wallet with userId:', userId);
+    const wallet = await Wallet.findOne({ userId });
+    if (!wallet) {
+      console.log('DEBUG: No wallet found for user');
+      return res.status(404).json({ error: 'No wallet found for this user' });
+    }
+
+    console.log('DEBUG: Found wallet:', wallet);
+    console.log('DEBUG: Current wallet balance:', wallet.balance);
+
+    const oldCashback = offers.cashback;
+    const oldWalletBalance = wallet.balance;
+
     offers.cashback -= amount;
-    await offers.save();
+    wallet.balance += amount;
+    wallet.lastUpdated = new Date();
+
+    console.log('DEBUG: Updated offers cashback:', offers.cashback);
+    console.log('DEBUG: Updated wallet balance:', wallet.balance);
+
+    await Promise.all([offers.save(), wallet.save()]);
+
+    console.log('DEBUG: Both documents saved successfully');
 
     const updatedOffers = await Offers.findById(offers._id)
       .populate('walletId', 'balance gems currency');
 
-    res.status(200).json(updatedOffers);
+    console.log('DEBUG: Sending response with updated data');
+
+    res.status(200).json({
+      offers: updatedOffers,
+      wallet: wallet,
+      message: `Successfully converted ৳${amount} cashback to wallet balance`
+    });
   } catch (error) {
+    console.error('DEBUG: Error in useCashback:', error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -184,13 +224,25 @@ const useCoupon = async (req, res) => {
       return res.status(400).json({ error: 'Insufficient coupon balance' });
     }
 
+    const wallet = await Wallet.findOne({ userId });
+    if (!wallet) {
+      return res.status(404).json({ error: 'No wallet found for this user' });
+    }
+
     offers.coupon -= amount;
-    await offers.save();
+    wallet.balance += amount;
+    wallet.lastUpdated = new Date();
+
+    await Promise.all([offers.save(), wallet.save()]);
 
     const updatedOffers = await Offers.findById(offers._id)
       .populate('walletId', 'balance gems currency');
 
-    res.status(200).json(updatedOffers);
+    res.status(200).json({
+      offers: updatedOffers,
+      wallet: wallet,
+      message: `Successfully converted ৳${amount} coupon to wallet balance`
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -214,13 +266,25 @@ const useDiscount = async (req, res) => {
       return res.status(400).json({ error: 'Insufficient discount balance' });
     }
 
+    const wallet = await Wallet.findOne({ userId });
+    if (!wallet) {
+      return res.status(404).json({ error: 'No wallet found for this user' });
+    }
+
     offers.discount -= amount;
-    await offers.save();
+    wallet.balance += amount;
+    wallet.lastUpdated = new Date();
+
+    await Promise.all([offers.save(), wallet.save()]);
 
     const updatedOffers = await Offers.findById(offers._id)
       .populate('walletId', 'balance gems currency');
 
-    res.status(200).json(updatedOffers);
+    res.status(200).json({
+      offers: updatedOffers,
+      wallet: wallet,
+      message: `Successfully converted ৳${amount} discount to wallet balance`
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

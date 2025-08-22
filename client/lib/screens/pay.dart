@@ -6,6 +6,8 @@ import '../models/individual_bus.dart';
 import '../services/auth_service.dart';
 import '../services/wallet_service.dart';
 import '../services/receipt_service.dart';
+import '../services/offers_service.dart';
+import '../models/offers.dart';
 
 class PayScreen extends StatefulWidget {
   final IndividualBus bus;
@@ -37,11 +39,16 @@ class _PayScreenState extends State<PayScreen> {
   int _gems = 0;
   String? _error;
   bool _insufficientBalance = false;
+  Offers? _userOffers;
+  double _discountAmount = 0.0;
+  double _payableAmount = 0.0;
+  bool _isLoadingOffers = true;
 
   @override
   void initState() {
     super.initState();
     _loadWalletData();
+    _loadUserOffers();
   }
 
   @override
@@ -62,7 +69,7 @@ class _PayScreenState extends State<PayScreen> {
         setState(() {
           _walletBalance = result['balance'];
           _gems = result['gems'];
-          _insufficientBalance = _walletBalance < widget.fare;
+          _insufficientBalance = _walletBalance < _payableAmount;
         });
       } else {
         setState(() {
@@ -82,6 +89,33 @@ class _PayScreenState extends State<PayScreen> {
 
   Future<void> _refreshWalletData() async {
     await _loadWalletData();
+  }
+
+  Future<void> _loadUserOffers() async {
+    try {
+      setState(() {
+        _isLoadingOffers = true;
+      });
+
+      final token = await AuthService.getToken();
+      if (token == null) return;
+
+      final offers = await OffersService.getUserOffers(token);
+      setState(() {
+        _userOffers = offers;
+        _discountAmount = offers.discount ?? 0.0;
+        _payableAmount = widget.fare - _discountAmount;
+        if (_payableAmount < 0) _payableAmount = 0.0;
+        _isLoadingOffers = false;
+      });
+    } catch (e) {
+      setState(() {
+        _userOffers = null;
+        _discountAmount = 0.0;
+        _payableAmount = widget.fare;
+        _isLoadingOffers = false;
+      });
+    }
   }
 
   Future<void> _downloadReceipt() async {
@@ -179,6 +213,7 @@ class _PayScreenState extends State<PayScreen> {
           final deductionResult = await _deductFare();
           if (deductionResult) {
             await _loadWalletData();
+            await _applyDiscount();
             _showSuccessDialog();
           } else {
             _showError(
@@ -212,7 +247,7 @@ class _PayScreenState extends State<PayScreen> {
           'Content-Type': 'application/json',
         },
         body: json.encode({
-          'amount': widget.fare,
+          'amount': _payableAmount,
           'description': 'Bus fare for ${widget.busInfo.busName}',
         }),
       );
@@ -222,7 +257,7 @@ class _PayScreenState extends State<PayScreen> {
         if (data['success']) {
           setState(() {
             _walletBalance = (data['newBalance'] ?? _walletBalance).toDouble();
-            _insufficientBalance = _walletBalance < widget.fare;
+            _insufficientBalance = _walletBalance < _payableAmount;
           });
           return true;
         } else {
@@ -248,6 +283,25 @@ class _PayScreenState extends State<PayScreen> {
     } catch (e) {
       _showError('Error deducting fare from wallet');
       return false;
+    }
+  }
+
+  Future<void> _applyDiscount() async {
+    if (_discountAmount <= 0 || _userOffers == null) return;
+
+    try {
+      final token = await AuthService.getToken();
+      if (token == null) return;
+
+      final result = await OffersService.useDiscount(token, _discountAmount);
+      if (result['success'] != null) {
+        setState(() {
+          _discountAmount = 0.0;
+          _payableAmount = widget.fare;
+        });
+      }
+    } catch (e) {
+      print('Error applying discount: $e');
     }
   }
 
@@ -297,7 +351,7 @@ class _PayScreenState extends State<PayScreen> {
                     Icon(Icons.account_balance_wallet, color: Colors.red[600]),
                     SizedBox(width: 8),
                     Text(
-                      'Required: ৳${widget.fare.toStringAsFixed(0)}',
+                      'Required: ৳${_payableAmount.toStringAsFixed(0)}',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -532,7 +586,7 @@ class _PayScreenState extends State<PayScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Fare Paid:',
+                            'Original Fare:',
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.grey[700],
@@ -540,6 +594,52 @@ class _PayScreenState extends State<PayScreen> {
                           ),
                           Text(
                             '৳${widget.fare.toStringAsFixed(0)}',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_discountAmount > 0) ...[
+                        SizedBox(height: 4),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Discount:',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.orange[700],
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              '-৳${_discountAmount.toStringAsFixed(0)}',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.orange[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Amount Paid:',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[700],
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            '৳${_payableAmount.toStringAsFixed(0)}',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
@@ -799,6 +899,125 @@ class _PayScreenState extends State<PayScreen> {
               ),
             ],
           ),
+          if (_isLoadingOffers) ...[
+            SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(Colors.grey[600]!),
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Text(
+                    'Loading offers...',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else if (_discountAmount > 0) ...[
+            SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange[200]!),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.discount,
+                    color: Colors.orange[600],
+                    size: 24,
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Discount Applied',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.orange[700],
+                          ),
+                        ),
+                        Text(
+                          '৳${_discountAmount.toStringAsFixed(0)} off',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.orange[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.orange[100],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'SAVE',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.orange[700],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.green[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.green[200]!),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Payable Amount',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.green[700],
+                    ),
+                  ),
+                  Text(
+                    '৳${_payableAmount.toStringAsFixed(0)}',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.green[700],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -960,7 +1179,7 @@ class _PayScreenState extends State<PayScreen> {
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Insufficient balance. You need ৳${(widget.fare - _walletBalance).toStringAsFixed(0)} more.',
+                      'Insufficient balance. You need ৳${(_payableAmount - _walletBalance).toStringAsFixed(0)} more.',
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.red[700],
@@ -1056,7 +1275,7 @@ class _PayScreenState extends State<PayScreen> {
                   Text(
                     _insufficientBalance
                         ? 'Insufficient Balance'
-                        : 'Pay & Board Bus',
+                        : 'Pay ৳${_payableAmount.toStringAsFixed(0)} & Board Bus',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,

@@ -190,6 +190,7 @@ class _QRScreenState extends State<QRScreen> {
           destination: _destination!,
           distance: _distance!,
           fare: _fare!,
+          isQRBooking: true,
         ),
       ),
     );

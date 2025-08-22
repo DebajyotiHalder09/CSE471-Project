@@ -17,6 +17,7 @@ class PayScreen extends StatefulWidget {
   final String destination;
   final double distance;
   final double fare;
+  final bool isQRBooking;
 
   const PayScreen({
     super.key,
@@ -26,6 +27,7 @@ class PayScreen extends StatefulWidget {
     required this.destination,
     required this.distance,
     required this.fare,
+    this.isQRBooking = false,
   });
 
   @override
@@ -246,41 +248,53 @@ class _PayScreenState extends State<PayScreen> {
     });
 
     try {
-      final token = await AuthService.getToken();
-      if (token == null) {
-        _showError('Authentication required');
-        return;
-      }
-
-      final uri = Uri.parse('${AuthService.baseUrl}/individual-bus/board');
-      final response = await http.post(
-        uri,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: json.encode({
-          'busId': widget.bus.id,
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success']) {
-          final deductionResult = await _deductFare();
-          if (deductionResult) {
-            await _loadWalletData();
-            await _applyDiscount();
-            _showSuccessDialog();
-          } else {
-            _showError(
-                'Payment processed but wallet deduction failed. Please contact support.');
-          }
+      if (widget.isQRBooking) {
+        final deductionResult = await _deductFare();
+        if (deductionResult) {
+          await _loadWalletData();
+          await _applyDiscount();
+          _showSuccessDialog();
         } else {
-          _showError(data['message'] ?? 'Failed to board bus');
+          _showError(
+              'Payment processed but wallet deduction failed. Please contact support.');
         }
       } else {
-        _showError('Failed to board bus');
+        final token = await AuthService.getToken();
+        if (token == null) {
+          _showError('Authentication required');
+          return;
+        }
+
+        final uri = Uri.parse('${AuthService.baseUrl}/individual-bus/board');
+        final response = await http.post(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: json.encode({
+            'busId': widget.bus.id,
+          }),
+        );
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          if (data['success']) {
+            final deductionResult = await _deductFare();
+            if (deductionResult) {
+              await _loadWalletData();
+              await _applyDiscount();
+              _showSuccessDialog();
+            } else {
+              _showError(
+                  'Payment processed but wallet deduction failed. Please contact support.');
+            }
+          } else {
+            _showError(data['message'] ?? 'Failed to board bus');
+          }
+        } else {
+          _showError('Failed to board bus');
+        }
       }
     } catch (e) {
       _showError('Error processing payment');
@@ -297,47 +311,65 @@ class _PayScreenState extends State<PayScreen> {
     });
 
     try {
-      final token = await AuthService.getToken();
-      if (token == null) {
-        _showError('Authentication required');
-        return;
-      }
-
-      final uri = Uri.parse('${AuthService.baseUrl}/individual-bus/board');
-      final response = await http.post(
-        uri,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: json.encode({
-          'busId': widget.bus.id,
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success']) {
-          await _applyDiscount();
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => GpayRegLogScreen(
-                amount: _payableAmount,
-                busName: widget.busInfo.busName,
-                busCode: widget.bus.busCode,
-                source: widget.source,
-                destination: widget.destination,
-                distance: widget.distance,
-                fare: widget.fare,
-              ),
+      if (widget.isQRBooking) {
+        await _applyDiscount();
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => GpayRegLogScreen(
+              amount: _payableAmount,
+              busName: widget.busInfo.busName,
+              busCode: widget.bus.busCode,
+              source: widget.source,
+              destination: widget.destination,
+              distance: widget.distance,
+              fare: widget.fare,
             ),
-          );
-        } else {
-          _showError(data['message'] ?? 'Failed to board bus');
-        }
+          ),
+        );
       } else {
-        _showError('Failed to board bus');
+        final token = await AuthService.getToken();
+        if (token == null) {
+          _showError('Authentication required');
+          return;
+        }
+
+        final uri = Uri.parse('${AuthService.baseUrl}/individual-bus/board');
+        final response = await http.post(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: json.encode({
+            'busId': widget.bus.id,
+          }),
+        );
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          if (data['success']) {
+            await _applyDiscount();
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => GpayRegLogScreen(
+                  amount: _payableAmount,
+                  busName: widget.busInfo.busName,
+                  busCode: widget.bus.busCode,
+                  source: widget.source,
+                  destination: widget.destination,
+                  distance: widget.distance,
+                  fare: widget.fare,
+                ),
+              ),
+            );
+          } else {
+            _showError(data['message'] ?? 'Failed to board bus');
+          }
+        } else {
+          _showError('Failed to board bus');
+        }
       }
     } catch (e) {
       _showError('Error processing payment');

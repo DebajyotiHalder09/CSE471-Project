@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import '../services/auth_service.dart';
 import '../services/bus_service.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -153,7 +155,7 @@ class _QRScreenState extends State<QRScreen> {
     );
   }
 
-  void _navigateToPayment() {
+  Future<void> _navigateToPayment() async {
     if (_matchedBus == null ||
         _source == null ||
         _destination == null ||
@@ -163,32 +165,67 @@ class _QRScreenState extends State<QRScreen> {
       return;
     }
 
-    final individualBus = IndividualBus(
-      id: _matchedBusRaw!['_id'] ?? '',
-      parentBusInfoId: _matchedBusRaw!['_id'] ?? '',
-      busCode: _matchedBusRaw!['busCode'] ?? '',
-      totalPassengerCapacity: _matchedBusRaw!['totalPassengerCapacity'] ?? 50,
-      currentPassengerCount: _matchedBusRaw!['currentPassengerCount'] ?? 0,
-      latitude: _matchedBusRaw!['latitude'] ?? 0.0,
-      longitude: _matchedBusRaw!['longitude'] ?? 0.0,
-      averageSpeedKmh: _matchedBusRaw!['averageSpeedKmh'] ?? 25.0,
-      status: _matchedBusRaw!['status'] ?? 'active',
-      busType: _matchedBusRaw!['busType'] ?? 'general',
-    );
+    try {
+      final token = await AuthService.getToken();
+      if (token == null) {
+        _showError('Authentication required');
+        return;
+      }
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PayScreen(
-          bus: individualBus,
-          busInfo: _matchedBus!,
-          source: _source!,
-          destination: _destination!,
-          distance: _distance!,
-          fare: _fare!,
-        ),
-      ),
-    );
+      final uri = Uri.parse(
+          '${AuthService.baseUrl}/bus/individual/${_matchedBusRaw!['_id']}');
+      final response = await http.get(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] &&
+            data['data'] is List &&
+            (data['data'] as List).isNotEmpty) {
+          final individualBusData = (data['data'] as List).first;
+
+          final individualBus = IndividualBus(
+            id: individualBusData['_id'] ?? '',
+            parentBusInfoId: individualBusData['parentBusInfoId'] ?? '',
+            busCode: individualBusData['busCode'] ?? _matchedBus!.busName,
+            totalPassengerCapacity:
+                individualBusData['totalPassengerCapacity'] ?? 50,
+            currentPassengerCount:
+                individualBusData['currentPassengerCount'] ?? 0,
+            latitude: individualBusData['latitude'] ?? 23.8103,
+            longitude: individualBusData['longitude'] ?? 90.4125,
+            averageSpeedKmh: individualBusData['averageSpeedKmh'] ?? 25.0,
+            status: individualBusData['status'] ?? 'active',
+            busType: individualBusData['busType'] ?? 'general',
+          );
+
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PayScreen(
+                bus: individualBus,
+                busInfo: _matchedBus!,
+                source: _source!,
+                destination: _destination!,
+                distance: _distance!,
+                fare: _fare!,
+              ),
+            ),
+          );
+        } else {
+          _showError('No active buses found for this route');
+        }
+      } else {
+        _showError('Failed to find active buses for this route');
+      }
+    } catch (e) {
+      _showError('Error finding active buses: $e');
+    }
   }
 
   @override
@@ -697,7 +734,7 @@ class _QRScreenState extends State<QRScreen> {
                   Container(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: _navigateToPayment,
+                      onPressed: () => _navigateToPayment(),
                       icon: Icon(Icons.payment, size: 24),
                       label: Text(
                         'Proceed to Payment',

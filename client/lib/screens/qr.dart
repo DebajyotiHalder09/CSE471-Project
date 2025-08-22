@@ -531,53 +531,101 @@ class _QRScreenState extends State<QRScreen> {
             ],
           ),
           SizedBox(height: 20),
-          TextFormField(
-            controller: _sourceController,
-            decoration: InputDecoration(
-              labelText: 'Source',
-              hintText: 'Enter source location',
-              prefixIcon: Icon(Icons.location_on, color: Colors.green[600]),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey[300]!),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.blue[600]!),
-              ),
-            ),
-            onChanged: (value) {
+          Autocomplete<String>(
+            optionsBuilder: (TextEditingValue textEditingValue) {
+              if (textEditingValue.text.isEmpty) {
+                return _matchedBus?.stopNames ?? [];
+              }
+              return _matchedBus?.stopNames
+                      .where((stop) => stop
+                          .toLowerCase()
+                          .contains(textEditingValue.text.toLowerCase()))
+                      .toList() ??
+                  [];
+            },
+            fieldViewBuilder:
+                (context, controller, focusNode, onFieldSubmitted) {
+              return TextFormField(
+                controller: controller,
+                focusNode: focusNode,
+                decoration: InputDecoration(
+                  labelText: 'Source',
+                  hintText: 'Enter source location',
+                  prefixIcon: Icon(Icons.location_on, color: Colors.green[600]),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.blue[600]!),
+                  ),
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    _source = value.isEmpty ? null : value;
+                    _showPaymentDetails = false;
+                  });
+                },
+              );
+            },
+            onSelected: (String selection) {
               setState(() {
-                _source = value.isEmpty ? null : value;
+                _source = selection;
+                _sourceController.text = selection;
                 _showPaymentDetails = false;
               });
             },
           ),
           SizedBox(height: 16),
-          TextFormField(
-            controller: _destinationController,
-            decoration: InputDecoration(
-              labelText: 'Destination',
-              hintText: 'Enter destination location',
-              prefixIcon: Icon(Icons.flag, color: Colors.red[600]),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey[300]!),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.blue[600]!),
-              ),
-            ),
-            onChanged: (value) {
+          Autocomplete<String>(
+            optionsBuilder: (TextEditingValue textEditingValue) {
+              if (textEditingValue.text.isEmpty) {
+                return _matchedBus?.stopNames ?? [];
+              }
+              return _matchedBus?.stopNames
+                      .where((stop) => stop
+                          .toLowerCase()
+                          .contains(textEditingValue.text.toLowerCase()))
+                      .toList() ??
+                  [];
+            },
+            fieldViewBuilder:
+                (context, controller, focusNode, onFieldSubmitted) {
+              return TextFormField(
+                controller: controller,
+                focusNode: focusNode,
+                decoration: InputDecoration(
+                  labelText: 'Destination',
+                  hintText: 'Enter destination location',
+                  prefixIcon: Icon(Icons.flag, color: Colors.red[600]),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.blue[600]!),
+                  ),
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    _destination = value.isEmpty ? null : value;
+                    _showPaymentDetails = false;
+                  });
+                },
+              );
+            },
+            onSelected: (String selection) {
               setState(() {
-                _destination = value.isEmpty ? null : value;
+                _destination = selection;
+                _destinationController.text = selection;
                 _showPaymentDetails = false;
               });
             },
@@ -588,9 +636,9 @@ class _QRScreenState extends State<QRScreen> {
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: _calculateFare,
-                icon: Icon(Icons.calculate, size: 20),
+                icon: Icon(Icons.directions, size: 20),
                 label: Text(
-                  'Calculate Fare',
+                  'Go',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
                 style: ElevatedButton.styleFrom(

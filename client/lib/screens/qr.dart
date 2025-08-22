@@ -3,6 +3,8 @@ import '../services/auth_service.dart';
 import '../services/bus_service.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../models/bus.dart';
+import '../models/individual_bus.dart';
+import 'pay.dart';
 
 class QRScreen extends StatefulWidget {
   static const routeName = '/qr';
@@ -23,10 +25,25 @@ class _QRScreenState extends State<QRScreen> {
   Bus? _matchedBus;
   String? _lastScanned;
 
+  final TextEditingController _sourceController = TextEditingController();
+  final TextEditingController _destinationController = TextEditingController();
+  String? _source;
+  String? _destination;
+  double? _distance;
+  double? _fare;
+  bool _showPaymentDetails = false;
+
   @override
   void initState() {
     super.initState();
     _loadUserFriendCode();
+  }
+
+  @override
+  void dispose() {
+    _sourceController.dispose();
+    _destinationController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUserFriendCode() async {
@@ -48,6 +65,13 @@ class _QRScreenState extends State<QRScreen> {
       _scanError = null;
       _matchedBus = null;
       _matchedBusRaw = null;
+      _showPaymentDetails = false;
+      _source = null;
+      _destination = null;
+      _distance = null;
+      _fare = null;
+      _sourceController.clear();
+      _destinationController.clear();
     });
 
     final result = await Navigator.push<String?>(
@@ -97,6 +121,76 @@ class _QRScreenState extends State<QRScreen> {
     }
   }
 
+  void _calculateFare() {
+    if (_source == null || _destination == null || _matchedBus == null) return;
+
+    final sourceIndex =
+        _matchedBus!.stops.indexWhere((stop) => stop.name == _source!);
+    final destinationIndex =
+        _matchedBus!.stops.indexWhere((stop) => stop.name == _destination!);
+
+    if (sourceIndex == -1 || destinationIndex == -1) {
+      _showError('Source or destination not found in bus route');
+      return;
+    }
+
+    final stopCount = (destinationIndex - sourceIndex).abs();
+    _distance = stopCount * 2.5;
+    _fare = _matchedBus!.calculateFare(_distance!);
+
+    setState(() {
+      _showPaymentDetails = true;
+    });
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red[600],
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _navigateToPayment() {
+    if (_matchedBus == null ||
+        _source == null ||
+        _destination == null ||
+        _distance == null ||
+        _fare == null) {
+      _showError('Please complete all details before proceeding');
+      return;
+    }
+
+    final individualBus = IndividualBus(
+      id: _matchedBusRaw!['_id'] ?? '',
+      parentBusInfoId: _matchedBusRaw!['_id'] ?? '',
+      busCode: _matchedBusRaw!['busCode'] ?? '',
+      totalPassengerCapacity: _matchedBusRaw!['totalPassengerCapacity'] ?? 50,
+      currentPassengerCount: _matchedBusRaw!['currentPassengerCount'] ?? 0,
+      latitude: _matchedBusRaw!['latitude'] ?? 0.0,
+      longitude: _matchedBusRaw!['longitude'] ?? 0.0,
+      averageSpeedKmh: _matchedBusRaw!['averageSpeedKmh'] ?? 25.0,
+      status: _matchedBusRaw!['status'] ?? 'active',
+      busType: _matchedBusRaw!['busType'] ?? 'general',
+    );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PayScreen(
+          bus: individualBus,
+          busInfo: _matchedBus!,
+          source: _source!,
+          destination: _destination!,
+          distance: _distance!,
+          fare: _fare!,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -129,6 +223,10 @@ class _QRScreenState extends State<QRScreen> {
                   _buildQRCodeSection(),
                   SizedBox(height: 32),
                   _buildScanSection(),
+                  if (_matchedBus != null) ...[
+                    SizedBox(height: 32),
+                    _buildTripDetailsSection(),
+                  ],
                   SizedBox(height: 32),
                   _buildActionButtons(),
                 ],
@@ -395,6 +493,220 @@ class _QRScreenState extends State<QRScreen> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTripDetailsSection() {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.route, color: Colors.blue[600]),
+              SizedBox(width: 8),
+              Text(
+                'Trip Details',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[800],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 20),
+          TextFormField(
+            controller: _sourceController,
+            decoration: InputDecoration(
+              labelText: 'Source',
+              hintText: 'Enter source location',
+              prefixIcon: Icon(Icons.location_on, color: Colors.green[600]),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey[300]!),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.blue[600]!),
+              ),
+            ),
+            onChanged: (value) {
+              setState(() {
+                _source = value.isEmpty ? null : value;
+                _showPaymentDetails = false;
+              });
+            },
+          ),
+          SizedBox(height: 16),
+          TextFormField(
+            controller: _destinationController,
+            decoration: InputDecoration(
+              labelText: 'Destination',
+              hintText: 'Enter destination location',
+              prefixIcon: Icon(Icons.flag, color: Colors.red[600]),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey[300]!),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.blue[600]!),
+              ),
+            ),
+            onChanged: (value) {
+              setState(() {
+                _destination = value.isEmpty ? null : value;
+                _showPaymentDetails = false;
+              });
+            },
+          ),
+          SizedBox(height: 20),
+          if (_source != null && _destination != null) ...[
+            Container(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _calculateFare,
+                icon: Icon(Icons.calculate, size: 20),
+                label: Text(
+                  'Calculate Fare',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue[600],
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+          ],
+          if (_showPaymentDetails && _distance != null && _fare != null) ...[
+            SizedBox(height: 20),
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.green[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.green[200]!),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    'Trip Summary',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.green[700],
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildInfoCard(
+                          Icons.straighten,
+                          'Distance',
+                          '${_distance!.toStringAsFixed(1)} km',
+                          Colors.blue[600]!,
+                        ),
+                      ),
+                      SizedBox(width: 16),
+                      Expanded(
+                        child: _buildInfoCard(
+                          Icons.payment,
+                          'Fare',
+                          '৳${_fare!.toStringAsFixed(0)}',
+                          Colors.green[600]!,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 20),
+                  Container(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _navigateToPayment,
+                      icon: Icon(Icons.payment, size: 24),
+                      label: Text(
+                        'Proceed to Payment',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green[600],
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard(
+      IconData icon, String label, String value, Color color) {
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 24),
+          SizedBox(height: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
         ],
       ),
     );

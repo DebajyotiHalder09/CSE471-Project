@@ -7,8 +7,8 @@ class GpayRegLogScreen extends StatefulWidget {
   static const routeName = '/gpay-reglog';
 
   final double? amount;
-  final String? busId;
-  final dynamic busInfo;
+  final String? busName;
+  final String? busCode;
   final String? source;
   final String? destination;
   final double? distance;
@@ -17,8 +17,8 @@ class GpayRegLogScreen extends StatefulWidget {
   const GpayRegLogScreen({
     super.key,
     this.amount,
-    this.busId,
-    this.busInfo,
+    this.busName,
+    this.busCode,
     this.source,
     this.destination,
     this.distance,
@@ -85,10 +85,24 @@ class _GpayRegLogScreenState extends State<GpayRegLogScreen> {
       if (result['success']) {
         final data = result['data'];
 
-        // Check if this is a payment scenario
-        if (widget.amount != null && widget.busId != null) {
-          // This is a payment scenario, process payment from Gpay
-          await _processPaymentFromGpay(data['balance'].toDouble());
+        if (widget.amount != null) {
+          // Navigate to GpayScreen with payment parameters
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => GpayScreen(
+                balance: data['balance'].toDouble(),
+                displayCode: data['displayCode'],
+                amount: widget.amount,
+                busName: widget.busName,
+                busCode: widget.busCode,
+                source: widget.source,
+                destination: widget.destination,
+                distance: widget.distance,
+                fare: widget.fare,
+              ),
+            ),
+          );
         } else {
           // Regular login, navigate to Gpay screen
           Navigator.pushReplacement(
@@ -114,45 +128,13 @@ class _GpayRegLogScreenState extends State<GpayRegLogScreen> {
   }
 
   Future<void> _processPaymentFromGpay(double gpayBalance) async {
-    if (widget.amount == null || widget.busId == null) return;
+    // This method is no longer needed as payment will be processed in GpayScreen
+    return;
+  }
 
-    if (gpayBalance < widget.amount!) {
-      _showError(
-          'Insufficient Gpay balance. You need ৳${widget.amount!.toStringAsFixed(0)} but have ৳${gpayBalance.toStringAsFixed(0)}');
-      return;
-    }
-
-    try {
-      setState(() {
-        _isLoading = true;
-      });
-
-      // Deduct amount from Gpay
-      final result = await GpayService.deductFromGpay(widget.amount!);
-
-      if (result['success']) {
-        // Show success message and navigate back
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                'Payment successful! ৳${widget.amount!.toStringAsFixed(0)} deducted from Gpay'),
-            backgroundColor: Colors.green[600],
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-
-        // Navigate back to previous screen
-        Navigator.of(context).pop();
-      } else {
-        _showError(result['message'] ?? 'Payment failed');
-      }
-    } catch (e) {
-      _showError('Payment failed: $e');
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
+  Future<void> _showPaymentSuccessAndOfferReceipt() async {
+    // This method is no longer needed as receipt will be shown in GpayScreen
+    return;
   }
 
   void _showError(String message) {
@@ -453,7 +435,9 @@ class _GpayRegLogScreenState extends State<GpayRegLogScreen> {
                           ),
                           SizedBox(width: 12),
                           Text(
-                            'Logging In...',
+                            widget.amount != null
+                                ? 'Processing Payment...'
+                                : 'Logging In...',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -462,7 +446,7 @@ class _GpayRegLogScreenState extends State<GpayRegLogScreen> {
                         ],
                       )
                     : Text(
-                        'Login',
+                        widget.amount != null ? 'Pay Now' : 'Login',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,

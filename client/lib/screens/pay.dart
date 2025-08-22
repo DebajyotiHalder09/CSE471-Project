@@ -271,7 +271,20 @@ class _PayScreenState extends State<PayScreen> {
           if (deductionResult) {
             await _loadWalletData();
             await _applyDiscount();
-            _showSuccessDialog();
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => GpayRegLogScreen(
+                  amount: _payableAmount,
+                  busName: widget.busInfo.busName,
+                  busCode: widget.bus.busCode,
+                  source: widget.source,
+                  destination: widget.destination,
+                  distance: widget.distance,
+                  fare: widget.fare,
+                ),
+              ),
+            );
           } else {
             _showError(
                 'Payment processed but wallet deduction failed. Please contact support.');
@@ -324,8 +337,8 @@ class _PayScreenState extends State<PayScreen> {
             MaterialPageRoute(
               builder: (context) => GpayRegLogScreen(
                 amount: _payableAmount,
-                busId: widget.bus.id,
-                busInfo: widget.busInfo,
+                busName: widget.busInfo.busName,
+                busCode: widget.bus.busCode,
                 source: widget.source,
                 destination: widget.destination,
                 distance: widget.distance,

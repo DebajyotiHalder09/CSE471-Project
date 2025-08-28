@@ -310,6 +310,80 @@ class _MapScreenState extends State<MapScreen> {
                       ],
                     ),
                     Divider(height: 16),
+                    // Show women-only bus suggestion for female users when regular buses are crowded
+                    if (_currentUserGender?.toLowerCase() == 'female' &&
+                        buses.any((bus) => bus.busType == 'women') &&
+                        sortedBuses.any((bus) =>
+                            bus.currentPassengerCount >=
+                            (bus.totalPassengerCapacity * 0.7)))
+                      Container(
+                        margin: EdgeInsets.only(bottom: 16),
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.pink[50],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.pink[200]!),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.woman,
+                              color: Colors.pink[600],
+                              size: 20,
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Regular buses are getting crowded',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.pink[700],
+                                    ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    'Consider women-only buses for a more comfortable ride',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.pink[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            ElevatedButton(
+                              onPressed: () {
+                                final womenOnlyBuses = buses
+                                    .where((bus) => bus.busType == 'women')
+                                    .toList();
+                                Navigator.of(context).pop();
+                                _showWomenOnlyBusesDialog(womenOnlyBuses,
+                                    busInfoId: busInfoId);
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.pink[600],
+                                foregroundColor: Colors.white,
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 6),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: Text(
+                                'View',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     Expanded(
                       child: ListView.builder(
                         itemCount: sortedBuses.length,
@@ -397,13 +471,27 @@ class _MapScreenState extends State<MapScreen> {
                                         Container(
                                           padding: EdgeInsets.all(8),
                                           decoration: BoxDecoration(
-                                            color: Colors.blue[50],
+                                            color: bus.currentPassengerCount >=
+                                                    bus.totalPassengerCapacity
+                                                ? Colors.red[50]
+                                                : bus.currentPassengerCount >=
+                                                        (bus.totalPassengerCapacity *
+                                                            0.8)
+                                                    ? Colors.orange[50]
+                                                    : Colors.blue[50],
                                             borderRadius:
                                                 BorderRadius.circular(10),
                                           ),
                                           child: Icon(
                                             Icons.people,
-                                            color: Colors.blue[600],
+                                            color: bus.currentPassengerCount >=
+                                                    bus.totalPassengerCapacity
+                                                ? Colors.red[600]
+                                                : bus.currentPassengerCount >=
+                                                        (bus.totalPassengerCapacity *
+                                                            0.8)
+                                                    ? Colors.orange[600]
+                                                    : Colors.blue[600],
                                             size: 16,
                                           ),
                                         ),
@@ -413,7 +501,14 @@ class _MapScreenState extends State<MapScreen> {
                                           style: TextStyle(
                                             fontSize: 14,
                                             fontWeight: FontWeight.w600,
-                                            color: Colors.grey[800],
+                                            color: bus.currentPassengerCount >=
+                                                    bus.totalPassengerCapacity
+                                                ? Colors.red[700]
+                                                : bus.currentPassengerCount >=
+                                                        (bus.totalPassengerCapacity *
+                                                            0.8)
+                                                    ? Colors.orange[700]
+                                                    : Colors.grey[800],
                                           ),
                                         ),
                                       ],
@@ -421,74 +516,119 @@ class _MapScreenState extends State<MapScreen> {
                                     AnimatedSwitcher(
                                       duration: Duration(milliseconds: 300),
                                       child: !(_boardedBuses[bus.id] ?? false)
-                                          ? ElevatedButton(
-                                              key: ValueKey('board_${bus.id}'),
-                                              onPressed: () async {
-                                                if (_currentUserGender
-                                                            ?.toLowerCase() ==
-                                                        'male' &&
-                                                    bus.busType == 'women') {
-                                                  Navigator.of(context).pop();
-                                                  _showWomenBusPopup();
-                                                  return;
-                                                }
+                                          ? Tooltip(
+                                              message: bus.currentPassengerCount >=
+                                                      bus.totalPassengerCapacity
+                                                  ? 'Bus is at full capacity'
+                                                  : bus.currentPassengerCount >=
+                                                          (bus.totalPassengerCapacity *
+                                                              0.8)
+                                                      ? 'Bus is nearly full'
+                                                      : 'Board this bus',
+                                              child: ElevatedButton(
+                                                key:
+                                                    ValueKey('board_${bus.id}'),
+                                                onPressed:
+                                                    bus.currentPassengerCount >=
+                                                            bus.totalPassengerCapacity
+                                                        ? null
+                                                        : () async {
+                                                            if (_currentUserGender
+                                                                        ?.toLowerCase() ==
+                                                                    'male' &&
+                                                                bus.busType ==
+                                                                    'women') {
+                                                              Navigator.of(
+                                                                      context)
+                                                                  .pop();
+                                                              _showWomenBusPopup();
+                                                              return;
+                                                            }
 
-                                                final source = _sourceController
-                                                    .text
-                                                    .trim();
-                                                final destination =
-                                                    _destinationController.text
-                                                        .trim();
+                                                            final source =
+                                                                _sourceController
+                                                                    .text
+                                                                    .trim();
+                                                            final destination =
+                                                                _destinationController
+                                                                    .text
+                                                                    .trim();
 
-                                                if (source.isEmpty ||
-                                                    destination.isEmpty) {
-                                                  ScaffoldMessenger.of(context)
-                                                      .showSnackBar(
-                                                    SnackBar(
-                                                      content: Text(
-                                                          'Please set source and destination first'),
-                                                      backgroundColor:
-                                                          Colors.orange,
-                                                    ),
-                                                  );
-                                                  return;
-                                                }
+                                                            if (source
+                                                                    .isEmpty ||
+                                                                destination
+                                                                    .isEmpty) {
+                                                              ScaffoldMessenger
+                                                                      .of(context)
+                                                                  .showSnackBar(
+                                                                SnackBar(
+                                                                  content: Text(
+                                                                      'Please set source and destination first'),
+                                                                  backgroundColor:
+                                                                      Colors
+                                                                          .orange,
+                                                                ),
+                                                              );
+                                                              return;
+                                                            }
 
-                                                await _boardBus(
-                                                    bus.id, busInfoId);
-                                              },
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: _boardedBuses
-                                                        .values
-                                                        .any((boarded) =>
-                                                            boarded)
-                                                    ? Colors.grey[400]
-                                                    : Colors.blue[600],
-                                                foregroundColor: Colors.white,
-                                                padding: EdgeInsets.symmetric(
-                                                    horizontal: 16,
-                                                    vertical: 8),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                ),
-                                                minimumSize: Size(0, 0),
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(Icons.directions_bus,
-                                                      size: 14),
-                                                  SizedBox(width: 6),
-                                                  Text(
-                                                    'Board',
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                    ),
+                                                            await _boardBus(
+                                                                bus.id,
+                                                                busInfoId);
+                                                          },
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: _boardedBuses
+                                                          .values
+                                                          .any((boarded) =>
+                                                              boarded)
+                                                      ? Colors.grey[400]
+                                                      : bus.currentPassengerCount >=
+                                                              bus
+                                                                  .totalPassengerCapacity
+                                                          ? Colors.red[400]
+                                                          : bus.currentPassengerCount >=
+                                                                  (bus.totalPassengerCapacity *
+                                                                      0.8)
+                                                              ? Colors
+                                                                  .orange[600]
+                                                              : Colors
+                                                                  .blue[600],
+                                                  foregroundColor: Colors.white,
+                                                  padding: EdgeInsets.symmetric(
+                                                      horizontal: 16,
+                                                      vertical: 8),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8),
                                                   ),
-                                                ],
+                                                  minimumSize: Size(0, 0),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Icon(Icons.directions_bus,
+                                                        size: 14),
+                                                    SizedBox(width: 6),
+                                                    Text(
+                                                      bus.currentPassengerCount >=
+                                                              bus
+                                                                  .totalPassengerCapacity
+                                                          ? 'Full'
+                                                          : bus.currentPassengerCount >=
+                                                                  (bus.totalPassengerCapacity *
+                                                                      0.8)
+                                                              ? 'Nearly Full'
+                                                              : 'Board',
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
                                             )
                                           : ElevatedButton(
@@ -680,6 +820,19 @@ class _MapScreenState extends State<MapScreen> {
 
       final individualBus = await _getIndividualBusById(busId);
       if (individualBus == null) return;
+
+      // Check if bus is at full capacity
+      if (individualBus.currentPassengerCount >=
+          individualBus.totalPassengerCapacity) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('This bus is at full capacity. Cannot board.'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
 
       Navigator.of(context).pop();
 
@@ -1519,9 +1672,18 @@ class _MapScreenState extends State<MapScreen> {
             list.map((e) => Bus.fromJson(e as Map<String, dynamic>)).toList();
 
         List<Bus> filteredBuses = buses;
+        List<Bus> womenOnlyBuses =
+            buses.where((bus) => bus.busType == 'women').toList();
 
         if (_currentUserGender?.toLowerCase() == 'male') {
           filteredBuses = buses.where((bus) => bus.busType != 'women').toList();
+        }
+
+        // Check if all regular buses are halfway full and suggest women-only buses
+        if (_currentUserGender?.toLowerCase() == 'female' &&
+            filteredBuses.isNotEmpty &&
+            womenOnlyBuses.isNotEmpty) {
+          _checkAndSuggestWomenOnlyBuses(filteredBuses, womenOnlyBuses);
         }
 
         setState(() {
@@ -1556,6 +1718,407 @@ class _MapScreenState extends State<MapScreen> {
         _busesError = 'Failed to load buses';
       });
     }
+  }
+
+  void _checkAndSuggestWomenOnlyBuses(
+      List<Bus> regularBuses, List<Bus> womenOnlyBuses) async {
+    // Check if all regular buses are at least halfway full by checking individual bus data
+    bool allRegularBusesHalfFull = true;
+
+    for (final bus in regularBuses) {
+      try {
+        final individualBuses =
+            await IndividualBusService.getIndividualBuses(bus.id);
+        if (individualBuses['success'] && individualBuses['data'].isNotEmpty) {
+          final List<IndividualBus> buses = individualBuses['data'];
+          // Check if any individual bus on this route has available capacity
+          bool hasAvailableCapacity = buses.any((individualBus) =>
+              individualBus.currentPassengerCount <
+              (individualBus.totalPassengerCapacity * 0.8));
+
+          if (hasAvailableCapacity) {
+            allRegularBusesHalfFull = false;
+            break;
+          }
+        }
+      } catch (e) {
+        // If we can't check capacity, assume bus is not full
+        allRegularBusesHalfFull = false;
+        break;
+      }
+    }
+
+    if (allRegularBusesHalfFull && womenOnlyBuses.isNotEmpty) {
+      // Show suggestion dialog after a short delay
+      Future.delayed(Duration(milliseconds: 500), () {
+        if (mounted) {
+          _showWomenOnlySuggestionDialog(womenOnlyBuses, busInfoId: null);
+        }
+      });
+    }
+  }
+
+  void _showWomenOnlySuggestionDialog(List<Bus> womenOnlyBuses,
+      {String? busInfoId}) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.2),
+                  blurRadius: 20,
+                  offset: Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.pink[50],
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.woman,
+                    size: 48,
+                    color: Colors.pink[600],
+                  ),
+                ),
+                SizedBox(height: 20),
+                Text(
+                  'Better Option Available!',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey[800],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Regular buses are getting crowded. Consider women-only buses for a more comfortable ride.',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey[300],
+                          foregroundColor: Colors.grey[700],
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          'Continue with regular',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _showWomenOnlyBusesDialog(womenOnlyBuses,
+                              busInfoId: busInfoId);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.pink[600],
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          'Show women-only',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showWomenOnlyBusesDialog(List<dynamic> womenOnlyBuses,
+      {String? busInfoId}) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.9,
+            height: MediaQuery.of(context).size.height * 0.7,
+            padding: EdgeInsets.all(20),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Women-Only Buses',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[800],
+                          ),
+                        ),
+                        Container(
+                          margin: EdgeInsets.only(top: 4),
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.pink[50],
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.pink[200]!),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.woman,
+                                size: 14,
+                                color: Colors.pink[600],
+                              ),
+                              SizedBox(width: 4),
+                              Text(
+                                'Exclusive for female passengers',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.pink[700],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: Icon(Icons.close, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+                Divider(height: 24),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: womenOnlyBuses.length,
+                    itemBuilder: (context, index) {
+                      final bus = womenOnlyBuses[index];
+                      // Handle both Bus and IndividualBus types
+                      double distance = 0.0;
+                      double totalFare = 0.0;
+
+                      if (bus is Bus) {
+                        distance = _calculateRouteDistance(bus);
+                        totalFare = bus.calculateFare(distance);
+                      } else if (bus is IndividualBus && busInfoId != null) {
+                        // For IndividualBus, we need to get the route info
+                        final busInfo = _getBusInfoById(busInfoId);
+                        if (busInfo != null) {
+                          distance = _calculateRouteDistance(busInfo);
+                          totalFare = busInfo.calculateFare(distance);
+                        }
+                      }
+
+                      return Container(
+                        margin: EdgeInsets.only(bottom: 16),
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.pink[100]!),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.pink.withValues(alpha: 0.1),
+                              blurRadius: 12,
+                              offset: Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    bus.busName,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 18,
+                                      color: Colors.grey[900],
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.pink[100],
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    'Women Only',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.pink[700],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Container(
+                                    padding: EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue[50],
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.straighten,
+                                          color: Colors.blue[600],
+                                          size: 16,
+                                        ),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          '${distance.toStringAsFixed(1)} km',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.blue[700],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                Expanded(
+                                  child: Container(
+                                    padding: EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green[50],
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.attach_money,
+                                          color: Colors.green[600],
+                                          size: 16,
+                                        ),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          '৳${totalFare.toStringAsFixed(0)}',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.green[700],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 16),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                  _toggleIndividualBuses(bus.id);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.pink[600],
+                                  foregroundColor: Colors.white,
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.directions_bus, size: 16),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Show Individual Buses',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   double _calculateRouteDistance(Bus bus) {
@@ -1693,6 +2256,78 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
+                // Show women-only bus suggestion for female users
+                if (_currentUserGender?.toLowerCase() == 'female' &&
+                    _availableBuses.any((bus) => bus.busType != 'women') &&
+                    _availableBuses.any((bus) => bus.busType == 'women'))
+                  Container(
+                    margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.pink[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.pink[200]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.woman,
+                          color: Colors.pink[600],
+                          size: 24,
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Women-Only Buses Available',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.pink[700],
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'Consider women-only buses for a more comfortable ride',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.pink[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ElevatedButton(
+                          onPressed: () {
+                            final womenOnlyBuses = _availableBuses
+                                .where((bus) => bus.busType == 'women')
+                                .toList();
+                            Navigator.of(context).pop();
+                            _showWomenOnlyBusesDialog(womenOnlyBuses,
+                                busInfoId: null);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.pink[600],
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: Text(
+                            'View',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 Expanded(
                   child: _busesLoading
                       ? const Center(child: CircularProgressIndicator())
@@ -2141,7 +2776,7 @@ class _MapScreenState extends State<MapScreen> {
         systemNavigationBarIconBrightness: Brightness.dark,
       ),
     );
-    
+
     if (_mapController == null) {
       return const Scaffold(
         body: Center(

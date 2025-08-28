@@ -7,6 +7,7 @@ import '../services/auth_service.dart';
 import '../services/wallet_service.dart';
 import '../services/receipt_service.dart';
 import '../services/offers_service.dart';
+import '../services/trip_history_service.dart';
 import '../models/offers.dart';
 import 'gpayreglog.dart';
 
@@ -217,6 +218,7 @@ class _PayScreenState extends State<PayScreen> {
           if (deductionResult) {
             await _loadWalletData();
             await _applyDiscount();
+            await _createTripRecord();
             _showSuccessDialog();
           } else {
             _showError(
@@ -253,6 +255,7 @@ class _PayScreenState extends State<PayScreen> {
         if (deductionResult) {
           await _loadWalletData();
           await _applyDiscount();
+          await _createTripRecord();
           _showSuccessDialog();
         } else {
           _showError(
@@ -284,6 +287,7 @@ class _PayScreenState extends State<PayScreen> {
             if (deductionResult) {
               await _loadWalletData();
               await _applyDiscount();
+              await _createTripRecord();
               _showSuccessDialog();
             } else {
               _showError(
@@ -448,6 +452,27 @@ class _PayScreenState extends State<PayScreen> {
       }
     } catch (e) {
       print('Error applying discount: $e');
+    }
+  }
+
+  Future<void> _createTripRecord() async {
+    try {
+      final result = await TripHistoryService.addTrip(
+        busId: widget.bus.id,
+        busName: widget.busInfo.busName,
+        distance: widget.distance,
+        fare: _payableAmount,
+        source: widget.source,
+        destination: widget.destination,
+      );
+
+      if (result['success']) {
+        print('Trip record created successfully');
+      } else {
+        print('Failed to create trip record: ${result['message']}');
+      }
+    } catch (e) {
+      print('Error creating trip record: $e');
     }
   }
 
@@ -858,7 +883,8 @@ class _PayScreenState extends State<PayScreen> {
                 ),
                 SizedBox(height: 20),
                 ElevatedButton(
-                  onPressed: () {
+                  onPressed: () async {
+                    await _createTripRecord();
                     Navigator.of(context).pop();
                     Navigator.of(context).pop();
                   },

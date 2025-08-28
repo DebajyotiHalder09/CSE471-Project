@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/gpay_service.dart';
 import '../services/receipt_service.dart';
+import '../services/trip_history_service.dart';
 import 'recharge.dart';
 
 class GpayScreen extends StatefulWidget {
@@ -48,6 +49,7 @@ class _GpayScreenState extends State<GpayScreen> {
       final result = await GpayService.deductFromGpay(widget.amount!);
 
       if (result['success']) {
+        await _createTripRecord();
         _showPaymentSuccessDialog();
       } else {
         _showError(result['message'] ?? 'Payment failed');
@@ -58,6 +60,28 @@ class _GpayScreenState extends State<GpayScreen> {
       setState(() {
         _isProcessingPayment = false;
       });
+    }
+  }
+
+  Future<void> _createTripRecord() async {
+    try {
+      final result = await TripHistoryService.addTrip(
+        busId: widget.busCode ?? 'unknown',
+        busName: widget.busName ?? 'Unknown Bus',
+        distance: widget.distance ?? 0.0,
+        fare: widget.amount ?? 0.0,
+        source: widget.source ?? 'Unknown',
+        destination: widget.destination ?? 'Unknown',
+      );
+
+      if (result['success']) {
+        print('Trip record created successfully from GPay payment');
+      } else {
+        print(
+            'Failed to create trip record from GPay payment: ${result['message']}');
+      }
+    } catch (e) {
+      print('Error creating trip record from GPay payment: $e');
     }
   }
 
@@ -149,7 +173,8 @@ class _GpayScreenState extends State<GpayScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
+                      await _createTripRecord();
                       Navigator.of(context).pop();
                       Navigator.of(context).pop();
                     },

@@ -1,16 +1,9 @@
 const Trip = require('../models/trip');
-const jwt = require('jsonwebtoken');
 const { addGemsToUser } = require('./walletController');
 
 const addTrip = async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-      return res.status(401).json({ success: false, message: 'No token provided' });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const userId = decoded.id;
+    const userId = req.user._id;
 
     const { busId, busName, distance, fare, source, destination } = req.body;
 
@@ -49,13 +42,6 @@ const addTrip = async (req, res) => {
     });
 
   } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({ success: false, message: 'Invalid token' });
-    }
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ success: false, message: 'Token expired' });
-    }
-    
     console.error('Error adding trip:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
@@ -63,13 +49,7 @@ const addTrip = async (req, res) => {
 
 const getUserTrips = async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-      return res.status(401).json({ success: false, message: 'No token provided' });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const userId = decoded.id;
+    const userId = req.user._id;
 
     const trips = await Trip.find({ userId })
       .sort({ createdAt: -1 })
@@ -82,13 +62,6 @@ const getUserTrips = async (req, res) => {
     });
 
   } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({ success: false, message: 'Invalid token' });
-    }
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ success: false, message: 'Token expired' });
-    }
-    
     console.error('Error fetching user trips:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }

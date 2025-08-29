@@ -4,6 +4,10 @@ import '../services/auth_service.dart';
 import '../services/rideshare_service.dart';
 import '../services/riderequest_service.dart';
 import '../services/friends_service.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:latlong2/latlong.dart';
 
 class RideshareScreen extends StatefulWidget {
   final String? source;
@@ -38,6 +42,11 @@ class _RideshareScreenState extends State<RideshareScreen>
   List<Map<String, dynamic>> friends = [];
   bool isLoadingFriends = false;
   Map<String, String> userRequestStatus = {};
+  double? estimatedDistanceKm;
+  double? estimatedFare;
+  bool isFareCalculating = false;
+  Timer? _fareDebounce;
+  final Map<String, Map<String, double>> _fareCache = {};
 
   @override
   void initState() {
@@ -62,6 +71,24 @@ class _RideshareScreenState extends State<RideshareScreen>
     if (widget.destination != null) {
       destinationController.text = widget.destination!;
     }
+
+    // Trigger fare calculation if both source and destination are pre-filled
+    if (widget.source != null && widget.destination != null) {
+      print(
+          'Pre-filled values detected: source="${widget.source}", destination="${widget.destination}"');
+      print(
+          'Source length: ${widget.source!.length}, Destination length: ${widget.destination!.length}');
+
+      // Use a small delay to ensure the controllers are properly set
+      Future.delayed(Duration(milliseconds: 100), () {
+        if (mounted) {
+          print('Triggering automatic fare calculation...');
+          print(
+              'Controllers set - Source: "${sourceController.text}", Destination: "${destinationController.text}"');
+          _forceFareCalculation();
+        }
+      });
+    }
   }
 
   @override
@@ -79,6 +106,7 @@ class _RideshareScreenState extends State<RideshareScreen>
     destinationController.dispose();
     searchSourceController.dispose();
     searchDestinationController.dispose();
+    _fareDebounce?.cancel();
     super.dispose();
   }
 
@@ -122,6 +150,517 @@ class _RideshareScreenState extends State<RideshareScreen>
     } catch (e) {
       print('Error loading user request status: $e');
     }
+  }
+
+  Future<Map<String, double>?> _geocode(String query) async {
+    try {
+      print('Geocoding query: "$query"');
+
+      // Try multiple geocoding strategies
+      final result = await _tryGeocodingStrategies(query);
+      if (result != null) {
+        return result;
+      }
+
+      // If all strategies fail, try with simplified address
+      final simplifiedQuery = _simplifyAddress(query);
+      if (simplifiedQuery != query) {
+        print('Trying simplified address: "$simplifiedQuery"');
+        final simplifiedResult = await _tryGeocodingStrategies(simplifiedQuery);
+        if (simplifiedResult != null) {
+          return simplifiedResult;
+        }
+      }
+
+      // Last resort: try with just the first meaningful part
+      final fallbackQuery = _getFallbackAddress(query);
+      if (fallbackQuery != query && fallbackQuery != simplifiedQuery) {
+        print('Trying fallback address: "$fallbackQuery"');
+        final fallbackResult = await _tryGeocodingStrategies(fallbackQuery);
+        if (fallbackResult != null) {
+          return fallbackResult;
+        }
+      }
+
+      print('All geocoding strategies failed for: "$query"');
+      return null;
+    } catch (e) {
+      print('Geocoding error for "$query": $e');
+      return null;
+    }
+  }
+
+  Future<Map<String, double>?> _tryGeocodingStrategies(String query) async {
+    // Strategy 1: Try with Bangladesh country code
+    final result1 = await _geocodeWithParams(query, {'countrycodes': 'bd'});
+    if (result1 != null) return result1;
+
+    // Strategy 2: Try without country restriction
+    final result2 = await _geocodeWithParams(query, {});
+    if (result2 != null) return result2;
+
+    // Strategy 3: Try with Dhaka context
+    final result3 = await _geocodeWithParams('$query, Dhaka, Bangladesh', {});
+    if (result3 != null) return result3;
+
+    // Strategy 4: Try with just the main part of the address
+    final mainPart = _extractMainAddressPart(query);
+    if (mainPart != query) {
+      final result4 = await _geocodeWithParams('$mainPart, Dhaka', {});
+      if (result4 != null) return result4;
+    }
+
+    return null;
+  }
+
+  Future<Map<String, double>?> _geocodeWithParams(
+      String query, Map<String, String> params) async {
+    try {
+      final defaultParams = {
+        'q': query,
+        'format': 'json',
+        'limit': '1',
+        'addressdetails': '1',
+      };
+
+      final allParams = {...defaultParams, ...params};
+
+      final uri =
+          Uri.parse('https://nominatim.openstreetmap.org/search').replace(
+        queryParameters: allParams,
+      );
+
+      print('Geocoding URL: $uri');
+
+      final res = await http.get(
+        uri,
+        headers: {'User-Agent': 'CSE471-Project/1.0 (rideshare)'},
+      ).timeout(
+        Duration(seconds: 10),
+        onTimeout: () {
+          print('Geocoding request timed out for: "$query"');
+          throw TimeoutException(
+              'Geocoding request timed out', Duration(seconds: 10));
+        },
+      );
+
+      if (res.statusCode != 200) {
+        print('Geocoding failed with status: ${res.statusCode}');
+        return null;
+      }
+
+      final list = json.decode(res.body) as List<dynamic>;
+      if (list.isEmpty) {
+        return null;
+      }
+
+      final item = list.first as Map<String, dynamic>;
+      final lat = double.tryParse(item['lat']?.toString() ?? '');
+      final lon = double.tryParse(item['lon']?.toString() ?? '');
+
+      if (lat == null || lon == null) {
+        return null;
+      }
+
+      // Validate coordinates are reasonable for Bangladesh
+      if (lat < 20.0 || lat > 27.0 || lon < 88.0 || lon > 93.0) {
+        print(
+            'Warning: Coordinates outside Bangladesh bounds: lat=$lat, lon=$lon');
+        // Don't return null here, just log the warning
+      }
+
+      print('Geocoding successful for "$query": lat=$lat, lon=$lon');
+      return {'lat': lat, 'lon': lon};
+    } catch (e) {
+      print('Geocoding error for "$query": $e');
+      return null;
+    }
+  }
+
+  String _simplifyAddress(String address) {
+    // Remove common suffixes and prefixes that might cause geocoding issues
+    String simplified = address.trim();
+
+    // Remove postal codes
+    simplified = simplified.replaceAll(RegExp(r'\b\d{4}\b'), '');
+
+    // Remove common building/floor indicators
+    simplified = simplified.replaceAll(
+        RegExp(
+            r'\b(floor|fl|room|rm|apt|apartment|suite|ste|building|bldg|tower|plaza|mall|center|centre|complex)\b',
+            caseSensitive: false),
+        '');
+
+    // Remove specific numbers that might be house numbers
+    simplified = simplified.replaceAll(RegExp(r'^\d+\s+'), '');
+
+    // Clean up extra spaces and commas
+    simplified = simplified.replaceAll(RegExp(r'\s+'), ' ').trim();
+    simplified = simplified.replaceAll(RegExp(r',+'), ',').trim();
+
+    // Remove trailing commas
+    if (simplified.endsWith(',')) {
+      simplified = simplified.substring(0, simplified.length - 1).trim();
+    }
+
+    print('Simplified address: "$address" -> "$simplified"');
+    return simplified;
+  }
+
+  String _extractMainAddressPart(String address) {
+    // Extract the main part of the address (usually the first meaningful part)
+    final parts = address
+        .split(',')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList();
+
+    if (parts.isEmpty) return address;
+
+    // Take the first 1-2 meaningful parts
+    if (parts.length >= 2) {
+      return '${parts[0]}, ${parts[1]}';
+    } else {
+      return parts[0];
+    }
+  }
+
+  String _getFallbackAddress(String address) {
+    // Create a very simple fallback address
+    final parts = address
+        .split(',')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList();
+
+    if (parts.isEmpty) return 'Dhaka';
+
+    // Take just the first meaningful part and add Dhaka
+    final firstPart = parts.first;
+    if (firstPart.toLowerCase().contains('dhaka') ||
+        firstPart.toLowerCase().contains('dhaaka')) {
+      return firstPart;
+    }
+
+    return '$firstPart, Dhaka';
+  }
+
+  Future<Map<String, double>?> _computeFare(
+      String source, String destination) async {
+    final key =
+        '${source.trim().toLowerCase()}|${destination.trim().toLowerCase()}';
+    if (_fareCache.containsKey(key)) return _fareCache[key];
+
+    print('Computing fare for: $source -> $destination');
+
+    // Try geocoding first
+    final src = await _geocode(source);
+    final dst = await _geocode(destination);
+    
+    if (src != null && dst != null) {
+      // Calculate distance using Haversine formula
+      final km = const Distance().as(
+        LengthUnit.Kilometer,
+        LatLng(src['lat']!, src['lon']!),
+        LatLng(dst['lat']!, dst['lon']!),
+      );
+
+      // Round to 1 decimal place for better display
+      final roundedKm = (km * 10).round() / 10;
+      final fare = roundedKm * 30.0;
+
+      print('Geocoding successful: ${roundedKm}km (৳${fare.toStringAsFixed(0)})');
+
+      final result = <String, double>{
+        'distanceKm': roundedKm, 
+        'fare': fare
+      };
+      _fareCache[key] = result;
+      return result;
+    }
+
+    // If geocoding fails, always use fallback estimation
+    print('Geocoding failed, using fallback estimation');
+    final estimatedDistance = _estimateDistanceFromAddresses(source, destination);
+    
+    if (estimatedDistance != null) {
+      final fare = estimatedDistance * 30.0;
+      print('Fallback estimation: ${estimatedDistance}km (৳${fare.toStringAsFixed(0)})');
+
+      final result = <String, double>{
+        'distanceKm': estimatedDistance,
+        'fare': fare
+      };
+      _fareCache[key] = result;
+      return result;
+    }
+
+    // Last resort: provide a reasonable default
+    print('All methods failed, using default estimation');
+    final defaultDistance = 10.0; // Default 10km
+    final defaultFare = defaultDistance * 30.0;
+    
+    final result = <String, double>{
+      'distanceKm': defaultDistance,
+      'fare': defaultFare
+    };
+    _fareCache[key] = result;
+    return result;
+  }
+
+  double? _estimateDistanceFromAddresses(String source, String destination) {
+    try {
+      // Common Dhaka area distances (in km) - expanded list
+      final commonAreas = {
+        'gulshan': {'lat': 23.7937, 'lon': 90.4066},
+        'banani': {'lat': 23.7941, 'lon': 90.4065},
+        'dhanmondi': {'lat': 23.7467, 'lon': 90.3708},
+        'mohammadpur': {'lat': 23.7645, 'lon': 90.3650},
+        'uttara': {'lat': 23.8700, 'lon': 90.3800},
+        'mirpur': {'lat': 23.8067, 'lon': 90.3683},
+        'lalbagh': {'lat': 23.7167, 'lon': 90.3833},
+        'old dhaka': {'lat': 23.7167, 'lon': 90.3833},
+        'rampura': {'lat': 23.7500, 'lon': 90.4000},
+        'badda': {'lat': 23.7833, 'lon': 90.4167},
+        'tejgaon': {'lat': 23.7667, 'lon': 90.4000},
+        'farmgate': {'lat': 23.7500, 'lon': 90.3833},
+        'shahbagh': {'lat': 23.7333, 'lon': 90.3833},
+        'tajgaon': {'lat': 23.7667, 'lon': 90.4000},
+        'kakrail': {'lat': 23.7333, 'lon': 90.4000},
+        'paltan': {'lat': 23.7333, 'lon': 90.4000},
+        'motijheel': {'lat': 23.7167, 'lon': 90.4000},
+        'sadarghat': {'lat': 23.7167, 'lon': 90.4000},
+        'chittagong road': {'lat': 23.7167, 'lon': 90.4000},
+        'airport': {'lat': 23.8700, 'lon': 90.3800},
+        'tongi': {'lat': 23.9000, 'lon': 90.4000},
+        'gazipur': {'lat': 23.9500, 'lon': 90.4000},
+        'narayanganj': {'lat': 23.6167, 'lon': 90.5000},
+        'savar': {'lat': 23.8500, 'lon': 90.2500},
+        'bashundhara': {'lat': 23.8000, 'lon': 90.4200},
+        'baridhara': {'lat': 23.8000, 'lon': 90.4200},
+        'niketon': {'lat': 23.7900, 'lon': 90.4100},
+        'mohakhali': {'lat': 23.7800, 'lon': 90.4000},
+        'khilgaon': {'lat': 23.7500, 'lon': 90.4200},
+        'demra': {'lat': 23.7500, 'lon': 90.4500},
+        'jatrabari': {'lat': 23.7167, 'lon': 90.4500},
+        'sutrapur': {'lat': 23.7167, 'lon': 90.4000},
+        'wari': {'lat': 23.7167, 'lon': 90.4000},
+        'azimpur': {'lat': 23.7167, 'lon': 90.4000},
+        'new market': {'lat': 23.7333, 'lon': 90.3833},
+        'kalabagan': {'lat': 23.7500, 'lon': 90.3700},
+        'adabor': {'lat': 23.7500, 'lon': 90.3700},
+        'agargaon': {'lat': 23.7667, 'lon': 90.3833},
+        'sher-e-bangla nagar': {'lat': 23.7667, 'lon': 90.3833},
+      };
+
+      // Find source and destination in common areas
+      String? sourceArea;
+      String? destArea;
+
+      for (final entry in commonAreas.entries) {
+        if (source.toLowerCase().contains(entry.key)) {
+          sourceArea = entry.key;
+        }
+        if (destination.toLowerCase().contains(entry.key)) {
+          destArea = entry.key;
+        }
+      }
+
+      if (sourceArea != null && destArea != null && sourceArea != destArea) {
+        final srcCoords = commonAreas[sourceArea]!;
+        final dstCoords = commonAreas[destArea]!;
+
+        final km = const Distance().as(
+          LengthUnit.Kilometer,
+          LatLng(srcCoords['lat']!, srcCoords['lon']!),
+          LatLng(dstCoords['lat']!, dstCoords['lon']!),
+        );
+
+        final roundedKm = (km * 10).round() / 10;
+        print(
+            'Estimated distance using common areas: $sourceArea -> $destArea = ${roundedKm}km');
+        return roundedKm;
+      }
+
+      // If no common areas found, provide a reasonable estimate based on text length and content
+      final sourceWords = source
+          .toLowerCase()
+          .split(RegExp(r'[,\s]+'))
+          .where((word) => word.length > 2)
+          .length;
+      final destWords = destination
+          .toLowerCase()
+          .split(RegExp(r'[,\s]+'))
+          .where((word) => word.length > 2)
+          .length;
+
+      // Simple heuristic: more specific addresses usually mean longer distances
+      final totalWords = sourceWords + destWords;
+      if (totalWords >= 8) {
+        return 15.0; // Long detailed addresses
+      } else if (totalWords >= 5) {
+        return 10.0; // Medium detailed addresses
+      } else {
+        return 8.0; // Short addresses
+      }
+    } catch (e) {
+      print('Error estimating distance: $e');
+      return null;
+    }
+  }
+
+  Map<String, dynamic>? _computeIndividualFare(
+      Map<String, dynamic> post, Map<String, double>? fareData) {
+    if (fareData == null) return null;
+
+    final requests = rideRequests[post['_id']] ?? [];
+    final acceptedRequests =
+        requests.where((req) => req['status'] == 'accepted').toList();
+
+    // Always include the ride creator as a participant
+    final totalParticipants = acceptedRequests.length + 1; // +1 for the creator
+    final totalFare = fareData['fare'] ?? 0;
+
+    // If no participants yet, individual fare equals total fare
+    final individualFare =
+        totalParticipants > 1 ? totalFare / totalParticipants : totalFare;
+
+    print('Individual fare calculation for post ${post['_id']}:');
+    print('  - Accepted requests: ${acceptedRequests.length}');
+    print('  - Total participants: $totalParticipants');
+    print('  - Total fare: ৳${totalFare.toStringAsFixed(0)}');
+    print('  - Individual fare: ৳${individualFare.toStringAsFixed(0)}');
+
+    return {
+      'originalFare': totalFare,
+      'individualFare': individualFare,
+      'participantCount': totalParticipants,
+    };
+  }
+
+  void _scheduleFareCalculation() {
+    final src = sourceController.text.trim();
+    final dst = destinationController.text.trim();
+    _fareDebounce?.cancel();
+    if (src.isEmpty || dst.isEmpty) {
+      setState(() {
+        estimatedDistanceKm = null;
+        estimatedFare = null;
+        isFareCalculating = false;
+      });
+      return;
+    }
+    setState(() {
+      isFareCalculating = true;
+    });
+    _fareDebounce = Timer(const Duration(milliseconds: 600), () async {
+      final result = await _computeFare(src, dst);
+      if (!mounted) return;
+      setState(() {
+        estimatedDistanceKm = result?['distanceKm'];
+        estimatedFare = result?['fare'];
+        isFareCalculating = false;
+      });
+    });
+  }
+
+  void _forceFareCalculation() async {
+    final src = sourceController.text.trim();
+    final dst = destinationController.text.trim();
+
+    print(
+        'Force fare calculation called with: source="$src", destination="$dst"');
+
+    if (src.isEmpty || dst.isEmpty) {
+      print('Empty source or destination, clearing fare state');
+      setState(() {
+        estimatedDistanceKm = null;
+        estimatedFare = null;
+        isFareCalculating = false;
+      });
+      return;
+    }
+
+    setState(() {
+      isFareCalculating = true;
+    });
+
+    try {
+      print('Starting fare calculation...');
+      final result = await _computeFare(src, dst).timeout(
+        Duration(seconds: 30),
+        onTimeout: () {
+          print('Fare calculation timed out after 30 seconds');
+          return null;
+        },
+      );
+
+      if (!mounted) return;
+
+      if (result != null) {
+        print(
+            'Fare calculation successful: ${result['distanceKm']}km, ৳${result['fare']}');
+        setState(() {
+          estimatedDistanceKm = result['distanceKm'];
+          estimatedFare = result['fare'];
+          isFareCalculating = false;
+        });
+      } else {
+        print('Fare calculation returned null result');
+        _showFareCalculationError();
+      }
+    } catch (e) {
+      print('Error calculating fare: $e');
+      if (!mounted) return;
+      _showFareCalculationError();
+    }
+  }
+
+  bool _shouldShowCalculateFareButton() {
+    final src = sourceController.text.trim();
+    final dst = destinationController.text.trim();
+    return src.isNotEmpty &&
+        dst.isNotEmpty &&
+        estimatedFare == null &&
+        !isFareCalculating;
+  }
+
+  void _showFareCalculationError() {
+    if (!mounted) return;
+
+    setState(() {
+      isFareCalculating = false;
+      estimatedDistanceKm = null;
+      estimatedFare = null;
+    });
+
+    // Show a snackbar with error message and helpful tips
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Fare calculation failed',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            SizedBox(height: 4),
+            Text(
+              'Try using simpler addresses (e.g., "Gulshan" instead of full address)',
+              style: TextStyle(fontSize: 12),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.orange,
+        duration: Duration(seconds: 6),
+        action: SnackBarAction(
+          label: 'Retry',
+          textColor: Colors.white,
+          onPressed: _forceFareCalculation,
+        ),
+      ),
+    );
   }
 
   void _applySearch() {
@@ -776,6 +1315,75 @@ class _RideshareScreenState extends State<RideshareScreen>
               fontStyle: FontStyle.italic,
             ),
           ),
+          SizedBox(height: 8),
+          FutureBuilder<Map<String, double>?>(
+            future:
+                _computeFare(post['source'] ?? '', post['destination'] ?? ''),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return Row(
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    SizedBox(width: 8),
+                    Text('Calculating fare...'),
+                  ],
+                );
+              }
+              final data = snapshot.data;
+              if (data == null) return SizedBox.shrink();
+              final km = data['distanceKm'] ?? 0;
+              final fare = data['fare'] ?? 0;
+
+              // Calculate individual fare
+              final individualFareData = _computeIndividualFare(post, data);
+              final originalFare = individualFareData?['originalFare'] ?? fare;
+              final individualFare =
+                  individualFareData?['individualFare'] ?? fare;
+              final participantCount =
+                  individualFareData?['participantCount'] ?? 1;
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.payments, color: Colors.blue, size: 16),
+                      SizedBox(width: 6),
+                      Text(
+                        '${km.toStringAsFixed(1)} km · ৳${originalFare.toStringAsFixed(0)}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.blue[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (participantCount > 1) ...[
+                    SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.people, color: Colors.green, size: 14),
+                        SizedBox(width: 6),
+                        Text(
+                          'Individual: ৳${individualFare.toStringAsFixed(0)} (${participantCount.toInt()} participants)',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.green[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              );
+            },
+          ),
         ],
       ),
     );
@@ -786,6 +1394,13 @@ class _RideshareScreenState extends State<RideshareScreen>
         destinationController.text.trim().isEmpty) {
       setState(() {
         errorMessage = 'Please enter both source and destination';
+      });
+      return;
+    }
+
+    if (estimatedFare == null || estimatedDistanceKm == null) {
+      setState(() {
+        errorMessage = 'Please wait for fare estimation to complete';
       });
       return;
     }
@@ -814,6 +1429,10 @@ class _RideshareScreenState extends State<RideshareScreen>
       if (response['success']) {
         sourceController.clear();
         destinationController.clear();
+        setState(() {
+          estimatedDistanceKm = null;
+          estimatedFare = null;
+        });
         await _loadRidePosts();
         await _loadUserRides();
         await _loadRideRequests();
@@ -1094,6 +1713,75 @@ class _RideshareScreenState extends State<RideshareScreen>
                               fontStyle: FontStyle.italic,
                             ),
                           ),
+                          SizedBox(height: 8),
+                          FutureBuilder<Map<String, double>?>(
+                            future: _computeFare(post['source'] ?? '',
+                                post['destination'] ?? ''),
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting) {
+                                return SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                );
+                              }
+                              final data = snapshot.data;
+                              if (data == null) return SizedBox.shrink();
+                              final km = data['distanceKm'] ?? 0;
+                              final fare = data['fare'] ?? 0;
+
+                              // Calculate individual fare
+                              final individualFareData =
+                                  _computeIndividualFare(post, data);
+                              final originalFare =
+                                  individualFareData?['originalFare'] ?? fare;
+                              final individualFare =
+                                  individualFareData?['individualFare'] ?? fare;
+                              final participantCount =
+                                  individualFareData?['participantCount'] ?? 1;
+
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.payments,
+                                          color: Colors.blue, size: 16),
+                                      SizedBox(width: 6),
+                                      Text(
+                                        '${km.toStringAsFixed(1)} km · ৳${originalFare.toStringAsFixed(0)}',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.blue[700],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (participantCount > 1) ...[
+                                    SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        Icon(Icons.people,
+                                            color: Colors.green, size: 14),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'Individual: ৳${individualFare.toStringAsFixed(0)} (${participantCount.toInt()} participants)',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.green[700],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ],
+                              );
+                            },
+                          ),
                           if (isOwnPost) ...[
                             _buildAcceptedParticipantsSection(post),
                             _buildRideRequestsSection(post),
@@ -1294,34 +1982,6 @@ class _RideshareScreenState extends State<RideshareScreen>
                   ],
                 ),
               ),
-            SizedBox(height: 12),
-            Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.yellow[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.yellow[300]!),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Debug Info',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.yellow[700],
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  Text('Total ride posts: ${ridePosts.length}'),
-                  Text('Filtered ride posts: ${filteredRidePosts.length}'),
-                  Text('Current user: ${currentUser?.id ?? 'null'}'),
-                  Text('Is searching: $isSearching'),
-                ],
-              ),
-            ),
-            SizedBox(height: 12),
             if (isLoading)
               Center(child: CircularProgressIndicator())
             else if (filteredRidePosts.isEmpty)
@@ -1520,6 +2180,75 @@ class _RideshareScreenState extends State<RideshareScreen>
                               _buildRequestButton(post),
                             ],
                           ),
+                          SizedBox(height: 8),
+                          FutureBuilder<Map<String, double>?>(
+                            future: _computeFare(post['source'] ?? '',
+                                post['destination'] ?? ''),
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting) {
+                                return SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                );
+                              }
+                              final data = snapshot.data;
+                              if (data == null) return SizedBox.shrink();
+                              final km = data['distanceKm'] ?? 0;
+                              final fare = data['fare'] ?? 0;
+
+                              // Calculate individual fare
+                              final individualFareData =
+                                  _computeIndividualFare(post, data);
+                              final originalFare =
+                                  individualFareData?['originalFare'] ?? fare;
+                              final individualFare =
+                                  individualFareData?['individualFare'] ?? fare;
+                              final participantCount =
+                                  individualFareData?['participantCount'] ?? 1;
+
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.payments,
+                                          color: Colors.blue, size: 16),
+                                      SizedBox(width: 6),
+                                      Text(
+                                        '${km.toStringAsFixed(1)} km · ৳${originalFare.toStringAsFixed(0)}',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.blue[700],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (participantCount > 1) ...[
+                                    SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        Icon(Icons.people,
+                                            color: Colors.green, size: 14),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'Individual: ৳${individualFare.toStringAsFixed(0)} (${participantCount.toInt()} participants)',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.green[700],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ],
+                              );
+                            },
+                          ),
                           _buildAcceptedParticipantsSection(post),
                           _buildRideRequestsSection(post),
                         ],
@@ -1669,6 +2398,16 @@ class _RideshareScreenState extends State<RideshareScreen>
                   ] else ...[
                     TextField(
                       controller: sourceController,
+                      onChanged: (_) {
+                        _scheduleFareCalculation();
+                        // Clear previous fare when source changes
+                        if (estimatedFare != null) {
+                          setState(() {
+                            estimatedDistanceKm = null;
+                            estimatedFare = null;
+                          });
+                        }
+                      },
                       decoration: InputDecoration(
                         hintText: 'Enter source location',
                         border: OutlineInputBorder(
@@ -1683,6 +2422,16 @@ class _RideshareScreenState extends State<RideshareScreen>
                     SizedBox(height: 12),
                     TextField(
                       controller: destinationController,
+                      onChanged: (_) {
+                        _scheduleFareCalculation();
+                        // Clear previous fare when destination changes
+                        if (estimatedFare != null) {
+                          setState(() {
+                            estimatedDistanceKm = null;
+                            estimatedFare = null;
+                          });
+                        }
+                      },
                       decoration: InputDecoration(
                         hintText: 'Enter destination location',
                         border: OutlineInputBorder(
@@ -1691,6 +2440,162 @@ class _RideshareScreenState extends State<RideshareScreen>
                         filled: true,
                         fillColor: Colors.grey[50],
                         prefixIcon: Icon(Icons.flag, color: Colors.red),
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue[200]!),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.local_taxi, color: Colors.blue),
+                          SizedBox(width: 8),
+                          if (isFareCalculating)
+                            Row(
+                              children: [
+                                SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                                SizedBox(width: 8),
+                                Text('Estimating fare...'),
+                              ],
+                            )
+                          else if (estimatedFare != null &&
+                              estimatedDistanceKm != null)
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${estimatedDistanceKm!.toStringAsFixed(1)} km · ৳${estimatedFare!.toStringAsFixed(0)} (৳30/km)',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.blue[800],
+                                    ),
+                                  ),
+                                  if (_fareCache[
+                                          '${sourceController.text.trim().toLowerCase()}|${destinationController.text.trim().toLowerCase()}'] !=
+                                      null)
+                                    Text(
+                                      'Fare calculated automatically',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.green[600],
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            )
+                          else
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    sourceController.text.trim().isNotEmpty &&
+                                            destinationController.text
+                                                .trim()
+                                                .isNotEmpty
+                                        ? 'Click Calculate Fare to see pricing'
+                                        : 'Enter source and destination to see fare (৳30/km)',
+                                    style: TextStyle(color: Colors.blue[800]),
+                                  ),
+                                  if (_shouldShowCalculateFareButton()) ...[
+                                    SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: ElevatedButton(
+                                            onPressed: _forceFareCalculation,
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.blue[600],
+                                              padding: EdgeInsets.symmetric(
+                                                  horizontal: 16, vertical: 8),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                              ),
+                                            ),
+                                            child: Text(
+                                              'Calculate Fare',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        SizedBox(width: 8),
+                                        ElevatedButton(
+                                          onPressed: () {
+                                            print('=== DEBUG INFO ===');
+                                            print(
+                                                'Source: "${sourceController.text}"');
+                                            print(
+                                                'Destination: "${destinationController.text}"');
+                                            print(
+                                                'Source length: ${sourceController.text.length}');
+                                            print(
+                                                'Destination length: ${destinationController.text.length}');
+                                            print(
+                                                'Estimated fare: $estimatedFare');
+                                            print(
+                                                'Estimated distance: $estimatedDistanceKm');
+                                            print(
+                                                'Is calculating: $isFareCalculating');
+                                            print('==================');
+                                          },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.grey[600],
+                                            padding: EdgeInsets.symmetric(
+                                                horizontal: 8, vertical: 8),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                            ),
+                                          ),
+                                          child: Text(
+                                            'Debug',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                  if (sourceController.text.trim().isNotEmpty &&
+                                      destinationController.text
+                                          .trim()
+                                          .isNotEmpty &&
+                                      estimatedFare == null &&
+                                      !isFareCalculating) ...[
+                                    SizedBox(height: 8),
+                                    Text(
+                                      'If geocoding fails, try using more specific addresses',
+                                      style: TextStyle(
+                                        color: Colors.orange[700],
+                                        fontSize: 11,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                     SizedBox(height: 12),

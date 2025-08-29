@@ -19,7 +19,9 @@ const app = express();
 // }
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: '*'  // For production, replace '*' with your frontend URL if hosted, e.g., 'https://myapp.com'
+}));
 app.use(express.json());
 
 // Connect to MongoDB
@@ -66,7 +68,12 @@ app.get('/test', (req, res) => {
   res.json({ message: 'Server is working!' });
 });
 
-const PORT = 3000;
+// Public root route for testing in emulator Chrome
+app.get('/', (req, res) => {
+  res.send('🚍 Bus API is running on port 3000!');
+});
+
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1340,31 +1341,56 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  Timer? _sourceDebounceTimer;
+  Timer? _destinationDebounceTimer;
+
   void _onSourceChanged() {
-    if (_sourceController.text.isEmpty) {
-      setState(() {
-        _showSourceSuggestions = false;
-      });
-      return;
-    }
-    _getSearchSuggestions(_sourceController.text, true);
+    _sourceDebounceTimer?.cancel();
+    _sourceDebounceTimer = Timer(Duration(milliseconds: 300), () {
+      if (_sourceController.text.isEmpty) {
+        setState(() {
+          _showSourceSuggestions = false;
+          _sourceSuggestions = [];
+        });
+        return;
+      }
+      _getSearchSuggestions(_sourceController.text, true);
+    });
   }
 
   void _onDestinationChanged() {
-    if (_destinationController.text.isEmpty) {
-      setState(() {
-        _showDestinationSuggestions = false;
-      });
-      return;
-    }
-    _getSearchSuggestions(_destinationController.text, false);
+    _destinationDebounceTimer?.cancel();
+    _destinationDebounceTimer = Timer(Duration(milliseconds: 300), () {
+      if (_destinationController.text.isEmpty) {
+        setState(() {
+          _showDestinationSuggestions = false;
+          _destinationSuggestions = [];
+        });
+        return;
+      }
+      _getSearchSuggestions(_destinationController.text, false);
+    });
   }
 
   Future<void> _getSearchSuggestions(String query, bool isSource) async {
-    if (query.trim().isEmpty) return;
+    if (query.trim().isEmpty) {
+      setState(() {
+        if (isSource) {
+          _showSourceSuggestions = false;
+          _sourceSuggestions = [];
+        } else {
+          _showDestinationSuggestions = false;
+          _destinationSuggestions = [];
+        }
+      });
+      return;
+    }
 
-    final suggestions = <Map<String, dynamic>>{};
+    print('Getting search suggestions for: "$query" (${isSource ? 'source' : 'destination'})');
 
+    final List<Map<String, dynamic>> suggestions = [];
+
+    // First, add bus stop suggestions
     for (final stop in _allBusStops) {
       if (stop.name.toLowerCase().contains(query.toLowerCase())) {
         suggestions.add({
@@ -1373,33 +1399,63 @@ class _MapScreenState extends State<MapScreen> {
           'latitude': stop.latitude,
           'longitude': stop.longitude,
           'isExactMatch': stop.name.toLowerCase() == query.toLowerCase(),
+          'fullAddress': stop.name,
         });
       }
     }
 
+    print('Found ${suggestions.length} bus stop suggestions');
+
+    // Then, add geocoding suggestions
     try {
       final geocodingSuggestions = await _getGeocodingSuggestions(query);
+      print('Found ${geocodingSuggestions.length} geocoding suggestions');
       suggestions.addAll(geocodingSuggestions);
     } catch (e) {
       print('Error getting geocoding suggestions: $e');
     }
 
-    final sortedSuggestions = suggestions.toList();
+    // Remove duplicates based on coordinates
+    final uniqueSuggestions = <String, Map<String, dynamic>>{};
+    for (final suggestion in suggestions) {
+      final key = '${suggestion['latitude']}_${suggestion['longitude']}';
+      if (!uniqueSuggestions.containsKey(key)) {
+        uniqueSuggestions[key] = suggestion;
+      }
+    }
+
+    final sortedSuggestions = uniqueSuggestions.values.toList();
     sortedSuggestions.sort((a, b) {
+      // Exact matches first
       if (a['isExactMatch'] == true && b['isExactMatch'] != true) return -1;
       if (a['isExactMatch'] != true && b['isExactMatch'] == true) return 1;
+      
+      // Bus stops first
       if (a['type'] == 'bus_stop' && b['type'] != 'bus_stop') return -1;
       if (a['type'] != 'bus_stop' && b['type'] == 'bus_stop') return 1;
+      
+      // Then by relevance score for locations
+      if (a['type'] == 'location' && b['type'] == 'location') {
+        final aScore = a['relevanceScore'] ?? 0.0;
+        final bScore = b['relevanceScore'] ?? 0.0;
+        if (aScore != bScore) return bScore.compareTo(aScore);
+      }
+      
+      // Finally by name
       return a['name'].toLowerCase().compareTo(b['name'].toLowerCase());
     });
+
+    print('Final suggestions: ${sortedSuggestions.length}');
 
     setState(() {
       if (isSource) {
         _sourceSuggestions = sortedSuggestions.take(8).toList();
         _showSourceSuggestions = _sourceSuggestions.isNotEmpty;
+        print('Source suggestions: ${_sourceSuggestions.length}, show: $_showSourceSuggestions');
       } else {
         _destinationSuggestions = sortedSuggestions.take(8).toList();
         _showDestinationSuggestions = _destinationSuggestions.isNotEmpty;
+        print('Destination suggestions: ${_destinationSuggestions.length}, show: $_showDestinationSuggestions');
       }
     });
   }
@@ -1408,45 +1464,256 @@ class _MapScreenState extends State<MapScreen> {
       String query) async {
     if (query.trim().isEmpty) return [];
 
-    try {
-      final encodedQuery = Uri.encodeComponent('$query, Dhaka, Bangladesh');
-      final url =
-          'https://nominatim.openstreetmap.org/search?q=$encodedQuery&format=json&limit=5&addressdetails=1&countrycodes=bd';
+    print('Starting geocoding for: "$query"');
 
-      final response = await http.get(Uri.parse(url));
+    try {
+      List<Map<String, dynamic>> suggestions = [];
+      
+      // Strategy 1: Try with Dhaka context and Bangladesh country code
+      print('Strategy 1: With Dhaka context and BD country code');
+      suggestions = await _tryGeocodingStrategy(query, 'bd', '$query, Dhaka, Bangladesh');
+      if (suggestions.isNotEmpty) {
+        print('Strategy 1 successful: ${suggestions.length} results');
+        return suggestions;
+      }
+      
+      // Strategy 2: Try with just Dhaka context
+      print('Strategy 2: With Dhaka context only');
+      suggestions = await _tryGeocodingStrategy(query, null, '$query, Dhaka');
+      if (suggestions.isNotEmpty) {
+        print('Strategy 2 successful: ${suggestions.length} results');
+        return suggestions;
+      }
+      
+      // Strategy 3: Try without any context
+      print('Strategy 3: Raw query');
+      suggestions = await _tryGeocodingStrategy(query, null, query);
+      if (suggestions.isNotEmpty) {
+        print('Strategy 3 successful: ${suggestions.length} results');
+        return suggestions;
+      }
+      
+      // Strategy 4: Try with just the main part of the query
+      final mainPart = _extractMainAddressPart(query);
+      if (mainPart != query) {
+        print('Strategy 4: Main part "$mainPart" with Dhaka context');
+        suggestions = await _tryGeocodingStrategy(mainPart, null, '$mainPart, Dhaka');
+        if (suggestions.isNotEmpty) {
+          print('Strategy 4 successful: ${suggestions.length} results');
+          return suggestions;
+        }
+      }
+      
+      // Strategy 5: Try with simplified query
+      final simplifiedQuery = _simplifyAddress(query);
+      if (simplifiedQuery != query) {
+        print('Strategy 5: Simplified "$simplifiedQuery" with Dhaka context');
+        suggestions = await _tryGeocodingStrategy(simplifiedQuery, null, '$simplifiedQuery, Dhaka');
+        if (suggestions.isNotEmpty) {
+          print('Strategy 5 successful: ${suggestions.length} results');
+          return suggestions;
+        }
+      }
+      
+      print('All geocoding strategies failed for: "$query"');
+      return [];
+    } catch (e) {
+      print('Geocoding error for "$query": $e');
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _tryGeocodingStrategy(
+      String query, String? countryCode, String searchQuery) async {
+    try {
+      final Map<String, String> params = {
+        'q': searchQuery,
+        'format': 'json',
+        'limit': '10',
+        'addressdetails': '1',
+        'viewbox': '90.2,23.9,90.6,23.6', // Dhaka area bounding box
+        'bounded': '1',
+      };
+      
+      if (countryCode != null) {
+        params['countrycodes'] = countryCode;
+      }
+      
+      final queryString = params.entries
+          .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
+          .join('&');
+      
+      final url = 'https://nominatim.openstreetmap.org/search?$queryString';
+      
+      print('Trying geocoding strategy: $url');
+      
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'User-Agent': 'CSE471-Project/1.0 (map)',
+          'Accept': 'application/json',
+        },
+      ).timeout(Duration(seconds: 8));
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
+        print('Geocoding response: ${data.length} results');
+        
         final List<Map<String, dynamic>> suggestions = [];
 
         for (final item in data) {
           if (item is Map<String, dynamic>) {
             final lat = item['lat']?.toString();
             final lon = item['lon']?.toString();
+            final displayName = item['display_name']?.toString() ?? '';
+            final importance = item['importance']?.toDouble() ?? 0.0;
+            final type = item['type']?.toString() ?? '';
 
-            if (lat != null && lon != null) {
-              final displayName = item['display_name']?.toString() ?? '';
-              final name = displayName.split(',').take(2).join(', ');
+            if (lat != null && lon != null && displayName.isNotEmpty) {
+              // Filter out very low importance results
+              if (importance < 0.1) continue;
+              
+              // Create a more meaningful name
+              final name = _createDisplayName(displayName);
+              
+              // Calculate relevance score
+              final relevanceScore = _calculateRelevanceScore(query, displayName, importance);
 
               suggestions.add({
                 'name': name,
                 'type': 'location',
                 'latitude': double.tryParse(lat) ?? 0.0,
                 'longitude': double.tryParse(lon) ?? 0.0,
-                'isExactMatch': false,
+                'isExactMatch': query.toLowerCase() == name.toLowerCase(),
                 'fullAddress': displayName,
+                'relevanceScore': relevanceScore,
+                'importance': importance,
+                'placeType': type,
               });
             }
           }
         }
 
-        return suggestions;
+        print('Processed ${suggestions.length} valid suggestions');
+
+        // Sort by relevance and importance
+        suggestions.sort((a, b) {
+          final aScore = a['relevanceScore'] ?? 0.0;
+          final bScore = b['relevanceScore'] ?? 0.0;
+          if (aScore != bScore) return bScore.compareTo(aScore);
+          
+          final aImportance = a['importance'] ?? 0.0;
+          final bImportance = b['importance'] ?? 0.0;
+          return bImportance.compareTo(aImportance);
+        });
+
+        return suggestions.take(8).toList();
+      } else {
+        print('Geocoding failed with status: ${response.statusCode}');
       }
     } catch (e) {
-      print('Geocoding error: $e');
+      print('Geocoding strategy error for "$query": $e');
     }
-
+    
     return [];
+  }
+
+  String _createDisplayName(String fullAddress) {
+    final parts = fullAddress.split(',').map((part) => part.trim()).where((part) => part.isNotEmpty).toList();
+    
+    if (parts.length <= 2) return fullAddress;
+    
+    // Take first 2-3 meaningful parts, excluding common geographic terms
+    final meaningfulParts = parts.take(4).where((part) => 
+      part.length > 2 && 
+      !part.toLowerCase().contains('bangladesh') &&
+      !part.toLowerCase().contains('dhaka') &&
+      !part.toLowerCase().contains('division') &&
+      !part.toLowerCase().contains('district') &&
+      !part.toLowerCase().contains('thana') &&
+      !part.toLowerCase().contains('postal') &&
+      !part.toLowerCase().contains('zip')
+    ).toList();
+    
+    if (meaningfulParts.isNotEmpty) {
+      final result = meaningfulParts.join(', ');
+      return result.length > 60 ? result.substring(0, 60) + '...' : result;
+    }
+    
+    return parts.take(2).join(', ');
+  }
+
+  double _calculateRelevanceScore(String query, String displayName, double importance) {
+    final queryLower = query.toLowerCase();
+    final displayLower = displayName.toLowerCase();
+    
+    double score = 0.0;
+    
+    // Exact match gets highest score
+    if (displayLower.contains(queryLower)) score += 15.0;
+    
+    // Word-by-word matching
+    final queryWords = queryLower.split(RegExp(r'[,\s]+')).where((word) => word.length > 2).toList();
+    for (final word in queryWords) {
+      if (displayLower.contains(word)) score += 3.0;
+    }
+    
+    // Importance factor (higher importance = higher score)
+    score += importance * 0.2;
+    
+    // Prefer shorter, more specific names
+    if (displayName.length < 40) score += 2.0;
+    else if (displayName.length < 60) score += 1.0;
+    
+    // Bonus for Dhaka-specific locations
+    if (displayLower.contains('dhaka') || displayLower.contains('gulshan') || 
+        displayLower.contains('banani') || displayLower.contains('dhanmondi') ||
+        displayLower.contains('uttara') || displayLower.contains('mirpur')) {
+      score += 5.0;
+    }
+    
+    // Bonus for common place types
+    if (displayLower.contains('market') || displayLower.contains('mall') ||
+        displayLower.contains('hospital') || displayLower.contains('university') ||
+        displayLower.contains('station') || displayLower.contains('airport')) {
+      score += 3.0;
+    }
+    
+    return score;
+  }
+
+  String _extractMainAddressPart(String address) {
+    final parts = address.split(',').map((part) => part.trim()).where((part) => part.isNotEmpty).toList();
+    
+    if (parts.isEmpty) return address;
+    
+    // Take the first meaningful part
+    if (parts.length >= 2) {
+      return '${parts[0]}, ${parts[1]}';
+    } else {
+      return parts[0];
+    }
+  }
+
+  String _simplifyAddress(String address) {
+    String simplified = address.trim();
+    
+    // Remove common suffixes and prefixes
+    simplified = simplified.replaceAll(RegExp(r'\b(floor|fl|room|rm|apt|apartment|suite|ste|building|bldg|tower|plaza|mall|center|centre|complex)\b', caseSensitive: false), '');
+    
+    // Remove specific numbers that might be house numbers
+    simplified = simplified.replaceAll(RegExp(r'^\d+\s+'), '');
+    
+    // Clean up extra spaces and commas
+    simplified = simplified.replaceAll(RegExp(r'\s+'), ' ').trim();
+    simplified = simplified.replaceAll(RegExp(r',+'), ',').trim();
+    
+    // Remove trailing commas
+    if (simplified.endsWith(',')) {
+      simplified = simplified.substring(0, simplified.length - 1).trim();
+    }
+    
+    return simplified;
   }
 
   void _selectSourceSuggestion(Map<String, dynamic> suggestion) {
@@ -1500,6 +1767,8 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   void dispose() {
+    _sourceDebounceTimer?.cancel();
+    _destinationDebounceTimer?.cancel();
     _mapController?.dispose();
     _sourceController.dispose();
     _destinationController.dispose();
@@ -2952,12 +3221,12 @@ class _MapScreenState extends State<MapScreen> {
                       margin: const EdgeInsets.only(top: 4),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+                            color: Colors.black.withValues(alpha: 0.15),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
                           ),
                         ],
                       ),
@@ -2966,41 +3235,100 @@ class _MapScreenState extends State<MapScreen> {
                         itemCount: _sourceSuggestions.length,
                         itemBuilder: (context, index) {
                           final suggestion = _sourceSuggestions[index];
+                          final isBusStop = suggestion['type'] == 'bus_stop';
+                          final isExactMatch = suggestion['isExactMatch'] == true;
+                          
                           return GestureDetector(
                             onTap: () => _selectSourceSuggestion(suggestion),
-                            child: ListTile(
-                              dense: true,
-                              leading: Icon(
-                                suggestion['type'] == 'bus_stop'
-                                    ? Icons.directions_bus
-                                    : Icons.location_on,
-                                color: suggestion['type'] == 'bus_stop'
-                                    ? Colors.blue
-                                    : Colors.green,
-                                size: 20,
-                              ),
-                              title: Text(
-                                suggestion['name'],
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: suggestion['isExactMatch'] == true
-                                      ? FontWeight.w600
-                                      : FontWeight.normal,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: isExactMatch ? Colors.blue[50] : Colors.white,
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: Colors.grey[200]!,
+                                    width: 0.5,
+                                  ),
                                 ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
                               ),
-                              subtitle: suggestion['type'] == 'location'
-                                  ? Text(
-                                      suggestion['fullAddress'] ?? '',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey[600],
+                              child: ListTile(
+                                dense: true,
+                                leading: Container(
+                                  padding: EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: isBusStop ? Colors.blue[100] : Colors.green[100],
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    isBusStop ? Icons.directions_bus : Icons.location_on,
+                                    color: isBusStop ? Colors.blue[700] : Colors.green[700],
+                                    size: 18,
+                                  ),
+                                ),
+                                title: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        suggestion['name'],
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: isExactMatch ? FontWeight.w600 : FontWeight.w500,
+                                          color: isExactMatch ? Colors.blue[800] : Colors.grey[800],
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    )
-                                  : null,
+                                    ),
+                                    if (isExactMatch)
+                                      Container(
+                                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue[100],
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          'Exact',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.blue[700],
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (suggestion['type'] == 'location' && suggestion['fullAddress'] != null)
+                                      Text(
+                                        suggestion['fullAddress']!,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.grey[600],
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    if (suggestion['type'] == 'location' && suggestion['placeType'] != null)
+                                      Container(
+                                        margin: EdgeInsets.only(top: 2),
+                                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey[100],
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          suggestion['placeType']!,
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.grey[700],
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
                             ),
                           );
                         },
@@ -3096,12 +3424,12 @@ class _MapScreenState extends State<MapScreen> {
                       margin: const EdgeInsets.only(top: 4),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+                            color: Colors.black.withValues(alpha: 0.15),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
                           ),
                         ],
                       ),
@@ -3110,42 +3438,100 @@ class _MapScreenState extends State<MapScreen> {
                         itemCount: _destinationSuggestions.length,
                         itemBuilder: (context, index) {
                           final suggestion = _destinationSuggestions[index];
+                          final isBusStop = suggestion['type'] == 'bus_stop';
+                          final isExactMatch = suggestion['isExactMatch'] == true;
+                          
                           return GestureDetector(
-                            onTap: () =>
-                                _selectDestinationSuggestion(suggestion),
-                            child: ListTile(
-                              dense: true,
-                              leading: Icon(
-                                suggestion['type'] == 'bus_stop'
-                                    ? Icons.directions_bus
-                                    : Icons.location_on,
-                                color: suggestion['type'] == 'bus_stop'
-                                    ? Colors.blue
-                                    : Colors.green,
-                                size: 20,
-                              ),
-                              title: Text(
-                                suggestion['name'],
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: suggestion['isExactMatch'] == true
-                                      ? FontWeight.w600
-                                      : FontWeight.normal,
+                            onTap: () => _selectDestinationSuggestion(suggestion),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: isExactMatch ? Colors.blue[50] : Colors.white,
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: Colors.grey[200]!,
+                                    width: 0.5,
+                                  ),
                                 ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
                               ),
-                              subtitle: suggestion['type'] == 'location'
-                                  ? Text(
-                                      suggestion['fullAddress'] ?? '',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey[600],
+                              child: ListTile(
+                                dense: true,
+                                leading: Container(
+                                  padding: EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: isBusStop ? Colors.blue[100] : Colors.green[100],
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    isBusStop ? Icons.directions_bus : Icons.location_on,
+                                    color: isBusStop ? Colors.blue[700] : Colors.green[700],
+                                    size: 18,
+                                  ),
+                                ),
+                                title: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        suggestion['name'],
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: isExactMatch ? FontWeight.w600 : FontWeight.w500,
+                                          color: isExactMatch ? Colors.blue[800] : Colors.grey[800],
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    )
-                                  : null,
+                                    ),
+                                    if (isExactMatch)
+                                      Container(
+                                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue[100],
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          'Exact',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.blue[700],
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (suggestion['type'] == 'location' && suggestion['fullAddress'] != null)
+                                      Text(
+                                        suggestion['fullAddress']!,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.grey[600],
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    if (suggestion['type'] == 'location' && suggestion['placeType'] != null)
+                                      Container(
+                                        margin: EdgeInsets.only(top: 2),
+                                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey[100],
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          suggestion['placeType']!,
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.grey[700],
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
                             ),
                           );
                         },

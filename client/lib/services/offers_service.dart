@@ -3,8 +3,11 @@ import 'package:http/http.dart' as http;
 import '../models/offers.dart';
 
 class OffersService {
-  static const String baseUrl = 'http://10.0.2.2:3000/offers';
+  //static const String baseUrl = 'https://smartdhaka0.onrender.com/offers';
+  //static const String authUrl = 'https://smartdhaka0.onrender.com/auth';
+  static const String baseUrl = 'http://10.0.2.2:3000'; // For Android emulator
   static const String authUrl = 'http://10.0.2.2:3000/auth';
+
 
   static Future<Offers> getUserOffers(String token) async {
     try {

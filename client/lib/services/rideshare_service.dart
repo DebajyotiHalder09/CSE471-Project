@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class RideshareService {
-  static const String baseUrl = 'http://10.0.2.2:3000';
+  //static const String baseUrl = 'https://smartdhaka0.onrender.com';
+  static const String baseUrl = 'http://10.0.2.2:3000'; // For Android emulator
 
   static Future<Map<String, dynamic>> createRidePost({
     required String source,

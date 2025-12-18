@@ -13,6 +13,8 @@ class GpayRegLogScreen extends StatefulWidget {
   final String? destination;
   final double? distance;
   final double? fare;
+  final bool isBoarding;
+  final String? busId;
 
   const GpayRegLogScreen({
     super.key,
@@ -23,6 +25,8 @@ class GpayRegLogScreen extends StatefulWidget {
     this.destination,
     this.distance,
     this.fare,
+    this.isBoarding = false,
+    this.busId,
   });
 
   @override
@@ -100,6 +104,8 @@ class _GpayRegLogScreenState extends State<GpayRegLogScreen> {
                 destination: widget.destination,
                 distance: widget.distance,
                 fare: widget.fare,
+                isBoarding: widget.isBoarding,
+                busId: widget.busId,
               ),
             ),
           );

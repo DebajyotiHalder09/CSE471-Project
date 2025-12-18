@@ -6,7 +6,10 @@ import 'driverDash.dart';
 import '../services/auth_service.dart';
 import '../services/wallet_service.dart';
 import '../models/user.dart';
+import '../models/individual_bus.dart';
+import '../models/bus.dart' as bus_model;
 import 'wallet_popup.dart';
+import 'pay.dart';
 
 class NavScreen extends StatefulWidget {
   static const routeName = '/nav';
@@ -29,6 +32,15 @@ class NavScreenState extends State<NavScreen> {
 
   String? _rideSource;
   String? _rideDestination;
+
+  // Boarding state
+  bool _isBoarding = false;
+  IndividualBus? _boardedBus;
+  bus_model.Bus? _boardedBusInfo;
+  String? _boardingSource;
+  String? _boardingDestination;
+  double? _boardingDistance;
+  double? _boardingFare;
 
   @override
   void initState() {
@@ -112,6 +124,37 @@ class NavScreenState extends State<NavScreen> {
     );
   }
 
+  void _handleEndTrip() {
+    if (_boardedBus != null && _boardedBusInfo != null && 
+        _boardingSource != null && _boardingDestination != null &&
+        _boardingDistance != null && _boardingFare != null) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => PayScreen(
+            bus: _boardedBus!,
+            busInfo: _boardedBusInfo!,
+            source: _boardingSource!,
+            destination: _boardingDestination!,
+            distance: _boardingDistance!,
+            fare: _boardingFare!,
+            isBoarding: true, // Indicate that user is already boarded
+          ),
+        ),
+      ).then((_) {
+        // Clear boarding state after payment is complete
+        setState(() {
+          _isBoarding = false;
+          _boardedBus = null;
+          _boardedBusInfo = null;
+          _boardingSource = null;
+          _boardingDestination = null;
+          _boardingDistance = null;
+          _boardingFare = null;
+        });
+      });
+    }
+  }
+
   @override
   void dispose() {
     // Clear wallet update callback
@@ -128,6 +171,17 @@ class NavScreenState extends State<NavScreen> {
               _rideSource = source;
               _rideDestination = destination;
               _currentIndex = 2;
+            });
+          },
+          onBoarded: (individualBus, busInfo, source, destination, distance, fare) {
+            setState(() {
+              _isBoarding = true;
+              _boardedBus = individualBus;
+              _boardedBusInfo = busInfo;
+              _boardingSource = source;
+              _boardingDestination = destination;
+              _boardingDistance = distance;
+              _boardingFare = fare;
             });
           },
         );
@@ -149,6 +203,17 @@ class NavScreenState extends State<NavScreen> {
               _rideSource = source;
               _rideDestination = destination;
               _currentIndex = 2;
+            });
+          },
+          onBoarded: (individualBus, busInfo, source, destination, distance, fare) {
+            setState(() {
+              _isBoarding = true;
+              _boardedBus = individualBus;
+              _boardedBusInfo = busInfo;
+              _boardingSource = source;
+              _boardingDestination = destination;
+              _boardingDistance = distance;
+              _boardingFare = fare;
             });
           },
         );
@@ -359,55 +424,93 @@ class NavScreenState extends State<NavScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 10,
-              offset: Offset(0, -2),
+      bottomNavigationBar: _isBoarding
+          ? Container(
+              decoration: BoxDecoration(
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 10,
+                    offset: Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: Container(
+                color: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: SafeArea(
+                  child: ElevatedButton.icon(
+                    onPressed: _handleEndTrip,
+                    icon: Icon(Icons.stop_circle, size: 24),
+                    label: Text(
+                      'End Trip',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red[600],
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 2,
+                    ),
+                  ),
+                ),
+              ),
+            )
+          : Container(
+              decoration: BoxDecoration(
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 10,
+                    offset: Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: BottomNavigationBar(
+                currentIndex: _currentIndex,
+                onTap: (index) {
+                  setState(() {
+                    _currentIndex = index;
+                  });
+                },
+                type: BottomNavigationBarType.fixed,
+                backgroundColor: Colors.white,
+                selectedItemColor: Colors.blue,
+                unselectedItemColor: Colors.grey[600],
+                selectedLabelStyle: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+                unselectedLabelStyle: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 12,
+                ),
+                items: [
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.map, size: 24),
+                    label: 'Map',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.directions_bus, size: 24),
+                    label: 'Bus',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(
+                        _currentUser?.role == 'driver'
+                            ? Icons.directions_car
+                            : Icons.local_taxi,
+                        size: 24),
+                    label: _currentUser?.role == 'driver' ? 'Driver' : 'Rideshare',
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-          },
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          selectedItemColor: Colors.blue,
-          unselectedItemColor: Colors.grey[600],
-          selectedLabelStyle: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 12,
-          ),
-          unselectedLabelStyle: TextStyle(
-            fontWeight: FontWeight.w500,
-            fontSize: 12,
-          ),
-          items: [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.map, size: 24),
-              label: 'Map',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.directions_bus, size: 24),
-              label: 'Bus',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(
-                  _currentUser?.role == 'driver'
-                      ? Icons.directions_car
-                      : Icons.local_taxi,
-                  size: 24),
-              label: _currentUser?.role == 'driver' ? 'Driver' : 'Rideshare',
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

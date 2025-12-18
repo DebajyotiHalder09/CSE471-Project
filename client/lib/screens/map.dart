@@ -12,12 +12,12 @@ import '../services/trip_history_service.dart';
 import '../models/bus.dart';
 import '../models/individual_bus.dart';
 import '../utils/distance_calculator.dart' as distance_calc;
-import 'pay.dart';
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key, this.onOpenRideshare});
+  const MapScreen({super.key, this.onOpenRideshare, this.onBoarded});
 
   final Function(String, String)? onOpenRideshare;
+  final Function(IndividualBus, Bus, String, String, double, double)? onBoarded;
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -835,20 +835,79 @@ class _MapScreenState extends State<MapScreen> {
         return;
       }
 
-      Navigator.of(context).pop();
-
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => PayScreen(
-            bus: individualBus,
-            busInfo: busInfo,
-            source: source,
-            destination: destination,
-            distance: distance,
-            fare: fare,
+      // Call board API to mark user as boarding
+      final token = await AuthService.getToken();
+      if (token == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Authentication required'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
           ),
-        ),
+        );
+        return;
+      }
+
+      final uri = Uri.parse('${AuthService.baseUrl}/individual-bus/board');
+      final response = await http.post(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode({
+          'busId': busId,
+        }),
       );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success']) {
+          // Mark as boarded
+          setState(() {
+            _boardedBuses[busId] = true;
+          });
+
+          Navigator.of(context).pop();
+
+          // Notify parent (NavScreen) that user has boarded
+          if (widget.onBoarded != null) {
+            widget.onBoarded!(
+              individualBus,
+              busInfo,
+              source,
+              destination,
+              distance,
+              fare,
+            );
+          }
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Successfully boarded! Click "End Trip" when you reach your destination.'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(data['message'] ?? 'Failed to board bus'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to board bus'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

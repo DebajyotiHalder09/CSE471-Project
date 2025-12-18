@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../services/gpay_service.dart';
 import '../services/receipt_service.dart';
 import '../services/trip_history_service.dart';
+import '../services/auth_service.dart';
 import 'recharge.dart';
 
 class GpayScreen extends StatefulWidget {
@@ -14,6 +17,8 @@ class GpayScreen extends StatefulWidget {
   final String? destination;
   final double? distance;
   final double? fare;
+  final bool isBoarding;
+  final String? busId;
 
   const GpayScreen({
     super.key,
@@ -26,6 +31,8 @@ class GpayScreen extends StatefulWidget {
     this.destination,
     this.distance,
     this.fare,
+    this.isBoarding = false,
+    this.busId,
   });
 
   @override
@@ -49,7 +56,11 @@ class _GpayScreenState extends State<GpayScreen> {
       final result = await GpayService.deductFromGpay(widget.amount!);
 
       if (result['success']) {
-        await _createTripRecord();
+        if (widget.isBoarding && widget.busId != null) {
+          await _endTripAndCreateRecord();
+        } else {
+          await _createTripRecord();
+        }
         _showPaymentSuccessDialog();
       } else {
         _showError(result['message'] ?? 'Payment failed');
@@ -60,6 +71,33 @@ class _GpayScreenState extends State<GpayScreen> {
       setState(() {
         _isProcessingPayment = false;
       });
+    }
+  }
+
+  Future<void> _endTripAndCreateRecord() async {
+    try {
+      final token = await AuthService.getToken();
+      if (token == null || widget.busId == null) return;
+
+      // Call end-trip API first
+      final uri = Uri.parse('${AuthService.baseUrl}/individual-bus/end-trip');
+      final response = await http.post(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode({
+          'busId': widget.busId,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        // Then create trip record
+        await _createTripRecord();
+      }
+    } catch (e) {
+      print('Error ending trip: $e');
     }
   }
 

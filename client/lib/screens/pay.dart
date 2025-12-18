@@ -19,6 +19,7 @@ class PayScreen extends StatefulWidget {
   final double distance;
   final double fare;
   final bool isQRBooking;
+  final bool isBoarding;
 
   const PayScreen({
     super.key,
@@ -29,6 +30,7 @@ class PayScreen extends StatefulWidget {
     required this.distance,
     required this.fare,
     this.isQRBooking = false,
+    this.isBoarding = false,
   });
 
   @override
@@ -193,42 +195,57 @@ class _PayScreenState extends State<PayScreen> {
     });
 
     try {
-      final token = await AuthService.getToken();
-      if (token == null) {
-        _showError('Authentication required');
-        return;
-      }
-
-      final uri = Uri.parse('${AuthService.baseUrl}/individual-bus/board');
-      final response = await http.post(
-        uri,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: json.encode({
-          'busId': widget.bus.id,
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success']) {
-          final deductionResult = await _deductFare();
-          if (deductionResult) {
-            await _loadWalletData();
-            await _applyDiscount();
-            await _createTripRecord();
-            _showSuccessDialog();
-          } else {
-            _showError(
-                'Payment processed but wallet deduction failed. Please contact support.');
-          }
+      // If user is already boarding, skip board API and go directly to payment
+      if (widget.isBoarding) {
+        final deductionResult = await _deductFare();
+        if (deductionResult) {
+          await _loadWalletData();
+          await _applyDiscount();
+          await _endTripAndCreateRecord();
+          _showSuccessDialog();
         } else {
-          _showError(data['message'] ?? 'Failed to board bus');
+          _showError(
+              'Payment processed but wallet deduction failed. Please contact support.');
         }
       } else {
-        _showError('Failed to board bus');
+        // Original flow: board first, then pay
+        final token = await AuthService.getToken();
+        if (token == null) {
+          _showError('Authentication required');
+          return;
+        }
+
+        final uri = Uri.parse('${AuthService.baseUrl}/individual-bus/board');
+        final response = await http.post(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: json.encode({
+            'busId': widget.bus.id,
+          }),
+        );
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          if (data['success']) {
+            final deductionResult = await _deductFare();
+            if (deductionResult) {
+              await _loadWalletData();
+              await _applyDiscount();
+              await _createTripRecord();
+              _showSuccessDialog();
+            } else {
+              _showError(
+                  'Payment processed but wallet deduction failed. Please contact support.');
+            }
+          } else {
+            _showError(data['message'] ?? 'Failed to board bus');
+          }
+        } else {
+          _showError('Failed to board bus');
+        }
       }
     } catch (e) {
       _showError('Error processing payment');
@@ -250,12 +267,17 @@ class _PayScreenState extends State<PayScreen> {
     });
 
     try {
-      if (widget.isQRBooking) {
+      if (widget.isQRBooking || widget.isBoarding) {
+        // For QR booking or already boarding, skip board API
         final deductionResult = await _deductFare();
         if (deductionResult) {
           await _loadWalletData();
           await _applyDiscount();
-          await _createTripRecord();
+          if (widget.isBoarding) {
+            await _endTripAndCreateRecord();
+          } else {
+            await _createTripRecord();
+          }
           _showSuccessDialog();
         } else {
           _showError(
@@ -315,7 +337,8 @@ class _PayScreenState extends State<PayScreen> {
     });
 
     try {
-      if (widget.isQRBooking) {
+      if (widget.isQRBooking || widget.isBoarding) {
+        // For QR booking or already boarding, skip board API
         await _applyDiscount();
         Navigator.pushReplacement(
           context,
@@ -328,6 +351,8 @@ class _PayScreenState extends State<PayScreen> {
               destination: widget.destination,
               distance: widget.distance,
               fare: widget.fare,
+              isBoarding: widget.isBoarding,
+              busId: widget.bus.id,
             ),
           ),
         );
@@ -452,6 +477,48 @@ class _PayScreenState extends State<PayScreen> {
       }
     } catch (e) {
       print('Error applying discount: $e');
+    }
+  }
+
+  Future<void> _endTripAndCreateRecord() async {
+    try {
+      final token = await AuthService.getToken();
+      if (token == null) return;
+
+      // Call end-trip API first
+      final uri = Uri.parse('${AuthService.baseUrl}/individual-bus/end-trip');
+      final response = await http.post(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode({
+          'busId': widget.bus.id,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        // Then create trip record
+        final result = await TripHistoryService.addTrip(
+          busId: widget.bus.id,
+          busName: widget.busInfo.busName,
+          distance: widget.distance,
+          fare: _payableAmount,
+          source: widget.source,
+          destination: widget.destination,
+        );
+
+        if (result['success']) {
+          print('Trip ended and record created successfully');
+        } else {
+          print('Failed to create trip record: ${result['message']}');
+        }
+      } else {
+        print('Failed to end trip');
+      }
+    } catch (e) {
+      print('Error ending trip and creating record: $e');
     }
   }
 

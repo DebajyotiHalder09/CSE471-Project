@@ -65,7 +65,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ? Center(
                 child: CircularProgressIndicator(),
               )
-            : Padding(
+            : SingleChildScrollView(
                 padding: EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -126,6 +126,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         );
                       }
                     }),
+                    if (_currentUser?.role != 'driver' && _currentUser?.role != 'admin')
+                      _buildProfileItem(Icons.verified_user, 'Verify', onTap: () {
+                        Navigator.pushNamed(context, '/verify');
+                      }),
                     _buildProfileItem(Icons.history, 'Trip History', onTap: () {
                       Navigator.pushNamed(context, '/trip-history');
                     }),

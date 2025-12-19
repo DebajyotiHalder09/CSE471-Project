@@ -347,19 +347,51 @@ class AuthService {
   static Future<List<User>> getFriendsList() async {
     try {
       final headers = await getAuthHeaders();
+      print('DEBUG: Getting friends list from: $baseUrl/auth/friends');
       final response = await http.get(
         Uri.parse('$baseUrl/auth/friends'),
         headers: headers,
       );
 
+      print('DEBUG: Friends API response status: ${response.statusCode}');
+      print('DEBUG: Friends API response body: ${response.body}');
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final friendsList = List<Map<String, dynamic>>.from(data['friends']);
-        return friendsList.map((friend) => User.fromJson(friend)).toList();
+        print('DEBUG: Parsed friends data: $data');
+        print('DEBUG: Friends data type: ${data.runtimeType}');
+        print('DEBUG: Friends data keys: ${data is Map ? data.keys.toList() : 'not a map'}');
+        
+        // Handle different response structures
+        List<Map<String, dynamic>> friendsListData = [];
+        if (data is Map && data.containsKey('friends')) {
+          friendsListData = List<Map<String, dynamic>>.from(data['friends']);
+        } else if (data is List) {
+          friendsListData = List<Map<String, dynamic>>.from(data);
+        } else if (data is Map && data.containsKey('data')) {
+          friendsListData = List<Map<String, dynamic>>.from(data['data']);
+        }
+        
+        print('DEBUG: Extracted ${friendsListData.length} friends from response');
+        
+        final friends = friendsListData.map((friend) {
+          print('DEBUG: Processing friend: $friend');
+          // Ensure the friend has an id field (might be _id)
+          if (friend.containsKey('_id') && !friend.containsKey('id')) {
+            friend['id'] = friend['_id'].toString();
+          }
+          return User.fromJson(friend);
+        }).toList();
+        
+        print('DEBUG: Created ${friends.length} User objects');
+        return friends;
       } else {
-        throw Exception('Failed to get friends list');
+        print('ERROR: Friends API returned status ${response.statusCode}');
+        throw Exception('Failed to get friends list: ${response.statusCode}');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('ERROR: Exception in getFriendsList: $e');
+      print('ERROR: Stack trace: $stackTrace');
       throw Exception('Failed to get friends list: $e');
     }
   }

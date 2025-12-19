@@ -9,6 +9,7 @@ import '../services/receipt_service.dart';
 import '../services/offers_service.dart';
 import '../services/trip_history_service.dart';
 import '../models/offers.dart';
+import '../models/user.dart';
 import 'gpayreglog.dart';
 
 class PayScreen extends StatefulWidget {
@@ -49,12 +50,27 @@ class _PayScreenState extends State<PayScreen> {
   double _discountAmount = 0.0;
   double _payableAmount = 0.0;
   bool _isLoadingOffers = true;
+  User? _currentUser;
+  double _studentDiscount = 0.0;
+  bool _tripRecordCreated = false; // Flag to prevent duplicate trip records
 
   @override
   void initState() {
     super.initState();
+    _loadUserData();
     _loadWalletData();
     _loadUserOffers();
+  }
+
+  Future<void> _loadUserData() async {
+    final user = await AuthService.getUser();
+    setState(() {
+      _currentUser = user;
+      // Apply 50% student discount if user is a student
+      if (user?.isStudent == true) {
+        _studentDiscount = widget.fare * 0.5;
+      }
+    });
   }
 
   @override
@@ -110,7 +126,9 @@ class _PayScreenState extends State<PayScreen> {
       setState(() {
         _userOffers = offers;
         _discountAmount = offers.discount ?? 0.0;
-        _payableAmount = widget.fare - _discountAmount;
+        // Calculate payable amount: original fare - student discount (50%) - offer discount
+        double discountedFare = widget.fare - _studentDiscount;
+        _payableAmount = discountedFare - _discountAmount;
         if (_payableAmount < 0) _payableAmount = 0.0;
         _isLoadingOffers = false;
       });
@@ -118,7 +136,9 @@ class _PayScreenState extends State<PayScreen> {
       setState(() {
         _userOffers = null;
         _discountAmount = 0.0;
-        _payableAmount = widget.fare;
+        // Calculate payable amount with student discount if applicable
+        double discountedFare = widget.fare - _studentDiscount;
+        _payableAmount = discountedFare;
         _isLoadingOffers = false;
       });
     }
@@ -209,42 +229,42 @@ class _PayScreenState extends State<PayScreen> {
         }
       } else {
         // Original flow: board first, then pay
-        final token = await AuthService.getToken();
-        if (token == null) {
-          _showError('Authentication required');
-          return;
-        }
+      final token = await AuthService.getToken();
+      if (token == null) {
+        _showError('Authentication required');
+        return;
+      }
 
-        final uri = Uri.parse('${AuthService.baseUrl}/individual-bus/board');
-        final response = await http.post(
-          uri,
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-          body: json.encode({
-            'busId': widget.bus.id,
-          }),
-        );
+      final uri = Uri.parse('${AuthService.baseUrl}/individual-bus/board');
+      final response = await http.post(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode({
+          'busId': widget.bus.id,
+        }),
+      );
 
-        if (response.statusCode == 200) {
-          final data = json.decode(response.body);
-          if (data['success']) {
-            final deductionResult = await _deductFare();
-            if (deductionResult) {
-              await _loadWalletData();
-              await _applyDiscount();
-              await _createTripRecord();
-              _showSuccessDialog();
-            } else {
-              _showError(
-                  'Payment processed but wallet deduction failed. Please contact support.');
-            }
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success']) {
+          final deductionResult = await _deductFare();
+          if (deductionResult) {
+            await _loadWalletData();
+            await _applyDiscount();
+            await _createTripRecord();
+            _showSuccessDialog();
           } else {
-            _showError(data['message'] ?? 'Failed to board bus');
+            _showError(
+                'Payment processed but wallet deduction failed. Please contact support.');
           }
         } else {
-          _showError('Failed to board bus');
+          _showError(data['message'] ?? 'Failed to board bus');
+        }
+      } else {
+        _showError('Failed to board bus');
         }
       }
     } catch (e) {
@@ -276,7 +296,7 @@ class _PayScreenState extends State<PayScreen> {
           if (widget.isBoarding) {
             await _endTripAndCreateRecord();
           } else {
-            await _createTripRecord();
+          await _createTripRecord();
           }
           _showSuccessDialog();
         } else {
@@ -324,6 +344,59 @@ class _PayScreenState extends State<PayScreen> {
       }
     } catch (e) {
       _showError('Error processing payment');
+    } finally {
+      setState(() {
+        _isProcessingPayment = false;
+      });
+    }
+  }
+
+  Future<void> _processPaymentWithCash() async {
+    setState(() {
+      _isProcessingPayment = true;
+    });
+
+    try {
+      if (widget.isBoarding) {
+        // For boarding scenario, call end-trip API first
+        await _endTripAndCreateRecord();
+        _showSuccessDialog();
+      } else {
+        // For regular booking, just create trip record
+        final token = await AuthService.getToken();
+        if (token == null) {
+          _showError('Authentication required');
+          return;
+        }
+
+        // Call board API first
+        final uri = Uri.parse('${AuthService.baseUrl}/individual-bus/board');
+        final response = await http.post(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: json.encode({
+            'busId': widget.bus.id,
+          }),
+        );
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          if (data['success']) {
+            // Create trip record without deducting from wallet
+            await _createTripRecord();
+            _showSuccessDialog();
+          } else {
+            _showError(data['message'] ?? 'Failed to board bus');
+          }
+        } else {
+          _showError('Failed to board bus');
+        }
+      }
+    } catch (e) {
+      _showError('Error processing cash payment: $e');
     } finally {
       setState(() {
         _isProcessingPayment = false;
@@ -481,9 +554,26 @@ class _PayScreenState extends State<PayScreen> {
   }
 
   Future<void> _endTripAndCreateRecord() async {
+    // Prevent duplicate trip record creation - check and set flag atomically
+    if (_tripRecordCreated) {
+      print('Trip record already created, skipping duplicate');
+      return;
+    }
+    
+    // Set flag immediately to prevent race conditions
+    setState(() {
+      _tripRecordCreated = true;
+    });
+
     try {
       final token = await AuthService.getToken();
-      if (token == null) return;
+      if (token == null) {
+        // Reset flag if token is missing
+        setState(() {
+          _tripRecordCreated = false;
+        });
+        return;
+      }
 
       // Call end-trip API first
       final uri = Uri.parse('${AuthService.baseUrl}/individual-bus/end-trip');
@@ -513,16 +603,39 @@ class _PayScreenState extends State<PayScreen> {
           print('Trip ended and record created successfully');
         } else {
           print('Failed to create trip record: ${result['message']}');
+          // Reset flag if creation failed so user can retry
+          setState(() {
+            _tripRecordCreated = false;
+          });
         }
       } else {
         print('Failed to end trip');
+        // Reset flag if end-trip failed so user can retry
+        setState(() {
+          _tripRecordCreated = false;
+        });
       }
     } catch (e) {
       print('Error ending trip and creating record: $e');
+      // Reset flag on error so user can retry
+      setState(() {
+        _tripRecordCreated = false;
+      });
     }
   }
 
   Future<void> _createTripRecord() async {
+    // Prevent duplicate trip record creation - check and set flag atomically
+    if (_tripRecordCreated) {
+      print('Trip record already created, skipping duplicate');
+      return;
+    }
+    
+    // Set flag immediately to prevent race conditions
+    setState(() {
+      _tripRecordCreated = true;
+    });
+
     try {
       final result = await TripHistoryService.addTrip(
         busId: widget.bus.id,
@@ -537,9 +650,17 @@ class _PayScreenState extends State<PayScreen> {
         print('Trip record created successfully');
       } else {
         print('Failed to create trip record: ${result['message']}');
+        // Reset flag if creation failed so user can retry
+        setState(() {
+          _tripRecordCreated = false;
+        });
       }
     } catch (e) {
       print('Error creating trip record: $e');
+      // Reset flag on error so user can retry
+      setState(() {
+        _tripRecordCreated = false;
+      });
     }
   }
 
@@ -840,13 +961,37 @@ class _PayScreenState extends State<PayScreen> {
                           ),
                         ],
                       ),
+                      if (_studentDiscount > 0) ...[
+                        SizedBox(height: 4),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Student Discount (50%):',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.blue[700],
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              '-৳${_studentDiscount.toStringAsFixed(0)}',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.blue[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       if (_discountAmount > 0) ...[
                         SizedBox(height: 4),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              'Discount:',
+                              'Offer Discount:',
                               style: TextStyle(
                                 fontSize: 14,
                                 color: Colors.orange[700],
@@ -950,8 +1095,9 @@ class _PayScreenState extends State<PayScreen> {
                 ),
                 SizedBox(height: 20),
                 ElevatedButton(
-                  onPressed: () async {
-                    await _createTripRecord();
+                  onPressed: () {
+                    // Trip record already created by _endTripAndCreateRecord() or _createTripRecord()
+                    // No need to create it again here
                     Navigator.of(context).pop();
                     Navigator.of(context).pop();
                   },
@@ -1169,7 +1315,66 @@ class _PayScreenState extends State<PayScreen> {
                 ],
               ),
             ),
-          ] else if (_discountAmount > 0) ...[
+          ] else if (_studentDiscount > 0 || _discountAmount > 0) ...[
+            if (_studentDiscount > 0) ...[
+              SizedBox(height: 16),
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.school,
+                      color: Colors.blue[600],
+                      size: 24,
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Student Discount (50%)',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.blue[700],
+                            ),
+                          ),
+                          Text(
+                            '৳${_studentDiscount.toStringAsFixed(0)} off',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.blue[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'STUDENT',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.blue[700],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (_discountAmount > 0) ...[
             SizedBox(height: 16),
             Container(
               padding: EdgeInsets.all(16),
@@ -1226,6 +1431,7 @@ class _PayScreenState extends State<PayScreen> {
                 ],
               ),
             ),
+            ],
             SizedBox(height: 16),
             Container(
               padding: EdgeInsets.all(16),
@@ -1543,6 +1749,31 @@ class _PayScreenState extends State<PayScreen> {
             ),
           ),
         ],
+        // Pay Cash button - always visible regardless of balance
+        SizedBox(height: 16),
+        Container(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _isProcessingPayment ? null : _processPaymentWithCash,
+            icon: Icon(Icons.money, size: 24),
+            label: Text(
+              'Pay Cash - ৳${_payableAmount.toStringAsFixed(0)}',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange[600],
+              foregroundColor: Colors.white,
+              padding: EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 2,
+            ),
+          ),
+        ),
         if (_isProcessingPayment) ...[
           SizedBox(height: 16),
           Row(

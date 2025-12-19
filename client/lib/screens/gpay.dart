@@ -59,7 +59,7 @@ class _GpayScreenState extends State<GpayScreen> {
         if (widget.isBoarding && widget.busId != null) {
           await _endTripAndCreateRecord();
         } else {
-          await _createTripRecord();
+        await _createTripRecord();
         }
         _showPaymentSuccessDialog();
       } else {

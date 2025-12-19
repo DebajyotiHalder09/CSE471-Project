@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
 import 'screens/dashboard_screen.dart';
@@ -14,8 +15,11 @@ import 'screens/offers.dart';
 import 'screens/qr.dart';
 import 'screens/gpayreglog.dart';
 import 'screens/recharge.dart';
+import 'screens/admin.dart';
+import 'screens/verify.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -30,8 +34,9 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
+        scaffoldBackgroundColor: Colors.white,
       ),
-      initialRoute: LoginScreen.routeName,
+      home: SplashScreen(),
       routes: {
         LoginScreen.routeName: (context) => LoginScreen(),
         SignupScreen.routeName: (context) => SignupScreen(),
@@ -48,6 +53,8 @@ class MyApp extends StatelessWidget {
         QRScreen.routeName: (context) => QRScreen(),
         GpayRegLogScreen.routeName: (context) => GpayRegLogScreen(),
         RechargeScreen.routeName: (context) => RechargeScreen(),
+        AdminScreen.routeName: (context) => AdminScreen(),
+        VerifyScreen.routeName: (context) => VerifyScreen(),
       },
       onUnknownRoute: (settings) {
         print('Unknown route: ${settings.name}');

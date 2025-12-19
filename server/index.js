@@ -22,7 +22,8 @@ const app = express();
 app.use(cors({
   origin: '*'  // For production, replace '*' with your frontend URL if hosted, e.g., 'https://myapp.com'
 }));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' })); // Increase limit for image uploads
+app.use(express.urlencoded({ extended: true, limit: '50mb' })); // For form data
 
 // Connect to MongoDB
 const mongoUrl = process.env.MONGO_URL;
@@ -62,6 +63,8 @@ app.use('/individual-bus', require('./routes/individualBus'));
 app.use('/wallet', require('./routes/wallet'));
 app.use('/offers', require('./routes/offers'));
 app.use('/gpay', require('./routes/gpay'));
+app.use('/verify', require('./routes/verify'));
+app.use('/api/stops', require('./routes/stops'));
 
 // Test route to verify server is working
 app.get('/test', (req, res) => {

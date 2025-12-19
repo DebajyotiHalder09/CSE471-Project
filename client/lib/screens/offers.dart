@@ -199,12 +199,16 @@ class _OffersScreenState extends State<OffersScreen> {
                   children: [
                     Row(
                       children: [
-                        Text(
-                          'Cashback Balance',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.grey[800],
+                        Flexible(
+                          child: Text(
+                            'Cashback Balance',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey[800],
+                            ),
+                            softWrap: true,
+                            overflow: TextOverflow.visible,
                           ),
                         ),
                         SizedBox(width: 8),
@@ -244,6 +248,8 @@ class _OffersScreenState extends State<OffersScreen> {
                         color:
                             hasCashback ? Colors.green[600] : Colors.grey[500],
                       ),
+                      softWrap: true,
+                      overflow: TextOverflow.visible,
                     ),
                   ],
                 ),
@@ -252,7 +258,7 @@ class _OffersScreenState extends State<OffersScreen> {
           ),
           SizedBox(height: 20),
           Text(
-            '৳${_userOffers?.cashback.toStringAsFixed(2) ?? '0.00'}',
+            '${_userOffers?.cashback.toStringAsFixed(2) ?? '0.00'}',
             style: TextStyle(
               fontSize: 32,
               fontWeight: FontWeight.w800,
@@ -326,12 +332,16 @@ class _OffersScreenState extends State<OffersScreen> {
                   children: [
                     Row(
                       children: [
-                        Text(
-                          'Coupon Balance',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.grey[800],
+                        Flexible(
+                          child: Text(
+                            'Coupon Balance',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey[800],
+                            ),
+                            softWrap: true,
+                            overflow: TextOverflow.visible,
                           ),
                         ),
                         SizedBox(width: 8),
@@ -369,6 +379,8 @@ class _OffersScreenState extends State<OffersScreen> {
                         fontSize: 14,
                         color: hasCoupon ? Colors.blue[600] : Colors.grey[500],
                       ),
+                      softWrap: true,
+                      overflow: TextOverflow.visible,
                     ),
                   ],
                 ),
@@ -377,7 +389,7 @@ class _OffersScreenState extends State<OffersScreen> {
           ),
           SizedBox(height: 20),
           Text(
-            '৳${_userOffers?.coupon.toStringAsFixed(2) ?? '0.00'}',
+            '${_userOffers?.coupon.toStringAsFixed(2) ?? '0.00'}',
             style: TextStyle(
               fontSize: 32,
               fontWeight: FontWeight.w800,
@@ -451,12 +463,16 @@ class _OffersScreenState extends State<OffersScreen> {
                   children: [
                     Row(
                       children: [
-                        Text(
-                          'Discount Balance',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.grey[800],
+                        Flexible(
+                          child: Text(
+                            'Discount Balance',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey[800],
+                            ),
+                            softWrap: true,
+                            overflow: TextOverflow.visible,
                           ),
                         ),
                         SizedBox(width: 8),
@@ -496,6 +512,8 @@ class _OffersScreenState extends State<OffersScreen> {
                         color:
                             hasDiscount ? Colors.orange[600] : Colors.grey[500],
                       ),
+                      softWrap: true,
+                      overflow: TextOverflow.visible,
                     ),
                   ],
                 ),
@@ -504,7 +522,7 @@ class _OffersScreenState extends State<OffersScreen> {
           ),
           SizedBox(height: 20),
           Text(
-            '৳${_userOffers?.discount.toStringAsFixed(2) ?? '0.00'}',
+            '${_userOffers?.discount.toStringAsFixed(2) ?? '0.00'}',
             style: TextStyle(
               fontSize: 32,
               fontWeight: FontWeight.w800,
@@ -562,37 +580,33 @@ class _OffersScreenState extends State<OffersScreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
-              title: Row(
-                children: [
-                  Icon(
-                    type == 'Cashback'
-                        ? Icons.monetization_on
-                        : type == 'Coupon'
-                            ? Icons.confirmation_number
-                            : Icons.discount,
-                    color: color,
-                    size: 28,
-                  ),
-                  SizedBox(width: 12),
-                  Text(
-                    'Convert $type to Wallet',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[800],
-                    ),
-                  ),
-                ],
+              title: Text(
+                'Convert',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[800],
+                ),
+                softWrap: true,
+                overflow: TextOverflow.visible,
               ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'This will convert your entire $type balance to wallet balance.',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey[700],
+                  RichText(
+                    textAlign: TextAlign.start,
+                    softWrap: true,
+                    overflow: TextOverflow.visible,
+                    text: TextSpan(
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey[700],
+                      ),
+                      children: [
+                        TextSpan(text: 'This will convert your entire\n'),
+                        TextSpan(text: '$type balance to wallet balance.'),
+                      ],
                     ),
                   ),
                   SizedBox(height: 16),
@@ -614,19 +628,23 @@ class _OffersScreenState extends State<OffersScreen> {
                               size: 24,
                             ),
                             SizedBox(width: 8),
-                            Text(
-                              'Available $type',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: color,
+                            Flexible(
+                              child: Text(
+                                'Available $type',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: color,
+                                ),
+                                softWrap: true,
+                                overflow: TextOverflow.visible,
                               ),
                             ),
                           ],
                         ),
                         SizedBox(height: 8),
                         Text(
-                          '৳${amount.toStringAsFixed(2)}',
+                          amount.toStringAsFixed(2),
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.w800,
@@ -640,6 +658,9 @@ class _OffersScreenState extends State<OffersScreen> {
                             fontSize: 14,
                             color: Colors.grey[600],
                           ),
+                          softWrap: true,
+                          overflow: TextOverflow.visible,
+                          textAlign: TextAlign.center,
                         ),
                       ],
                     ),
@@ -758,7 +779,7 @@ class _OffersScreenState extends State<OffersScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content:
-              Text('৳${amount.toStringAsFixed(2)} added to wallet balance!'),
+              Text('${amount.toStringAsFixed(2)} added to wallet balance!'),
           backgroundColor: Colors.green,
           duration: Duration(seconds: 3),
         ),
@@ -820,13 +841,18 @@ class _OffersScreenState extends State<OffersScreen> {
                   textAlign: TextAlign.center,
                 ),
                 SizedBox(height: 8),
-                Text(
-                  '৳${amount.toStringAsFixed(2)} has been added to your wallet balance.',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey[600],
-                  ),
+                RichText(
                   textAlign: TextAlign.center,
+                  text: TextSpan(
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey[600],
+                    ),
+                    children: [
+                      TextSpan(text: '${amount.toStringAsFixed(2)} has been added\n'),
+                      TextSpan(text: 'to your wallet balance.'),
+                    ],
+                  ),
                 ),
                 SizedBox(height: 20),
                 ElevatedButton(

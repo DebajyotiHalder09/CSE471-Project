@@ -184,7 +184,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           ),
                           contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                         ),
-                        items: ['User', 'Driver']
+                        items: ['User', 'Driver', 'Admin']
                             .map((role) => DropdownMenuItem(
                                   value: role,
                                   child: Text(role),

@@ -3,7 +3,6 @@ import '../models/user.dart';
 import '../services/auth_service.dart';
 import '../services/rideshare_service.dart';
 import '../services/riderequest_service.dart';
-import '../services/friends_service.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -21,7 +20,6 @@ class RideshareScreen extends StatefulWidget {
 
 class _RideshareScreenState extends State<RideshareScreen>
     with SingleTickerProviderStateMixin {
-  late TabController _tabController;
   List<Map<String, dynamic>> ridePosts = [];
   List<Map<String, dynamic>> filteredRidePosts = [];
   bool isLoading = false;
@@ -39,25 +37,37 @@ class _RideshareScreenState extends State<RideshareScreen>
   Map<String, List<Map<String, dynamic>>> rideParticipants = {};
   List<Map<String, dynamic>> userRides = [];
   bool isYourRideExpanded = false;
-  List<Map<String, dynamic>> friends = [];
-  bool isLoadingFriends = false;
   Map<String, String> userRequestStatus = {};
   double? estimatedDistanceKm;
   double? estimatedFare;
   bool isFareCalculating = false;
   Timer? _fareDebounce;
   final Map<String, Map<String, double>> _fareCache = {};
+  
+  // Tab controller and friends list
+  late TabController _tabController;
+  List<User> friendsList = [];
+  bool isLoadingFriends = false;
+  List<Map<String, dynamic>> friendRidePosts = [];
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
-      if (_tabController.index == 0) {
-        _loadRidePosts();
-        _loadUserRides();
-        if (currentUser != null) {
-          _loadUserRequestStatus();
+      print('DEBUG: Tab changed to index: ${_tabController.index}');
+      if (_tabController.index == 1) {
+        print('DEBUG: Friend tab selected - loading friends and posts');
+        // When Friend tab is selected, ensure ride posts are loaded first, then load friends
+        if (ridePosts.isEmpty) {
+          print('DEBUG: Ride posts empty, loading them first...');
+          _loadRidePosts().then((_) {
+            print('DEBUG: Ride posts loaded, now loading friends...');
+            _loadFriends();
+          });
+        } else {
+          print('DEBUG: Ride posts already loaded (${ridePosts.length} posts), loading friends...');
+          _loadFriends();
         }
       }
     });
@@ -101,12 +111,12 @@ class _RideshareScreenState extends State<RideshareScreen>
 
   @override
   void dispose() {
-    _tabController.dispose();
     sourceController.dispose();
     destinationController.dispose();
     searchSourceController.dispose();
     searchDestinationController.dispose();
     _fareDebounce?.cancel();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -121,7 +131,6 @@ class _RideshareScreenState extends State<RideshareScreen>
 
       if (user != null) {
         await _loadUserRides();
-        await _loadFriends();
         await _loadUserRequestStatus();
       }
     } catch (e) {
@@ -738,6 +747,11 @@ class _RideshareScreenState extends State<RideshareScreen>
               'Post: ${post['_id']}, userId: ${post['userId']}, source: ${post['source']}, destination: ${post['destination']}');
         }
 
+        // If friends list is already loaded, update friend posts
+        if (friendsList.isNotEmpty) {
+          _filterFriendRidePosts();
+        }
+
         await _loadRideRequests();
         if (currentUser != null) {
           await _loadUserRequestStatus();
@@ -777,6 +791,118 @@ class _RideshareScreenState extends State<RideshareScreen>
     }
   }
 
+  Future<void> _loadFriends() async {
+    if (currentUser == null) {
+      print('DEBUG: Cannot load friends - currentUser is null');
+      setState(() {
+        friendRidePosts = [];
+        isLoadingFriends = false;
+      });
+      return;
+    }
+
+    print('DEBUG: Loading friends for user: ${currentUser!.id}');
+    setState(() {
+      isLoadingFriends = true;
+    });
+
+    try {
+      print('DEBUG: Calling AuthService.getFriendsList()...');
+      final friends = await AuthService.getFriendsList();
+      print('DEBUG: getFriendsList returned ${friends.length} friends');
+      
+      if (friends.isEmpty) {
+        print('DEBUG: Friends list is empty - user has no friends');
+      } else {
+        print('DEBUG: Friends list details:');
+        for (var i = 0; i < friends.length; i++) {
+          final friend = friends[i];
+          print('DEBUG: Friend $i - ID: ${friend.id}, Name: ${friend.name}, Email: ${friend.email}');
+        }
+      }
+      
+      setState(() {
+        friendsList = friends;
+        isLoadingFriends = false;
+      });
+      
+      // Filter ride posts to only show posts from friends
+      print('DEBUG: Calling _filterFriendRidePosts()...');
+      _filterFriendRidePosts();
+    } catch (e, stackTrace) {
+      print('ERROR: Error loading friends: $e');
+      print('ERROR: Stack trace: $stackTrace');
+      setState(() {
+        isLoadingFriends = false;
+        friendRidePosts = [];
+      });
+    }
+  }
+
+  void _filterFriendRidePosts() {
+    print('DEBUG: Filtering friend ride posts...');
+    print('DEBUG: Friends list length: ${friendsList.length}');
+    print('DEBUG: Ride posts length: ${ridePosts.length}');
+    
+    if (friendsList.isEmpty) {
+      print('DEBUG: Friends list is empty');
+      setState(() {
+        friendRidePosts = [];
+      });
+      return;
+    }
+    
+    if (ridePosts.isEmpty) {
+      print('DEBUG: Ride posts list is empty');
+      setState(() {
+        friendRidePosts = [];
+      });
+      return;
+    }
+
+    // Create a set of friend IDs for quick lookup - normalize IDs
+    final friendIds = friendsList.map((friend) {
+      final id = friend.id.toString();
+      // Remove ObjectId wrapper if present
+      return id.replaceAll('ObjectId(\'', '').replaceAll('\')', '').trim();
+    }).toSet();
+    
+    print('DEBUG: Friend IDs set: $friendIds');
+    
+    // Filter ride posts to only include posts from friends
+    final filtered = ridePosts.where((post) {
+      var postUserId = post['userId']?.toString() ?? '';
+      // Normalize the post user ID
+      postUserId = postUserId.replaceAll('ObjectId(\'', '').replaceAll('\')', '').trim();
+      
+      print('DEBUG: Checking post - Post ID: ${post['_id']}, Post User ID: $postUserId, Current User ID: ${currentUser?.id}');
+      
+      // Exclude current user's own posts
+      if (currentUser != null) {
+        final currentUserId = currentUser!.id.toString();
+        final normalizedCurrentUserId = currentUserId.replaceAll('ObjectId(\'', '').replaceAll('\')', '').trim();
+        if (postUserId == normalizedCurrentUserId) {
+          print('DEBUG: Excluding own post');
+          return false;
+        }
+      }
+      
+      // Check if post is from a friend
+      final isFriend = friendIds.contains(postUserId);
+      print('DEBUG: Post from friend: $isFriend');
+      return isFriend;
+    }).toList();
+
+    setState(() {
+      friendRidePosts = filtered;
+    });
+    
+    print('DEBUG: Filtered ${friendRidePosts.length} friend ride posts from ${ridePosts.length} total posts');
+    if (friendRidePosts.isNotEmpty) {
+      print('DEBUG: First friend post - User ID: ${friendRidePosts.first['userId']}, Source: ${friendRidePosts.first['source']}');
+    }
+  }
+
   Future<void> _loadRideRequests() async {
     final allPosts = [...ridePosts, ...userRides];
 
@@ -792,38 +918,6 @@ class _RideshareScreenState extends State<RideshareScreen>
       } catch (e) {
         print('Error loading ride requests for post ${post['_id']}: $e');
       }
-    }
-  }
-
-  Future<void> _loadFriends() async {
-    if (currentUser == null) return;
-
-    print('Loading friends for user: ${currentUser!.id}');
-    setState(() {
-      isLoadingFriends = true;
-    });
-
-    try {
-      final response = await FriendsService.getFriends();
-      print('Friends API response: $response');
-
-      if (response['success']) {
-        setState(() {
-          friends = List<Map<String, dynamic>>.from(response['data']);
-          isLoadingFriends = false;
-        });
-        print('Friends loaded successfully: ${friends.length} friends');
-      } else {
-        setState(() {
-          isLoadingFriends = false;
-        });
-        print('Failed to load friends: ${response['message']}');
-      }
-    } catch (e) {
-      setState(() {
-        isLoadingFriends = false;
-      });
-      print('Error loading friends: $e');
     }
   }
 
@@ -1128,6 +1222,11 @@ class _RideshareScreenState extends State<RideshareScreen>
   }
 
   Widget _buildRideRequestsSection(Map<String, dynamic> post) {
+    // Only show ride requests to the user who owns this post
+    if (currentUser == null || post['userId']?.toString() != currentUser!.id) {
+      return SizedBox.shrink();
+    }
+
     final requests = rideRequests[post['_id']] ?? [];
     final pendingRequests =
         requests.where((req) => req['status'] == 'pending').toList();
@@ -1268,40 +1367,59 @@ class _RideshareScreenState extends State<RideshareScreen>
 
   Widget _buildExistingPostCard(Map<String, dynamic> post) {
     return Container(
-      padding: EdgeInsets.all(12),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.orange[300]!),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(Icons.location_on, color: Colors.green, size: 16),
               SizedBox(width: 8),
-              Text(
+              Expanded(
+                child: Text(
                 'From: ${post['source'] ?? 'Unknown location'}',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: Colors.black87,
+                  ),
+                  softWrap: true,
+                  overflow: TextOverflow.visible,
+                  maxLines: null,
                 ),
               ),
             ],
           ),
           SizedBox(height: 8),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(Icons.flag, color: Colors.red, size: 16),
               SizedBox(width: 8),
-              Text(
+              Expanded(
+                child: Text(
                 'To: ${post['destination'] ?? 'Unknown location'}',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: Colors.black87,
+                  ),
+                  softWrap: true,
+                  overflow: TextOverflow.visible,
+                  maxLines: null,
                 ),
               ),
             ],
@@ -1667,6 +1785,8 @@ class _RideshareScreenState extends State<RideshareScreen>
                                         fontSize: 16,
                                         color: Colors.black87,
                                       ),
+                                      softWrap: true,
+                                      overflow: TextOverflow.visible,
                                     ),
                                   ],
                                 ),
@@ -1698,6 +1818,8 @@ class _RideshareScreenState extends State<RideshareScreen>
                                         fontSize: 16,
                                         color: Colors.black87,
                                       ),
+                                      softWrap: true,
+                                      overflow: TextOverflow.visible,
                                     ),
                                   ],
                                 ),
@@ -2127,6 +2249,8 @@ class _RideshareScreenState extends State<RideshareScreen>
                                         fontSize: 16,
                                         color: Colors.black87,
                                       ),
+                                      softWrap: true,
+                                      overflow: TextOverflow.visible,
                                     ),
                                   ],
                                 ),
@@ -2158,6 +2282,8 @@ class _RideshareScreenState extends State<RideshareScreen>
                                         fontSize: 16,
                                         color: Colors.black87,
                                       ),
+                                      softWrap: true,
+                                      overflow: TextOverflow.visible,
                                     ),
                                   ],
                                 ),
@@ -2250,7 +2376,7 @@ class _RideshareScreenState extends State<RideshareScreen>
                             },
                           ),
                           _buildAcceptedParticipantsSection(post),
-                          _buildRideRequestsSection(post),
+                          if (isOwnPost) _buildRideRequestsSection(post),
                         ],
                       ),
                     ),
@@ -2283,14 +2409,8 @@ class _RideshareScreenState extends State<RideshareScreen>
           unselectedLabelColor: Colors.grey,
           indicatorColor: Colors.blue,
           tabs: [
-            Tab(
-              icon: Icon(Icons.post_add),
-              text: 'Post',
-            ),
-            Tab(
-              icon: Icon(Icons.people),
-              text: 'Friend',
-            ),
+            Tab(text: 'Post'),
+            Tab(text: 'Friend'),
           ],
         ),
       ),
@@ -2298,7 +2418,7 @@ class _RideshareScreenState extends State<RideshareScreen>
         controller: _tabController,
         children: [
           _buildPostScreen(),
-          _buildFriendScreen(),
+          _buildFriendsTab(),
         ],
       ),
     );
@@ -2343,32 +2463,6 @@ class _RideshareScreenState extends State<RideshareScreen>
                   ),
                   SizedBox(height: 12),
                   if (_hasExistingPost()) ...[
-                    Container(
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.orange[50],
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.orange[200]!),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.info_outline,
-                                  color: Colors.orange[700], size: 20),
-                              SizedBox(width: 8),
-                              Text(
-                                'You already have an active ride post',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.orange[700],
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 12),
                           _buildExistingPostCard(_getExistingPost()!),
                           SizedBox(height: 12),
                           SizedBox(
@@ -2390,9 +2484,6 @@ class _RideshareScreenState extends State<RideshareScreen>
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                            ),
-                          ),
-                        ],
                       ),
                     ),
                   ] else ...[
@@ -2678,188 +2769,329 @@ class _RideshareScreenState extends State<RideshareScreen>
     );
   }
 
-  Widget _buildFriendScreen() {
+  Widget _buildFriendsTab() {
     return RefreshIndicator(
-      onRefresh: _loadFriends,
+      onRefresh: () async {
+        await _loadRidePosts();
+        await _loadFriends();
+      },
       child: SingleChildScrollView(
-        padding: EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey.withOpacity(0.1),
-                    spreadRadius: 1,
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+            if (isLoadingFriends)
+              Padding(
+                padding: EdgeInsets.all(32),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (friendRidePosts.isEmpty)
+              Padding(
+                padding: EdgeInsets.all(32),
+                child: Center(
+                  child: Column(
                     children: [
                       Icon(
-                        Icons.people,
-                        color: Colors.blue,
-                        size: 24,
+                        Icons.people_outline,
+                        size: 64,
+                        color: Colors.grey[400],
                       ),
-                      SizedBox(width: 12),
+                      SizedBox(height: 16),
                       Text(
-                        'Friends',
+                        'No friend ride posts available',
                         style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
+                          fontSize: 18,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                      Spacer(),
-                      IconButton(
-                        icon: Icon(Icons.refresh, color: Colors.blue),
-                        onPressed: _loadFriends,
+                      SizedBox(height: 8),
+                      Text(
+                        currentUser == null
+                            ? 'Please login to see your friends\' ride posts'
+                            : friendsList.isEmpty
+                                ? 'You don\'t have any friends yet. Add friends from the Friends screen.'
+                                : ridePosts.isEmpty
+                                    ? 'No ride posts available yet'
+                                    : 'None of your ${friendsList.length} friend(s) have posted rides yet',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[500],
+                        ),
+                      ),
+                      if (friendsList.isNotEmpty && ridePosts.isNotEmpty) ...[
+                        SizedBox(height: 16),
+                        Container(
+                          padding: EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.blue[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.blue[200]!),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Debug Info:',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.blue[900],
+                                ),
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                'Friends: ${friendsList.length}',
+                                style: TextStyle(fontSize: 12, color: Colors.blue[800]),
+                              ),
+                              Text(
+                                'Total ride posts: ${ridePosts.length}',
+                                style: TextStyle(fontSize: 12, color: Colors.blue[800]),
+                              ),
+                              if (friendsList.isNotEmpty)
+                                Text(
+                                  'Friend IDs: ${friendsList.take(3).map((f) => f.id?.toString().substring(0, 8) ?? 'null').join(', ')}${friendsList.length > 3 ? '...' : ''}',
+                                  style: TextStyle(fontSize: 10, color: Colors.blue[700]),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              )
+            else
+              ...friendRidePosts.map((post) {
+                return Container(
+                  margin: EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.1),
+                        spreadRadius: 1,
+                        blurRadius: 4,
+                        offset: Offset(0, 2),
                       ),
                     ],
                   ),
-                  SizedBox(height: 16),
-                  _buildFriendsList(),
-                ],
-              ),
-            ),
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: Colors.blue[100],
+                              child: Text(
+                                post['userName']?.isNotEmpty == true
+                                    ? post['userName'][0].toUpperCase()
+                                    : 'U',
+                                style: TextStyle(
+                                  color: Colors.blue[700],
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    post['userName'] ?? 'Unknown User',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  Row(
+                                    children: [
+                                      Icon(Icons.wc,
+                                          color: Colors.purple, size: 14),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        post['gender'] ?? 'Not specified',
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.location_on,
+                                          color: Colors.green, size: 16),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'From:',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                          color: Colors.grey[700],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    post['source'] ?? 'Unknown location',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.black87,
+                                    ),
+                                    softWrap: true,
+                                    overflow: TextOverflow.visible,
+                                    maxLines: null,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.flag,
+                                          color: Colors.red, size: 16),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'To:',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                          color: Colors.grey[700],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    post['destination'] ?? 'Unknown location',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.black87,
+                                    ),
+                                    softWrap: true,
+                                    overflow: TextOverflow.visible,
+                                    maxLines: null,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Posted ${_formatDate(DateTime.parse(post['createdAt'] ?? DateTime.now().toIso8601String()))}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[500],
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ),
+                            _buildRequestButton(post),
+                          ],
+                        ),
+                        SizedBox(height: 8),
+                        FutureBuilder<Map<String, double>?>(
+                          future: _computeFare(
+                              post['source'] ?? '', post['destination'] ?? ''),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              return SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              );
+                            }
+                            final data = snapshot.data;
+                            if (data == null) return SizedBox.shrink();
+                            final km = data['distanceKm'] ?? 0;
+                            final fare = data['fare'] ?? 0;
+
+                            // Calculate individual fare
+                            final individualFareData =
+                                _computeIndividualFare(post, data);
+                            final originalFare =
+                                individualFareData?['originalFare'] ?? fare;
+                            final individualFare =
+                                individualFareData?['individualFare'] ?? fare;
+                            final participantCount =
+                                individualFareData?['participantCount'] ?? 1;
+
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.payments,
+                                        color: Colors.blue, size: 16),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      '${km.toStringAsFixed(1)} km · ৳${originalFare.toStringAsFixed(0)}',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.blue[700],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (participantCount > 1) ...[
+                                  SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Icon(Icons.people,
+                                          color: Colors.green, size: 14),
+                                      SizedBox(width: 6),
+                                      Text(
+                                        'Individual: ৳${individualFare.toStringAsFixed(0)} (${participantCount.toInt()} participants)',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.green[700],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ],
+                            );
+                          },
+                        ),
+                        _buildAcceptedParticipantsSection(post),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildFriendsList() {
-    if (isLoadingFriends) {
-      return Center(
-        child: CircularProgressIndicator(),
-      );
-    }
-
-    if (friends.isEmpty) {
-      return Center(
-        child: Column(
-          children: [
-            Icon(
-              Icons.people_outline,
-              size: 64,
-              color: Colors.grey[400],
-            ),
-            SizedBox(height: 16),
-            Text(
-              'No friends yet',
-              style: TextStyle(
-                fontSize: 18,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Add friends to see them here',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[500],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: NeverScrollableScrollPhysics(),
-      itemCount: friends.length,
-      itemBuilder: (context, index) {
-        final friend = friends[index];
-
-        return Container(
-          margin: EdgeInsets.only(bottom: 12),
-          padding: EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.grey[50],
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey[200]!),
-          ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: Colors.blue[100],
-                child: Text(
-                  friend['name']![0].toUpperCase(),
-                  style: TextStyle(
-                    color: Colors.blue[700],
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      friend['name']!,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      friend['email']!,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  _inviteFriend(friend);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                ),
-                child: Text(
-                  'Invite to Ride',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  void _inviteFriend(Map<String, dynamic> friend) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Invite functionality will be implemented later'),
-        duration: Duration(seconds: 2),
-      ),
-    );
-  }
 }
+

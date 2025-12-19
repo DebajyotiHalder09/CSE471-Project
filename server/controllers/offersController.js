@@ -27,11 +27,23 @@ const createOffersForUser = async (userId, walletId) => {
 
 const getUserOffers = async (req, res) => {
   try {
-    const offers = await Offers.findOne({ userId: req.user._id })
+    let offers = await Offers.findOne({ userId: req.user._id })
       .populate('walletId', 'balance gems currency');
 
+    // If no offers exist, create them (this shouldn't happen but handle it gracefully)
     if (!offers) {
-      return res.status(404).json({ error: 'No offers found for this user' });
+      // Try to find user's wallet first
+      const Wallet = require('../models/wallet');
+      const wallet = await Wallet.findOne({ userId: req.user._id });
+      
+      if (!wallet) {
+        return res.status(404).json({ error: 'No wallet found for this user. Please contact support.' });
+      }
+
+      // Create offers for the user
+      offers = await createOffersForUser(req.user._id, wallet._id);
+      offers = await Offers.findById(offers._id)
+        .populate('walletId', 'balance gems currency');
     }
 
     res.status(200).json(offers);

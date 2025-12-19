@@ -463,54 +463,54 @@ class NavScreenState extends State<NavScreen> {
               ),
             )
           : Container(
-              decoration: BoxDecoration(
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 10,
-                    offset: Offset(0, -2),
-                  ),
-                ],
-              ),
-              child: BottomNavigationBar(
-                currentIndex: _currentIndex,
-                onTap: (index) {
-                  setState(() {
-                    _currentIndex = index;
-                  });
-                },
-                type: BottomNavigationBarType.fixed,
-                backgroundColor: Colors.white,
-                selectedItemColor: Colors.blue,
-                unselectedItemColor: Colors.grey[600],
-                selectedLabelStyle: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                ),
-                unselectedLabelStyle: TextStyle(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 12,
-                ),
-                items: [
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.map, size: 24),
-                    label: 'Map',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.directions_bus, size: 24),
-                    label: 'Bus',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(
-                        _currentUser?.role == 'driver'
-                            ? Icons.directions_car
-                            : Icons.local_taxi,
-                        size: 24),
-                    label: _currentUser?.role == 'driver' ? 'Driver' : 'Rideshare',
-                  ),
-                ],
-              ),
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 10,
+              offset: Offset(0, -2),
             ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _currentIndex,
+          onTap: (index) {
+            setState(() {
+              _currentIndex = index;
+            });
+          },
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.white,
+          selectedItemColor: Colors.blue,
+          unselectedItemColor: Colors.grey[600],
+          selectedLabelStyle: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+          ),
+          unselectedLabelStyle: TextStyle(
+            fontWeight: FontWeight.w500,
+            fontSize: 12,
+          ),
+          items: [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.map, size: 24),
+              label: 'Map',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.directions_bus, size: 24),
+              label: 'Bus',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(
+                  _currentUser?.role == 'driver'
+                      ? Icons.directions_car
+                      : Icons.local_taxi,
+                  size: 24),
+              label: _currentUser?.role == 'driver' ? 'Driver' : 'Rideshare',
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -4,6 +4,7 @@ class User {
   final String email;
   final String role;
   final String? gender;
+  final String? pass;
 
   User({
     required this.id,
@@ -11,6 +12,7 @@ class User {
     required this.email,
     required this.role,
     this.gender,
+    this.pass,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -20,6 +22,7 @@ class User {
       email: json['email'] ?? '',
       role: json['role'] ?? '',
       gender: json['gender'],
+      pass: json['pass'],
     );
   }
 
@@ -30,8 +33,11 @@ class User {
       'email': email,
       'role': role,
       'gender': gender,
+      'pass': pass,
     };
   }
+
+  bool get isStudent => pass == 'student';
 
   // Get the first letter of the user's first name
   String get firstNameInitial {

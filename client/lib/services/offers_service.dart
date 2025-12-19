@@ -1,18 +1,15 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/offers.dart';
+import 'auth_service.dart';
 
 class OffersService {
-  //static const String baseUrl = 'https://smartdhaka0.onrender.com/offers';
-  //static const String authUrl = 'https://smartdhaka0.onrender.com/auth';
-  static const String baseUrl = 'http://10.0.2.2:3000'; // For Android emulator
-  static const String authUrl = 'http://10.0.2.2:3000/auth';
-
+  static const String baseUrl = AuthService.baseUrl;
 
   static Future<Offers> getUserOffers(String token) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/user'),
+        Uri.parse('$baseUrl/offers/user'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -59,7 +56,7 @@ class OffersService {
   ) async {
     try {
       final response = await http.put(
-        Uri.parse('$baseUrl/user'),
+        Uri.parse('$baseUrl/offers/user'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -85,7 +82,7 @@ class OffersService {
   static Future<Offers> addCashback(String token, double amount) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/add-cashback'),
+        Uri.parse('$baseUrl/offers/add-cashback'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -106,7 +103,7 @@ class OffersService {
   static Future<Offers> addCoupon(String token, double amount) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/add-coupon'),
+        Uri.parse('$baseUrl/offers/add-coupon'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -127,7 +124,7 @@ class OffersService {
   static Future<Offers> addDiscount(String token, double amount) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/add-discount'),
+        Uri.parse('$baseUrl/offers/add-discount'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -155,7 +152,7 @@ class OffersService {
       print('DEBUG: Request body: $requestBody');
       
       final response = await http.post(
-        Uri.parse('$baseUrl/use-cashback'),
+        Uri.parse('$baseUrl/offers/use-cashback'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -189,7 +186,7 @@ class OffersService {
       String token, double amount) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/use-coupon'),
+        Uri.parse('$baseUrl/offers/use-coupon'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -216,7 +213,7 @@ class OffersService {
       String token, double amount) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/use-discount'),
+        Uri.parse('$baseUrl/offers/use-discount'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',

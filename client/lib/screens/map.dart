@@ -9,9 +9,11 @@ import '../services/auth_service.dart';
 import '../services/fav_bus_service.dart';
 import '../services/individual_bus_service.dart';
 import '../services/trip_history_service.dart';
+import '../services/stops_service.dart' show StopsService, StopData;
 import '../models/bus.dart';
 import '../models/individual_bus.dart';
 import '../utils/distance_calculator.dart' as distance_calc;
+import 'search.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key, this.onOpenRideshare, this.onBoarded});
@@ -42,14 +44,11 @@ class _MapScreenState extends State<MapScreen> {
   String? _currentUserGender;
   final Map<String, bool> _favoriteStatus = {};
   final Map<String, bool> _boardedBuses = {};
+  final Map<String, bool> _tripRecordsCreated = {}; // Track created trip records by busInfoId
 
   List<BusStop> _allBusStops = [];
 
-  // Search suggestions
-  List<Map<String, dynamic>> _sourceSuggestions = [];
-  List<Map<String, dynamic>> _destinationSuggestions = [];
-  bool _showSourceSuggestions = false;
-  bool _showDestinationSuggestions = false;
+  DraggableScrollableController? _bottomSheetController;
 
   static const LatLng dhakaCenter = LatLng(23.8103, 90.4125);
 
@@ -59,9 +58,13 @@ class _MapScreenState extends State<MapScreen> {
     _initializeMap();
     _getCurrentUserId();
     _loadAllBusStops();
+    _bottomSheetController = DraggableScrollableController();
+  }
 
-    _sourceController.addListener(() => _onSourceChanged());
-    _destinationController.addListener(() => _onDestinationChanged());
+  @override
+  void dispose() {
+    _bottomSheetController?.dispose();
+    super.dispose();
   }
 
   void _initializeMap() {
@@ -868,7 +871,7 @@ class _MapScreenState extends State<MapScreen> {
             _boardedBuses[busId] = true;
           });
 
-          Navigator.of(context).pop();
+      Navigator.of(context).pop();
 
           // Notify parent (NavScreen) that user has boarded
           if (widget.onBoarded != null) {
@@ -905,8 +908,8 @@ class _MapScreenState extends State<MapScreen> {
             content: Text('Failed to board bus'),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
-          ),
-        );
+        ),
+      );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -921,6 +924,12 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _endTrip(
       String busId, String busInfoId, String source, String destination) async {
+    // Prevent duplicate trip record creation
+    if (_tripRecordsCreated[busInfoId] == true) {
+      print('Trip record already created for bus $busInfoId, skipping duplicate');
+      return;
+    }
+
     try {
       final token = await AuthService.getToken();
       if (token == null) return;
@@ -957,6 +966,9 @@ class _MapScreenState extends State<MapScreen> {
           );
 
           if (result['success']) {
+            setState(() {
+              _tripRecordsCreated[busInfoId] = true;
+            });
             Navigator.of(context).pop();
             _showTripEndedPopup();
 
@@ -1220,6 +1232,205 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
+  void _showSOSDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.2),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // SOS Header
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.red[50],
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.warning,
+                    size: 48,
+                    color: Colors.red,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Emergency Services',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey[800],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                // Emergency Options
+                _buildEmergencyOption(
+                  icon: Icons.local_hospital,
+                  label: 'Ambulance',
+                  color: Colors.red,
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _callEmergency('999', 'Ambulance');
+                  },
+                ),
+                const SizedBox(height: 12),
+                _buildEmergencyOption(
+                  icon: Icons.local_police,
+                  label: 'Police',
+                  color: Colors.blue,
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _callEmergency('999', 'Police');
+                  },
+                ),
+                const SizedBox(height: 12),
+                _buildEmergencyOption(
+                  icon: Icons.fire_truck,
+                  label: 'Fire',
+                  color: Colors.orange,
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _callEmergency('999', 'Fire');
+                  },
+                ),
+                const SizedBox(height: 12),
+                _buildEmergencyOption(
+                  icon: Icons.share_location,
+                  label: 'Share Location',
+                  color: Colors.green,
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _shareLocation();
+                  },
+                ),
+                const SizedBox(height: 16),
+                // Cancel button
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEmergencyOption({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                icon,
+                color: color,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[800],
+                ),
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 16,
+              color: Colors.grey[400],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _callEmergency(String number, String service) {
+    // TODO: Implement actual emergency call functionality
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Calling $service: $number'),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+    // You can use url_launcher package to make actual calls:
+    // final uri = Uri.parse('tel:$number');
+    // if (await canLaunchUrl(uri)) {
+    //   await launchUrl(uri);
+    // }
+  }
+
+  void _shareLocation() {
+    // Get current location or use source/destination
+    String locationText = 'My current location';
+    
+    if (_sourcePoint != null) {
+      locationText = 'Source: ${_sourcePoint!.latitude}, ${_sourcePoint!.longitude}';
+    } else if (_destinationPoint != null) {
+      locationText = 'Destination: ${_destinationPoint!.latitude}, ${_destinationPoint!.longitude}';
+    }
+    
+    // TODO: Implement actual location sharing functionality
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Sharing location: $locationText'),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+    // You can use share_plus package to share location:
+    // Share.share('My location: https://maps.google.com/?q=$lat,$lng');
+  }
+
   void _showStopsDialog(Bus bus) {
     showDialog(
       context: context,
@@ -1400,447 +1611,208 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  Timer? _sourceDebounceTimer;
-  Timer? _destinationDebounceTimer;
+  Future<void> _navigateToSearch() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SearchScreen()),
+    );
 
-  void _onSourceChanged() {
-    _sourceDebounceTimer?.cancel();
-    _sourceDebounceTimer = Timer(Duration(milliseconds: 300), () {
-      if (_sourceController.text.isEmpty) {
+    if (result != null && result is Map) {
+      final source = result['source'] as String?;
+      final destination = result['destination'] as String?;
+      final sourceCoords = result['sourceCoordinates'] as Map<String, double>?;
+      final destCoords = result['destinationCoordinates'] as Map<String, double>?;
+      
+      if (source != null && destination != null) {
         setState(() {
-          _showSourceSuggestions = false;
-          _sourceSuggestions = [];
+          _sourceController.text = source;
+          _destinationController.text = destination;
         });
-        return;
-      }
-      _getSearchSuggestions(_sourceController.text, true);
-    });
-  }
-
-  void _onDestinationChanged() {
-    _destinationDebounceTimer?.cancel();
-    _destinationDebounceTimer = Timer(Duration(milliseconds: 300), () {
-      if (_destinationController.text.isEmpty) {
-        setState(() {
-          _showDestinationSuggestions = false;
-          _destinationSuggestions = [];
-        });
-        return;
-      }
-      _getSearchSuggestions(_destinationController.text, false);
-    });
-  }
-
-  Future<void> _getSearchSuggestions(String query, bool isSource) async {
-    if (query.trim().isEmpty) {
-      setState(() {
-        if (isSource) {
-          _showSourceSuggestions = false;
-          _sourceSuggestions = [];
-        } else {
-          _showDestinationSuggestions = false;
-          _destinationSuggestions = [];
-        }
-      });
-      return;
-    }
-
-    print('Getting search suggestions for: "$query" (${isSource ? 'source' : 'destination'})');
-
-    final List<Map<String, dynamic>> suggestions = [];
-
-    // First, add bus stop suggestions
-    for (final stop in _allBusStops) {
-      if (stop.name.toLowerCase().contains(query.toLowerCase())) {
-        suggestions.add({
-          'name': stop.name,
-          'type': 'bus_stop',
-          'latitude': stop.latitude,
-          'longitude': stop.longitude,
-          'isExactMatch': stop.name.toLowerCase() == query.toLowerCase(),
-          'fullAddress': stop.name,
-        });
-      }
-    }
-
-    print('Found ${suggestions.length} bus stop suggestions');
-
-    // Then, add geocoding suggestions
-    try {
-      final geocodingSuggestions = await _getGeocodingSuggestions(query);
-      print('Found ${geocodingSuggestions.length} geocoding suggestions');
-      suggestions.addAll(geocodingSuggestions);
-    } catch (e) {
-      print('Error getting geocoding suggestions: $e');
-    }
-
-    // Remove duplicates based on coordinates
-    final uniqueSuggestions = <String, Map<String, dynamic>>{};
-    for (final suggestion in suggestions) {
-      final key = '${suggestion['latitude']}_${suggestion['longitude']}';
-      if (!uniqueSuggestions.containsKey(key)) {
-        uniqueSuggestions[key] = suggestion;
-      }
-    }
-
-    final sortedSuggestions = uniqueSuggestions.values.toList();
-    sortedSuggestions.sort((a, b) {
-      // Exact matches first
-      if (a['isExactMatch'] == true && b['isExactMatch'] != true) return -1;
-      if (a['isExactMatch'] != true && b['isExactMatch'] == true) return 1;
-      
-      // Bus stops first
-      if (a['type'] == 'bus_stop' && b['type'] != 'bus_stop') return -1;
-      if (a['type'] != 'bus_stop' && b['type'] == 'bus_stop') return 1;
-      
-      // Then by relevance score for locations
-      if (a['type'] == 'location' && b['type'] == 'location') {
-        final aScore = a['relevanceScore'] ?? 0.0;
-        final bScore = b['relevanceScore'] ?? 0.0;
-        if (aScore != bScore) return bScore.compareTo(aScore);
-      }
-      
-      // Finally by name
-      return a['name'].toLowerCase().compareTo(b['name'].toLowerCase());
-    });
-
-    print('Final suggestions: ${sortedSuggestions.length}');
-
-    setState(() {
-      if (isSource) {
-        _sourceSuggestions = sortedSuggestions.take(8).toList();
-        _showSourceSuggestions = _sourceSuggestions.isNotEmpty;
-        print('Source suggestions: ${_sourceSuggestions.length}, show: $_showSourceSuggestions');
-      } else {
-        _destinationSuggestions = sortedSuggestions.take(8).toList();
-        _showDestinationSuggestions = _destinationSuggestions.isNotEmpty;
-        print('Destination suggestions: ${_destinationSuggestions.length}, show: $_showDestinationSuggestions');
-      }
-    });
-  }
-
-  Future<List<Map<String, dynamic>>> _getGeocodingSuggestions(
-      String query) async {
-    if (query.trim().isEmpty) return [];
-
-    print('Starting geocoding for: "$query"');
-
-    try {
-      List<Map<String, dynamic>> suggestions = [];
-      
-      // Strategy 1: Try with Dhaka context and Bangladesh country code
-      print('Strategy 1: With Dhaka context and BD country code');
-      suggestions = await _tryGeocodingStrategy(query, 'bd', '$query, Dhaka, Bangladesh');
-      if (suggestions.isNotEmpty) {
-        print('Strategy 1 successful: ${suggestions.length} results');
-        return suggestions;
-      }
-      
-      // Strategy 2: Try with just Dhaka context
-      print('Strategy 2: With Dhaka context only');
-      suggestions = await _tryGeocodingStrategy(query, null, '$query, Dhaka');
-      if (suggestions.isNotEmpty) {
-        print('Strategy 2 successful: ${suggestions.length} results');
-        return suggestions;
-      }
-      
-      // Strategy 3: Try without any context
-      print('Strategy 3: Raw query');
-      suggestions = await _tryGeocodingStrategy(query, null, query);
-      if (suggestions.isNotEmpty) {
-        print('Strategy 3 successful: ${suggestions.length} results');
-        return suggestions;
-      }
-      
-      // Strategy 4: Try with just the main part of the query
-      final mainPart = _extractMainAddressPart(query);
-      if (mainPart != query) {
-        print('Strategy 4: Main part "$mainPart" with Dhaka context');
-        suggestions = await _tryGeocodingStrategy(mainPart, null, '$mainPart, Dhaka');
-        if (suggestions.isNotEmpty) {
-          print('Strategy 4 successful: ${suggestions.length} results');
-          return suggestions;
-        }
-      }
-      
-      // Strategy 5: Try with simplified query
-      final simplifiedQuery = _simplifyAddress(query);
-      if (simplifiedQuery != query) {
-        print('Strategy 5: Simplified "$simplifiedQuery" with Dhaka context');
-        suggestions = await _tryGeocodingStrategy(simplifiedQuery, null, '$simplifiedQuery, Dhaka');
-        if (suggestions.isNotEmpty) {
-          print('Strategy 5 successful: ${suggestions.length} results');
-          return suggestions;
-        }
-      }
-      
-      print('All geocoding strategies failed for: "$query"');
-      return [];
-    } catch (e) {
-      print('Geocoding error for "$query": $e');
-      return [];
-    }
-  }
-
-  Future<List<Map<String, dynamic>>> _tryGeocodingStrategy(
-      String query, String? countryCode, String searchQuery) async {
-    try {
-      final Map<String, String> params = {
-        'q': searchQuery,
-        'format': 'json',
-        'limit': '10',
-        'addressdetails': '1',
-        'viewbox': '90.2,23.9,90.6,23.6', // Dhaka area bounding box
-        'bounded': '1',
-      };
-      
-      if (countryCode != null) {
-        params['countrycodes'] = countryCode;
-      }
-      
-      final queryString = params.entries
-          .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
-          .join('&');
-      
-      final url = 'https://nominatim.openstreetmap.org/search?$queryString';
-      
-      print('Trying geocoding strategy: $url');
-      
-      final response = await http.get(
-        Uri.parse(url),
-        headers: {
-          'User-Agent': 'CSE471-Project/1.0 (map)',
-          'Accept': 'application/json',
-        },
-      ).timeout(Duration(seconds: 8));
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        print('Geocoding response: ${data.length} results');
         
-        final List<Map<String, dynamic>> suggestions = [];
+        // Process search results with provided coordinates
+        await _processSearchResults(source, destination, sourceCoords, destCoords);
+      }
+    }
+  }
 
-        for (final item in data) {
-          if (item is Map<String, dynamic>) {
-            final lat = item['lat']?.toString();
-            final lon = item['lon']?.toString();
-            final displayName = item['display_name']?.toString() ?? '';
-            final importance = item['importance']?.toDouble() ?? 0.0;
-            final type = item['type']?.toString() ?? '';
+  Future<void> _processSearchResults(
+    String source,
+    String destination,
+    Map<String, double>? sourceCoords,
+    Map<String, double>? destCoords,
+  ) async {
+    setState(() {
+      _isLoading = true;
+    });
 
-            if (lat != null && lon != null && displayName.isNotEmpty) {
-              // Filter out very low importance results
-              if (importance < 0.1) continue;
-              
-              // Create a more meaningful name
-              final name = _createDisplayName(displayName);
-              
-              // Calculate relevance score
-              final relevanceScore = _calculateRelevanceScore(query, displayName, importance);
+    try {
+      LatLng? sourcePoint;
+      LatLng? destinationPoint;
 
-              suggestions.add({
-                'name': name,
-                'type': 'location',
-                'latitude': double.tryParse(lat) ?? 0.0,
-                'longitude': double.tryParse(lon) ?? 0.0,
-                'isExactMatch': query.toLowerCase() == name.toLowerCase(),
-                'fullAddress': displayName,
-                'relevanceScore': relevanceScore,
-                'importance': importance,
-                'placeType': type,
-              });
+      // Use provided coordinates if available (from search screen)
+      if (sourceCoords != null && sourceCoords['lat'] != null && sourceCoords['lon'] != null) {
+        sourcePoint = LatLng(sourceCoords['lat']!, sourceCoords['lon']!);
+        print('Using provided source coordinates: ${sourcePoint.latitude}, ${sourcePoint.longitude}');
+      } else {
+        // First, try to get coordinates from stops collection (fastest)
+        final stopData = await StopsService.getStopCoordinates(source);
+        if (stopData != null) {
+          sourcePoint = LatLng(stopData.lat, stopData.lng);
+          print('Found source in stops collection: ${sourcePoint.latitude}, ${sourcePoint.longitude}');
+        } else {
+          // Fallback: try to find coordinates from local bus stops cache
+          sourcePoint = _findBusStopCoordinates(source);
+          
+          // If still not found, geocode
+          if (sourcePoint == null) {
+            print('Geocoding source: $source');
+            final geocodedCoords = await _geocodeAddress(source);
+            if (geocodedCoords != null) {
+              sourcePoint = LatLng(geocodedCoords['lat']!, geocodedCoords['lon']!);
+              print('Geocoded source coordinates: ${sourcePoint.latitude}, ${sourcePoint.longitude}');
             }
           }
         }
+      }
 
-        print('Processed ${suggestions.length} valid suggestions');
-
-        // Sort by relevance and importance
-        suggestions.sort((a, b) {
-          final aScore = a['relevanceScore'] ?? 0.0;
-          final bScore = b['relevanceScore'] ?? 0.0;
-          if (aScore != bScore) return bScore.compareTo(aScore);
-          
-          final aImportance = a['importance'] ?? 0.0;
-          final bImportance = b['importance'] ?? 0.0;
-          return bImportance.compareTo(aImportance);
-        });
-
-        return suggestions.take(8).toList();
+      // Use provided coordinates if available (from search screen)
+      if (destCoords != null && destCoords['lat'] != null && destCoords['lon'] != null) {
+        destinationPoint = LatLng(destCoords['lat']!, destCoords['lon']!);
+        print('Using provided destination coordinates: ${destinationPoint.latitude}, ${destinationPoint.longitude}');
       } else {
-        print('Geocoding failed with status: ${response.statusCode}');
+        // First, try to get coordinates from stops collection (fastest)
+        final stopData = await StopsService.getStopCoordinates(destination);
+        if (stopData != null) {
+          destinationPoint = LatLng(stopData.lat, stopData.lng);
+          print('Found destination in stops collection: ${destinationPoint.latitude}, ${destinationPoint.longitude}');
+        } else {
+          // Fallback: try to find coordinates from local bus stops cache
+          destinationPoint = _findBusStopCoordinates(destination);
+          
+          // If still not found, geocode
+          if (destinationPoint == null) {
+            print('Geocoding destination: $destination');
+            final geocodedCoords = await _geocodeAddress(destination);
+            if (geocodedCoords != null) {
+              destinationPoint = LatLng(geocodedCoords['lat']!, geocodedCoords['lon']!);
+              print('Geocoded destination coordinates: ${destinationPoint.latitude}, ${destinationPoint.longitude}');
+            }
+          }
+        }
+      }
+
+      if (sourcePoint != null && destinationPoint != null) {
+        setState(() {
+          _sourcePoint = sourcePoint;
+          _destinationPoint = destinationPoint;
+        });
+        
+        // Draw route and show bus list
+        await _updateRoute();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not find coordinates for source or destination. Please try selecting from suggestions.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 4),
+          ),
+        );
+        setState(() {
+          _isLoading = false;
+        });
       }
     } catch (e) {
-      print('Geocoding strategy error for "$query": $e');
-    }
-    
-    return [];
-  }
-
-  String _createDisplayName(String fullAddress) {
-    final parts = fullAddress.split(',').map((part) => part.trim()).where((part) => part.isNotEmpty).toList();
-    
-    if (parts.length <= 2) return fullAddress;
-    
-    // Take first 2-3 meaningful parts, excluding common geographic terms
-    final meaningfulParts = parts.take(4).where((part) => 
-      part.length > 2 && 
-      !part.toLowerCase().contains('bangladesh') &&
-      !part.toLowerCase().contains('dhaka') &&
-      !part.toLowerCase().contains('division') &&
-      !part.toLowerCase().contains('district') &&
-      !part.toLowerCase().contains('thana') &&
-      !part.toLowerCase().contains('postal') &&
-      !part.toLowerCase().contains('zip')
-    ).toList();
-    
-    if (meaningfulParts.isNotEmpty) {
-      final result = meaningfulParts.join(', ');
-      return result.length > 60 ? result.substring(0, 60) + '...' : result;
-    }
-    
-    return parts.take(2).join(', ');
-  }
-
-  double _calculateRelevanceScore(String query, String displayName, double importance) {
-    final queryLower = query.toLowerCase();
-    final displayLower = displayName.toLowerCase();
-    
-    double score = 0.0;
-    
-    // Exact match gets highest score
-    if (displayLower.contains(queryLower)) score += 15.0;
-    
-    // Word-by-word matching
-    final queryWords = queryLower.split(RegExp(r'[,\s]+')).where((word) => word.length > 2).toList();
-    for (final word in queryWords) {
-      if (displayLower.contains(word)) score += 3.0;
-    }
-    
-    // Importance factor (higher importance = higher score)
-    score += importance * 0.2;
-    
-    // Prefer shorter, more specific names
-    if (displayName.length < 40) score += 2.0;
-    else if (displayName.length < 60) score += 1.0;
-    
-    // Bonus for Dhaka-specific locations
-    if (displayLower.contains('dhaka') || displayLower.contains('gulshan') || 
-        displayLower.contains('banani') || displayLower.contains('dhanmondi') ||
-        displayLower.contains('uttara') || displayLower.contains('mirpur')) {
-      score += 5.0;
-    }
-    
-    // Bonus for common place types
-    if (displayLower.contains('market') || displayLower.contains('mall') ||
-        displayLower.contains('hospital') || displayLower.contains('university') ||
-        displayLower.contains('station') || displayLower.contains('airport')) {
-      score += 3.0;
-    }
-    
-    return score;
-  }
-
-  String _extractMainAddressPart(String address) {
-    final parts = address.split(',').map((part) => part.trim()).where((part) => part.isNotEmpty).toList();
-    
-    if (parts.isEmpty) return address;
-    
-    // Take the first meaningful part
-    if (parts.length >= 2) {
-      return '${parts[0]}, ${parts[1]}';
-    } else {
-      return parts[0];
+      print('Error processing search results: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error processing locations: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
-  String _simplifyAddress(String address) {
-    String simplified = address.trim();
-    
-    // Remove common suffixes and prefixes
-    simplified = simplified.replaceAll(RegExp(r'\b(floor|fl|room|rm|apt|apartment|suite|ste|building|bldg|tower|plaza|mall|center|centre|complex)\b', caseSensitive: false), '');
-    
-    // Remove specific numbers that might be house numbers
-    simplified = simplified.replaceAll(RegExp(r'^\d+\s+'), '');
-    
-    // Clean up extra spaces and commas
-    simplified = simplified.replaceAll(RegExp(r'\s+'), ' ').trim();
-    simplified = simplified.replaceAll(RegExp(r',+'), ',').trim();
-    
-    // Remove trailing commas
-    if (simplified.endsWith(',')) {
-      simplified = simplified.substring(0, simplified.length - 1).trim();
+  LatLng? _findBusStopCoordinates(String query) {
+    final queryLower = query.toLowerCase().trim();
+    for (final stop in _allBusStops) {
+      if (stop.name.toLowerCase() == queryLower ||
+          stop.name.toLowerCase().contains(queryLower) ||
+          queryLower.contains(stop.name.toLowerCase())) {
+        return LatLng(stop.latitude, stop.longitude);
+      }
     }
-    
-    return simplified;
+    return null;
   }
 
-  void _selectSourceSuggestion(Map<String, dynamic> suggestion) {
-    if (suggestion['type'] == 'bus_stop') {
-      _sourceController.text = suggestion['name'];
-    } else {
-      _sourceController.text = suggestion['fullAddress'] ?? suggestion['name'];
+  Future<Map<String, double>?> _geocodeAddress(String query) async {
+    try {
+      // Try multiple geocoding strategies with better handling for detailed addresses
+      final strategies = [
+        {'q': query, 'countrycodes': 'bd'},
+        {'q': '$query, Dhaka, Bangladesh'},
+        {'q': query},
+        // Try with simplified address (remove house numbers, etc.)
+        if (query.contains(',')) {'q': query.split(',').skip(1).join(',').trim() + ', Dhaka, Bangladesh'},
+      ];
+
+      for (final params in strategies) {
+        try {
+          final uri = Uri.parse('https://nominatim.openstreetmap.org/search').replace(
+            queryParameters: {
+              ...params,
+        'format': 'json',
+              'limit': '5', // Get more results to find the best match
+        'addressdetails': '1',
+            },
+          );
+      
+      final response = await http.get(
+            uri,
+            headers: {'User-Agent': 'CSE471-Project/1.0 (map)'},
+          ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+            final List<dynamic> results = json.decode(response.body) as List<dynamic>;
+            if (results.isNotEmpty) {
+              // Try to find the best match (prefer results in Bangladesh)
+              for (final item in results) {
+                final resultMap = item as Map<String, dynamic>;
+                final lat = double.tryParse(resultMap['lat']?.toString() ?? '');
+                final lon = double.tryParse(resultMap['lon']?.toString() ?? '');
+                
+                if (lat != null && lon != null) {
+                  // Validate coordinates are reasonable for Bangladesh
+                  if (lat >= 20.0 && lat <= 27.0 && lon >= 88.0 && lon <= 93.0) {
+                    print('Geocoding success for "$query": lat=$lat, lon=$lon');
+                    return {'lat': lat, 'lon': lon};
+                  }
+                }
+              }
+              
+              // If no Bangladesh result found, use the first result anyway (might be close)
+              final firstItem = results.first as Map<String, dynamic>;
+              final lat = double.tryParse(firstItem['lat']?.toString() ?? '');
+              final lon = double.tryParse(firstItem['lon']?.toString() ?? '');
+              
+              if (lat != null && lon != null) {
+                print('Geocoding success (outside BD bounds) for "$query": lat=$lat, lon=$lon');
+                return {'lat': lat, 'lon': lon};
+              }
+            }
+          }
+        } catch (e) {
+          print('Geocoding strategy failed: $e');
+          continue; // Try next strategy
+        }
+      }
+    } catch (e) {
+      print('Geocoding error for "$query": $e');
     }
-
-    _sourcePoint = LatLng(suggestion['latitude'], suggestion['longitude']);
-    if (_mapController != null && _mapReady) {
-      _mapController!.move(_sourcePoint!, 15.0);
-    }
-
-    if (suggestion['type'] == 'bus_stop') {
-      _updateRoute();
-    } else {
-      _updateRouteForCustomLocation();
-    }
-
-    setState(() {
-      _showSourceSuggestions = false;
-      _sourceSuggestions = [];
-    });
-  }
-
-  void _selectDestinationSuggestion(Map<String, dynamic> suggestion) {
-    if (suggestion['type'] == 'bus_stop') {
-      _destinationController.text = suggestion['name'];
-    } else {
-      _destinationController.text =
-          suggestion['fullAddress'] ?? suggestion['name'];
-    }
-
-    _destinationPoint = LatLng(suggestion['latitude'], suggestion['longitude']);
-    if (_mapController != null && _mapReady) {
-      _mapController!.move(_destinationPoint!, 15.0);
-    }
-
-    if (suggestion['type'] == 'bus_stop') {
-      _updateRoute();
-    } else {
-      _updateRouteForCustomLocation();
-    }
-
-    setState(() {
-      _showDestinationSuggestions = false;
-      _destinationSuggestions = [];
-    });
-  }
-
-  @override
-  void dispose() {
-    _sourceDebounceTimer?.cancel();
-    _destinationDebounceTimer?.cancel();
-    _mapController?.dispose();
-    _sourceController.dispose();
-    _destinationController.dispose();
-    super.dispose();
-  }
-
-  void _hideAllSuggestions() {
-    setState(() {
-      _showSourceSuggestions = false;
-      _showDestinationSuggestions = false;
-      _sourceSuggestions = [];
-      _destinationSuggestions = [];
-    });
+    
+    return null;
   }
 
   Future<void> _updateRoute() async {
@@ -1849,6 +1821,57 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       _isLoading = true;
     });
+
+    // First fetch available buses to get bus route information
+    await _fetchAvailableBuses();
+
+    // Draw polyline based on bus stops if buses are available
+    if (_availableBuses.isNotEmpty) {
+      // Use the first bus's route (all buses on same route should have similar stops)
+      final bus = _availableBuses.first;
+      
+      // Find source and destination stops in the bus route
+      final sourceStopIndex = bus.stops.indexWhere(
+        (stop) => stop.name.toLowerCase() == _sourceController.text.trim().toLowerCase(),
+      );
+      final destStopIndex = bus.stops.indexWhere(
+        (stop) => stop.name.toLowerCase() == _destinationController.text.trim().toLowerCase(),
+      );
+
+      if (sourceStopIndex != -1 && destStopIndex != -1 && sourceStopIndex < destStopIndex) {
+        // Get stops between source and destination
+        final routeStops = bus.stops.sublist(sourceStopIndex, destStopIndex + 1);
+        
+        // Create route points from bus stops
+        final routePoints = routeStops.map((stop) {
+          return LatLng(stop.latitude, stop.longitude);
+        }).toList();
+
+        setState(() {
+          _routePoints = routePoints;
+        });
+
+        _fitMapToRoute();
+      } else {
+        // Fallback: use direct route if stops not found in bus route
+        _drawDirectRoute();
+      }
+    } else {
+      // No buses available, draw direct route
+      _drawDirectRoute();
+    }
+
+    setState(() {
+      _isLoading = false;
+    });
+
+    if (mounted) {
+      _showResultsSheet();
+    }
+  }
+
+  Future<void> _drawDirectRoute() async {
+    if (_sourcePoint == null || _destinationPoint == null) return;
 
     try {
       final routeUrl = Uri.parse(
@@ -1887,15 +1910,6 @@ class _MapScreenState extends State<MapScreen> {
         _routePoints = [_sourcePoint!, _destinationPoint!];
       });
       _fitMapToRoute();
-    }
-
-    setState(() {
-      _isLoading = false;
-    });
-
-    await _fetchAvailableBuses();
-    if (mounted) {
-      _showResultsSheet();
     }
   }
 
@@ -2452,26 +2466,46 @@ class _MapScreenState extends State<MapScreen> {
   double _calculateRouteDistance(Bus bus) {
     if (_sourcePoint == null || _destinationPoint == null) return 0.0;
 
-    final sourceStop = bus.stops.firstWhere(
+    // Find source and destination stop indices
+    final sourceStopIndex = bus.stops.indexWhere(
       (stop) =>
           stop.name.toLowerCase() ==
           _sourceController.text.trim().toLowerCase(),
-      orElse: () => bus.stops.first,
     );
-
-    final destStop = bus.stops.firstWhere(
+    final destStopIndex = bus.stops.indexWhere(
       (stop) =>
           stop.name.toLowerCase() ==
           _destinationController.text.trim().toLowerCase(),
-      orElse: () => bus.stops.last,
     );
 
-    return distance_calc.DistanceCalculator.calculateDistance(
-      sourceStop.latitude,
-      sourceStop.longitude,
-      destStop.latitude,
-      destStop.longitude,
-    );
+    // If stops not found, use first and last
+    if (sourceStopIndex == -1 || destStopIndex == -1) {
+      return distance_calc.DistanceCalculator.calculateDistance(
+        bus.stops.first.latitude,
+        bus.stops.first.longitude,
+        bus.stops.last.latitude,
+        bus.stops.last.longitude,
+      );
+    }
+
+    // Ensure source comes before destination
+    final startIndex = sourceStopIndex < destStopIndex ? sourceStopIndex : destStopIndex;
+    final endIndex = sourceStopIndex < destStopIndex ? destStopIndex : sourceStopIndex;
+
+    // Calculate total distance by summing distances between consecutive stops
+    double totalDistance = 0.0;
+    for (int i = startIndex; i < endIndex; i++) {
+      final currentStop = bus.stops[i];
+      final nextStop = bus.stops[i + 1];
+      totalDistance += distance_calc.DistanceCalculator.calculateDistance(
+        currentStop.latitude,
+        currentStop.longitude,
+        nextStop.latitude,
+        nextStop.longitude,
+      );
+    }
+
+    return totalDistance;
   }
 
   String _calculateETA(IndividualBus bus) {
@@ -2519,12 +2553,15 @@ class _MapScreenState extends State<MapScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (context) {
         return DraggableScrollableSheet(
+          controller: _bottomSheetController,
           initialChildSize: 0.35,
           minChildSize: 0.25,
           maxChildSize: 0.8,
@@ -3084,10 +3121,6 @@ class _MapScreenState extends State<MapScreen> {
       _routePoints = [];
       _sourceController.clear();
       _destinationController.clear();
-      _showSourceSuggestions = false;
-      _showDestinationSuggestions = false;
-      _sourceSuggestions = [];
-      _destinationSuggestions = [];
     });
     if (_mapController != null && _mapReady) {
       _mapController!.move(dhakaCenter, _currentZoom);
@@ -3128,6 +3161,16 @@ class _MapScreenState extends State<MapScreen> {
                 setState(() {
                   _mapReady = true;
                 });
+              },
+              onTap: (tapPosition, point) {
+                // Collapse bottom sheet to minimum size when map is tapped
+                if (_bottomSheetController != null && _bottomSheetController!.isAttached) {
+                  _bottomSheetController!.animateTo(
+                    0.25, // minChildSize
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                  );
+                }
               },
             ),
             children: [
@@ -3184,422 +3227,139 @@ class _MapScreenState extends State<MapScreen> {
             ],
           ),
           Positioned(
-            top: 40,
+            bottom: 20,
             left: 16,
             right: 16,
-            child: GestureDetector(
-              onTap: _hideAllSuggestions,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: _sourceController,
-                    decoration: InputDecoration(
-                      hintText: "Enter source location",
-                      filled: true,
-                      fillColor: Colors.white,
-                      prefixIcon:
-                          const Icon(Icons.location_on, color: Colors.green),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.search),
-                        onPressed: () async {
-                          final query = _sourceController.text.trim();
-                          if (query.isEmpty) return;
-
-                          final stop = _allBusStops.firstWhere(
-                            (s) => s.name.toLowerCase() == query.toLowerCase(),
-                            orElse: () => BusStop(
-                                name: '', latitude: 0.0, longitude: 0.0),
-                          );
-
-                          if (stop.name.isNotEmpty) {
-                            _sourcePoint =
-                                LatLng(stop.latitude, stop.longitude);
-                            if (_mapController != null && _mapReady) {
-                              _mapController!.move(_sourcePoint!, 15.0);
-                            }
-                            _updateRoute();
-                          } else {
-                            final geocodingSuggestions =
-                                await _getGeocodingSuggestions(query);
-                            if (geocodingSuggestions.isNotEmpty) {
-                              final location = geocodingSuggestions.first;
-                              _sourcePoint = LatLng(
-                                  location['latitude'], location['longitude']);
-                              _sourceController.text =
-                                  location['fullAddress'] ?? location['name'];
-                              if (_mapController != null && _mapReady) {
-                                _mapController!.move(_sourcePoint!, 15.0);
-                              }
-                              _updateRouteForCustomLocation();
-                            }
-                          }
-                        },
-                      ),
-                      border: OutlineInputBorder(
+            child: ElevatedButton.icon(
+              onPressed: _navigateToSearch,
+              icon: const Icon(Icons.search, color: Colors.white),
+              label: const Text(
+                'Go',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue[600],
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                    ),
-                    onSubmitted: (_) async {
-                      final query = _sourceController.text.trim();
-                      if (query.isEmpty) return;
-
-                      final stop = _allBusStops.firstWhere(
-                        (s) => s.name.toLowerCase() == query.toLowerCase(),
-                        orElse: () =>
-                            BusStop(name: '', latitude: 0.0, longitude: 0.0),
-                      );
-                      if (stop.name.isNotEmpty) {
-                        _sourcePoint = LatLng(stop.latitude, stop.longitude);
-                        if (_mapController != null && _mapReady) {
-                          _mapController!.move(_sourcePoint!, 15.0);
-                        }
-                        _updateRoute();
-                      } else {
-                        final geocodingSuggestions =
-                            await _getGeocodingSuggestions(query);
-                        if (geocodingSuggestions.isNotEmpty) {
-                          final location = geocodingSuggestions.first;
-                          _sourcePoint = LatLng(
-                              location['latitude'], location['longitude']);
-                          _sourceController.text =
-                              location['fullAddress'] ?? location['name'];
-                          if (_mapController != null && _mapReady) {
-                            _mapController!.move(_sourcePoint!, 15.0);
-                          }
-                          _updateRouteForCustomLocation();
-                        }
-                      }
-                    },
-                  ),
-                  if (_showSourceSuggestions && _sourceSuggestions.isNotEmpty)
-                    Container(
-                      margin: const EdgeInsets.only(top: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.15),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: _sourceSuggestions.length,
-                        itemBuilder: (context, index) {
-                          final suggestion = _sourceSuggestions[index];
-                          final isBusStop = suggestion['type'] == 'bus_stop';
-                          final isExactMatch = suggestion['isExactMatch'] == true;
-                          
-                          return GestureDetector(
-                            onTap: () => _selectSourceSuggestion(suggestion),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: isExactMatch ? Colors.blue[50] : Colors.white,
-                                border: Border(
-                                  bottom: BorderSide(
-                                    color: Colors.grey[200]!,
-                                    width: 0.5,
-                                  ),
-                                ),
-                              ),
-                              child: ListTile(
-                                dense: true,
-                                leading: Container(
-                                  padding: EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: isBusStop ? Colors.blue[100] : Colors.green[100],
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Icon(
-                                    isBusStop ? Icons.directions_bus : Icons.location_on,
-                                    color: isBusStop ? Colors.blue[700] : Colors.green[700],
-                                    size: 18,
-                                  ),
-                                ),
-                                title: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        suggestion['name'],
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: isExactMatch ? FontWeight.w600 : FontWeight.w500,
-                                          color: isExactMatch ? Colors.blue[800] : Colors.grey[800],
-                                        ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    if (isExactMatch)
-                                      Container(
-                                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Colors.blue[100],
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Text(
-                                          'Exact',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.blue[700],
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (suggestion['type'] == 'location' && suggestion['fullAddress'] != null)
-                                      Text(
-                                        suggestion['fullAddress']!,
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: Colors.grey[600],
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    if (suggestion['type'] == 'location' && suggestion['placeType'] != null)
-                                      Container(
-                                        margin: EdgeInsets.only(top: 2),
-                                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Colors.grey[100],
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          suggestion['placeType']!,
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w500,
-                                            color: Colors.grey[700],
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _destinationController,
-                    decoration: InputDecoration(
-                      hintText: "Enter destination location",
-                      filled: true,
-                      fillColor: Colors.white,
-                      prefixIcon: const Icon(Icons.flag, color: Colors.red),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.search),
-                        onPressed: () async {
-                          final query = _destinationController.text.trim();
-                          if (query.isEmpty) return;
-
-                          final stop = _allBusStops.firstWhere(
-                            (s) => s.name.toLowerCase() == query.toLowerCase(),
-                            orElse: () => BusStop(
-                                name: '', latitude: 0.0, longitude: 0.0),
-                          );
-
-                          if (stop.name.isNotEmpty) {
-                            _destinationPoint =
-                                LatLng(stop.latitude, stop.longitude);
-                            if (_mapController != null && _mapReady) {
-                              _mapController!.move(_destinationPoint!, 15.0);
-                            }
-                            _updateRoute();
-                          } else {
-                            final geocodingSuggestions =
-                                await _getGeocodingSuggestions(query);
-                            if (geocodingSuggestions.isNotEmpty) {
-                              final location = geocodingSuggestions.first;
-                              _destinationPoint = LatLng(
-                                  location['latitude'], location['longitude']);
-                              _destinationController.text =
-                                  location['fullAddress'] ?? location['name'];
-                              if (_mapController != null && _mapReady) {
-                                _mapController!.move(_destinationPoint!, 15.0);
-                              }
-                              _updateRouteForCustomLocation();
-                            }
-                          }
-                        },
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                    ),
-                    onSubmitted: (_) async {
-                      final query = _destinationController.text.trim();
-                      if (query.isEmpty) return;
-
-                      final stop = _allBusStops.firstWhere(
-                        (s) => s.name.toLowerCase() == query.toLowerCase(),
-                        orElse: () =>
-                            BusStop(name: '', latitude: 0.0, longitude: 0.0),
-                      );
-                      if (stop.name.isNotEmpty) {
-                        _destinationPoint =
-                            LatLng(stop.latitude, stop.longitude);
-                        if (_mapController != null && _mapReady) {
-                          _mapController!.move(_destinationPoint!, 15.0);
-                        }
-                        _updateRoute();
-                      } else {
-                        final geocodingSuggestions =
-                            await _getGeocodingSuggestions(query);
-                        if (geocodingSuggestions.isNotEmpty) {
-                          final location = geocodingSuggestions.first;
-                          _destinationPoint = LatLng(
-                              location['latitude'], location['longitude']);
-                          _destinationController.text =
-                              location['fullAddress'] ?? location['name'];
-                          if (_mapController != null && _mapReady) {
-                            _mapController!.move(_destinationPoint!, 15.0);
-                          }
-                          _updateRouteForCustomLocation();
-                        }
-                      }
-                    },
-                  ),
-                  if (_showDestinationSuggestions &&
-                      _destinationSuggestions.isNotEmpty)
-                    Container(
-                      margin: const EdgeInsets.only(top: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.15),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: _destinationSuggestions.length,
-                        itemBuilder: (context, index) {
-                          final suggestion = _destinationSuggestions[index];
-                          final isBusStop = suggestion['type'] == 'bus_stop';
-                          final isExactMatch = suggestion['isExactMatch'] == true;
-                          
-                          return GestureDetector(
-                            onTap: () => _selectDestinationSuggestion(suggestion),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: isExactMatch ? Colors.blue[50] : Colors.white,
-                                border: Border(
-                                  bottom: BorderSide(
-                                    color: Colors.grey[200]!,
-                                    width: 0.5,
-                                  ),
-                                ),
-                              ),
-                              child: ListTile(
-                                dense: true,
-                                leading: Container(
-                                  padding: EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: isBusStop ? Colors.blue[100] : Colors.green[100],
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Icon(
-                                    isBusStop ? Icons.directions_bus : Icons.location_on,
-                                    color: isBusStop ? Colors.blue[700] : Colors.green[700],
-                                    size: 18,
-                                  ),
-                                ),
-                                title: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        suggestion['name'],
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: isExactMatch ? FontWeight.w600 : FontWeight.w500,
-                                          color: isExactMatch ? Colors.blue[800] : Colors.grey[800],
-                                        ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    if (isExactMatch)
-                                      Container(
-                                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Colors.blue[100],
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Text(
-                                          'Exact',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.blue[700],
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (suggestion['type'] == 'location' && suggestion['fullAddress'] != null)
-                                      Text(
-                                        suggestion['fullAddress']!,
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: Colors.grey[600],
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    if (suggestion['type'] == 'location' && suggestion['placeType'] != null)
-                                      Container(
-                                        margin: EdgeInsets.only(top: 2),
-                                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Colors.grey[100],
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          suggestion['placeType']!,
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w500,
-                                            color: Colors.grey[700],
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                ],
+                ),
+                elevation: 2,
               ),
             ),
           ),
+          // Display source and destination at top when set
+          if (_sourceController.text.isNotEmpty || _destinationController.text.isNotEmpty)
+            Positioned(
+              top: 40,
+              left: 16,
+              right: 16,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.location_on, color: Colors.green, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _sourceController.text.isNotEmpty
+                                      ? _sourceController.text
+                                      : 'Source',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: _sourceController.text.isNotEmpty
+                                        ? Colors.grey[800]
+                                        : Colors.grey[400],
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              const Icon(Icons.flag, color: Colors.red, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _destinationController.text.isNotEmpty
+                                      ? _destinationController.text
+                                      : 'Destination',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: _destinationController.text.isNotEmpty
+                                        ? Colors.grey[800]
+                                        : Colors.grey[400],
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      onPressed: _sourceController.text.isNotEmpty && 
+                                _destinationController.text.isNotEmpty
+                          ? () async {
+                              // Process search results and show bus list
+                              await _processSearchResults(
+                                _sourceController.text.trim(),
+                                _destinationController.text.trim(),
+                                null,
+                                null,
+                              );
+                            }
+                          : null,
+                      icon: const Icon(Icons.send, size: 18, color: Colors.white),
+                      label: const Text(
+                        'Send',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue[600],
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        elevation: 2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           if (_sourcePoint != null || _destinationPoint != null)
             Positioned(
               top: 140,
@@ -3610,6 +3370,30 @@ class _MapScreenState extends State<MapScreen> {
                 child: const Icon(Icons.clear, color: Colors.white),
               ),
             ),
+          // SOS Button
+          Positioned(
+            bottom: 100,
+            right: 16,
+            child: FloatingActionButton(
+              onPressed: _showSOSDialog,
+              backgroundColor: Colors.red[700],
+              elevation: 8,
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'SOS',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
           if (_isLoading)
             Positioned(
               top: 0,

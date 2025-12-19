@@ -59,6 +59,7 @@ router.post('/signup', async (req, res) => {
       gender,
       role,
       password: hashedPassword,
+      pass: 'normal', // Default pass value for all users
     });
 
     await user.save();
@@ -127,6 +128,7 @@ router.post('/login', async (req, res) => {
         email: user.email,
         role: user.role,
         gender: user.gender,
+        pass: user.pass || 'normal',
       }
     });
   } catch (error) {
@@ -154,6 +156,7 @@ router.get('/me', verifyToken, (req, res) => {
       email: req.user.email,
       role: req.user.role,
       gender: req.user.gender,
+      pass: req.user.pass || 'normal',
     }
   });
 });

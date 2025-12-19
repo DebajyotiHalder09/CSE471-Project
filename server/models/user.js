@@ -22,6 +22,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  pass: {
+    type: String,
+    default: 'normal',
+  },
 }, {
   timestamps: true
 });

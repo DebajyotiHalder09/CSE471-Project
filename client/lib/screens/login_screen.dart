@@ -3,6 +3,7 @@ import '../services/auth_service.dart';
 import 'signup_screen.dart';
 import 'nav.dart';
 import 'navDriver.dart';
+import 'admin.dart';
 
 class LoginScreen extends StatefulWidget {
   static const routeName = '/login';
@@ -23,18 +24,29 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: Colors.white,
       body: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Login Box with Shadow
-                Container(
-                  width: double.infinity,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Main Image at Top
+                  Padding(
+                    padding: EdgeInsets.only(bottom: 32),
+                    child: Image.asset(
+                      'assets/main.png',
+                      width: 200,
+                      height: 200,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                  // Login Box with Shadow
+                  Container(
+                    width: double.infinity,
                   padding: EdgeInsets.all(32),
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -158,7 +170,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       // Login Button
                       SizedBox(
                         width: double.infinity,
-                        height: 50,
+                        height: 56,
                         child: _isLoading
                             ? Center(child: CircularProgressIndicator())
                             : ElevatedButton(
@@ -196,9 +208,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                                 .trim() ??
                                             '';
                                         final isDriver = userRole == 'driver';
+                                        final isAdmin = userRole == 'admin';
 
                                         print('Processed role: "$userRole"');
                                         print('Is driver: $isDriver');
+                                        print('Is admin: $isAdmin');
 
                                         // Also check for common variations
                                         final alternativeDriverRoles = [
@@ -213,7 +227,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                         print(
                                             'Is driver (alternative check): $isDriverAlternative');
 
-                                        if (isDriver || isDriverAlternative) {
+                                        if (isAdmin) {
+                                          print('Navigating to AdminScreen');
+                                          Navigator.pushReplacementNamed(
+                                            context,
+                                            AdminScreen.routeName,
+                                            arguments: response['user'],
+                                          );
+                                        } else if (isDriver || isDriverAlternative) {
                                           print(
                                               'Navigating to NavDriverScreen');
                                           Navigator.pushReplacementNamed(
@@ -253,95 +274,50 @@ class _LoginScreenState extends State<LoginScreen> {
                                   elevation: 2,
                                 ),
                                 child: Text(
-                                  'Login',
+                                  'Sign In',
                                   style: TextStyle(
-                                    fontSize: 16,
+                                    fontSize: 18,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ),
                       ),
-                      SizedBox(height: 20),
-
-                      // Divider
-                      Row(
-                        children: [
-                          Expanded(child: Divider(color: Colors.grey[300])),
-                          Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 16),
-                            child: Text(
-                              'OR',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
-                          Expanded(child: Divider(color: Colors.grey[300])),
-                        ],
-                      ),
-                      SizedBox(height: 20),
-
-                      // Continue with Google Button
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            // TODO: Implement Google sign-in
-                          },
-                          icon: Image.asset(
-                            'assets/icons/icons8-google-48.png',
-                            width: 30,
-                            height: 30,
-                          ),
-                          label: Text(
-                            'Continue with Google',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(color: Colors.grey[300]!),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                      ),
+                      SizedBox(height: 16),
                     ],
                   ),
                 ),
                 SizedBox(height: 24),
 
-                // Sign Up Link
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      "Don't have an account? ",
-                      style: TextStyle(color: Colors.grey[600]),
+                // Sign Up Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.pushNamed(context, SignupScreen.routeName);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.blue, width: 2),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      backgroundColor: Colors.white,
                     ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pushNamed(context, SignupScreen.routeName);
-                      },
-                      child: Text(
-                        'Sign Up',
-                        style: TextStyle(
-                          color: Colors.blue,
-                          fontWeight: FontWeight.w600,
-                        ),
+                    child: Text(
+                      'Sign Up',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.blue,
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ],
             ),
           ),
         ),
+      ),
       ),
     );
   }

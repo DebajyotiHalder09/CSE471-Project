@@ -26,6 +26,7 @@ class _BusScreenState extends State<BusScreen> {
   String? errorMessage;
   String? currentUserId;
   String? currentUserGender;
+  String? currentUserPass;
   Map<String, bool> favoriteStatus = {};
 
   @override
@@ -49,6 +50,7 @@ class _BusScreenState extends State<BusScreen> {
       setState(() {
         currentUserId = user.id;
         currentUserGender = user.gender;
+        currentUserPass = user.pass;
       });
       _loadFavoriteStatuses();
     }
@@ -180,10 +182,17 @@ class _BusScreenState extends State<BusScreen> {
           await BusService.searchBusByName(busNameController.text.trim());
 
       if (response['success']) {
+        List<Bus> buses = (response['data'] as List)
+            .map((json) => Bus.fromJson(json))
+            .toList();
+        
+        // Filter out women-only buses for male users, but keep them for female users
+        if (currentUserGender?.toLowerCase() == 'male') {
+          buses = buses.where((bus) => bus.busType != 'women').toList();
+        }
+        
         setState(() {
-          searchResults = (response['data'] as List)
-              .map((json) => Bus.fromJson(json))
-              .toList();
+          searchResults = buses;
           isLoading = false;
         });
         _loadFavoriteStatusesForSearchResults();
@@ -497,10 +506,11 @@ class _BusScreenState extends State<BusScreen> {
                       itemCount: searchResults.length,
                       itemBuilder: (context, index) {
                         final bus = searchResults[index];
-                        return BusResultCard(
+                            return BusResultCard(
                           bus: bus,
                           isFavorited: favoriteStatus[bus.id] ?? false,
                           onFavoriteToggle: () => _toggleFavorite(bus),
+                          userPass: currentUserPass,
                         );
                       },
                     )
@@ -510,10 +520,11 @@ class _BusScreenState extends State<BusScreen> {
                           itemBuilder: (context, index) {
                             final bus = allBuses[index];
                             return BusResultCard(
-                              bus: bus,
-                              isFavorited: favoriteStatus[bus.id] ?? false,
-                              onFavoriteToggle: () => _toggleFavorite(bus),
-                            );
+                          bus: bus,
+                          isFavorited: favoriteStatus[bus.id] ?? false,
+                          onFavoriteToggle: () => _toggleFavorite(bus),
+                          userPass: currentUserPass,
+                        );
                           },
                         )
                       : Center(
@@ -557,12 +568,14 @@ class BusResultCard extends StatefulWidget {
   final Bus bus;
   final bool isFavorited;
   final VoidCallback onFavoriteToggle;
+  final String? userPass;
 
   const BusResultCard({
     super.key,
     required this.bus,
     required this.isFavorited,
     required this.onFavoriteToggle,
+    this.userPass,
   });
 
   @override
@@ -683,20 +696,48 @@ class _BusResultCardState extends State<BusResultCard> {
                       ),
                     ),
                     SizedBox(width: 8),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.green[100],
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '\$${widget.bus.baseFare.toStringAsFixed(2)}',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.green[700],
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.green[100],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '৳${(widget.userPass == 'student' ? widget.bus.baseFare * 0.5 : widget.bus.baseFare).toStringAsFixed(0)}',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.green[700],
+                                ),
+                              ),
+                              if (widget.userPass == 'student') ...[
+                                SizedBox(width: 4),
+                                Container(
+                                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue[600],
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    'ST',
+                                    style: TextStyle(
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
@@ -774,7 +815,7 @@ class _BusResultCardState extends State<BusResultCard> {
                       ),
                       Spacer(),
                       Text(
-                        'Per km: \$${widget.bus.perKmFare.toStringAsFixed(2)}',
+                        'Per km: ৳${widget.bus.perKmFare.toStringAsFixed(0)}',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[600],

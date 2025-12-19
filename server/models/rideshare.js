@@ -38,6 +38,14 @@ const ridePostSchema = new mongoose.Schema({
     type: Number,
     default: 3
   },
+  distance: {
+    type: Number,
+    default: null
+  },
+  fare: {
+    type: Number,
+    default: null
+  },
 }, { timestamps: true });
 
 // Pre-save middleware to ensure creator is always first participant

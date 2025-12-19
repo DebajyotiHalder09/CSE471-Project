@@ -1,5 +1,124 @@
 const RidePost = require('../models/rideshare');
 const { addGemsToUser } = require('./walletController');
+const axios = require('axios');
+
+// Helper function to calculate Haversine (straight-line) distance as fallback
+const calculateHaversineDistance = (srcLat, srcLon, dstLat, dstLon) => {
+  const R = 6371; // Earth's radius in km
+  const dLat = (dstLat - srcLat) * Math.PI / 180;
+  const dLon = (dstLon - srcLon) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(srcLat * Math.PI / 180) * Math.cos(dstLat * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distance = R * c;
+
+  // Round to 1 decimal place
+  const roundedDistance = Math.round(distance * 10) / 10;
+  // Calculate fare: 30 BDT per km
+  const fare = roundedDistance * 30.0;
+
+  return {
+    distance: roundedDistance,
+    fare: fare
+  };
+};
+
+// Helper function to calculate distance and fare using geocoding and road distance
+const calculateFare = async (source, destination) => {
+  try {
+    console.log(`Calculating fare for: ${source} -> ${destination}`);
+    
+    // Geocode source
+    const sourceResponse = await axios.get('https://nominatim.openstreetmap.org/search', {
+      params: {
+        q: source,
+        format: 'json',
+        limit: 1,
+        addressdetails: 1
+      },
+      headers: {
+        'User-Agent': 'BusApp/1.0'
+      },
+      timeout: 10000 // 10 second timeout
+    });
+
+    // Geocode destination
+    const destResponse = await axios.get('https://nominatim.openstreetmap.org/search', {
+      params: {
+        q: destination,
+        format: 'json',
+        limit: 1,
+        addressdetails: 1
+      },
+      headers: {
+        'User-Agent': 'BusApp/1.0'
+      },
+      timeout: 10000 // 10 second timeout
+    });
+
+    if (!sourceResponse.data || sourceResponse.data.length === 0) {
+      console.error('Source geocoding failed for:', source);
+      throw new Error('Could not find source location');
+    }
+
+    if (!destResponse.data || destResponse.data.length === 0) {
+      console.error('Destination geocoding failed for:', destination);
+      throw new Error('Could not find destination location');
+    }
+
+    const srcLat = parseFloat(sourceResponse.data[0].lat);
+    const srcLon = parseFloat(sourceResponse.data[0].lon);
+    const dstLat = parseFloat(destResponse.data[0].lat);
+    const dstLon = parseFloat(destResponse.data[0].lon);
+
+    console.log(`Geocoded coordinates: (${srcLat}, ${srcLon}) -> (${dstLat}, ${dstLon})`);
+
+    // Calculate road distance using OSRM (Open Source Routing Machine)
+    // OSRM format: /route/v1/driving/{lon},{lat};{lon},{lat}
+    try {
+      const osrmUrl = `http://router.project-osrm.org/route/v1/driving/${srcLon},${srcLat};${dstLon},${dstLat}?overview=false`;
+      console.log(`Requesting road distance from OSRM...`);
+      
+      const routeResponse = await axios.get(osrmUrl, {
+        timeout: 15000 // 15 second timeout
+      });
+
+      if (routeResponse.data && routeResponse.data.code === 'Ok' && routeResponse.data.routes && routeResponse.data.routes.length > 0) {
+        // Distance is in meters, convert to km
+        const distanceInMeters = routeResponse.data.routes[0].distance;
+        const distanceInKm = distanceInMeters / 1000;
+        const roundedDistance = Math.round(distanceInKm * 10) / 10;
+        
+        // Calculate fare: 30 BDT per km
+        const fare = roundedDistance * 30.0;
+
+        console.log(`OSRM road distance: ${roundedDistance}km, Fare: ৳${fare.toFixed(0)}`);
+
+        return {
+          distance: roundedDistance,
+          fare: fare
+        };
+      } else {
+        console.warn('OSRM route not found, falling back to Haversine distance');
+        // Fallback to Haversine if OSRM fails
+        return calculateHaversineDistance(srcLat, srcLon, dstLat, dstLon);
+      }
+    } catch (osrmError) {
+      console.warn('OSRM API error, falling back to Haversine distance:', osrmError.message);
+      // Fallback to Haversine if OSRM is unavailable
+      return calculateHaversineDistance(srcLat, srcLon, dstLat, dstLon);
+    }
+  } catch (error) {
+    console.error('Error calculating fare:', error.message);
+    // Return default values on error
+    return {
+      distance: 10.0,
+      fare: 300.0
+    };
+  }
+};
 
 const rideshareController = {
   createRidePost: async (req, res) => {
@@ -13,12 +132,17 @@ const rideshareController = {
         });
       }
 
+      // Calculate fare and distance
+      const fareData = await calculateFare(source, destination);
+
       const ridePost = new RidePost({
         source,
         destination,
         userId,
         userName,
         gender,
+        distance: fareData.distance,
+        fare: fareData.fare,
       });
 
       await ridePost.save();
@@ -32,6 +156,8 @@ const rideshareController = {
           userId: ridePost.userId,
           userName: ridePost.userName,
           gender: ridePost.gender,
+          distance: ridePost.distance,
+          fare: ridePost.fare,
           createdAt: ridePost.createdAt,
         },
       });
@@ -60,6 +186,8 @@ const rideshareController = {
           gender: post.gender,
           participants: post.participants || [],
           maxParticipants: post.maxParticipants || 3,
+          distance: post.distance,
+          fare: post.fare,
           createdAt: post.createdAt,
         })),
       });
@@ -123,6 +251,8 @@ const rideshareController = {
           gender: post.gender,
           participants: post.participants || [],
           maxParticipants: post.maxParticipants || 3,
+          distance: post.distance,
+          fare: post.fare,
           createdAt: post.createdAt,
         })),
       });

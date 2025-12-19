@@ -3,9 +3,9 @@ import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 
 class BusService {
-  //static const String baseUrl = 'https://smartdhaka0.onrender.com'; // For Android emulator
+  static const String baseUrl = 'https://smartdhaka0.onrender.com'; // For Android emulator
   // static const String baseUrl = 'http://localhost:3000'; // For iOS simulator
-  static const String baseUrl = 'http://10.0.2.2:3000'; // For Android emulator
+  //static const String baseUrl = 'http://10.0.2.2:3000'; // For Android emulator
 
   static Future<Map<String, dynamic>> getAllBuses() async {
     try {

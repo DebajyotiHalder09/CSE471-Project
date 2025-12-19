@@ -7,6 +7,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+import 'chat.dart';
 
 class RideshareScreen extends StatefulWidget {
   final String? source;
@@ -519,8 +520,8 @@ class _RideshareScreenState extends State<RideshareScreen>
   }
 
   Map<String, dynamic>? _computeIndividualFare(
-      Map<String, dynamic> post, Map<String, double>? fareData) {
-    if (fareData == null) return null;
+      Map<String, dynamic> post, double? totalFare) {
+    if (totalFare == null) return null;
 
     final requests = rideRequests[post['_id']] ?? [];
     final acceptedRequests =
@@ -528,7 +529,6 @@ class _RideshareScreenState extends State<RideshareScreen>
 
     // Always include the ride creator as a participant
     final totalParticipants = acceptedRequests.length + 1; // +1 for the creator
-    final totalFare = fareData['fare'] ?? 0;
 
     // If no participants yet, individual fare equals total fare
     final individualFare =
@@ -545,6 +545,126 @@ class _RideshareScreenState extends State<RideshareScreen>
       'individualFare': individualFare,
       'participantCount': totalParticipants,
     };
+  }
+
+  Widget _buildFareDisplay(Map<String, dynamic> post) {
+    // Use saved fare/distance from post if available, otherwise calculate
+    final savedDistance = post['distance'];
+    final savedFare = post['fare'];
+
+    if (savedDistance != null && savedFare != null) {
+      // Use saved values
+      final km = (savedDistance is num) ? savedDistance.toDouble() : double.tryParse(savedDistance.toString()) ?? 0.0;
+      final fare = (savedFare is num) ? savedFare.toDouble() : double.tryParse(savedFare.toString()) ?? 0.0;
+
+      final individualFareData = _computeIndividualFare(post, fare);
+      final originalFare = individualFareData?['originalFare'] ?? fare;
+      final individualFare = individualFareData?['individualFare'] ?? fare;
+      final participantCount = individualFareData?['participantCount'] ?? 1;
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.payments, color: Colors.blue, size: 16),
+              SizedBox(width: 6),
+              Text(
+                '${km.toStringAsFixed(1)} km · ৳${originalFare.toStringAsFixed(0)}',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.blue[700],
+                ),
+              ),
+            ],
+          ),
+          if (participantCount > 1) ...[
+            SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(Icons.people, color: Colors.green, size: 14),
+                SizedBox(width: 6),
+                Text(
+                  'Individual: ৳${individualFare.toStringAsFixed(0)} (${participantCount.toInt()} participants)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.green[700],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      );
+    }
+
+    // Fallback to calculation if not saved (for backwards compatibility)
+    return FutureBuilder<Map<String, double>?>(
+      future: _computeFare(post['source'] ?? '', post['destination'] ?? ''),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: 8),
+              Text('Calculating fare...'),
+            ],
+          );
+        }
+        final data = snapshot.data;
+        if (data == null) return SizedBox.shrink();
+        final km = data['distanceKm'] ?? 0;
+        final fare = data['fare'] ?? 0;
+
+        final individualFareData = _computeIndividualFare(post, fare);
+        final originalFare = individualFareData?['originalFare'] ?? fare;
+        final individualFare = individualFareData?['individualFare'] ?? fare;
+        final participantCount = individualFareData?['participantCount'] ?? 1;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.payments, color: Colors.blue, size: 16),
+                SizedBox(width: 6),
+                Text(
+                  '${km.toStringAsFixed(1)} km · ৳${originalFare.toStringAsFixed(0)}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.blue[700],
+                  ),
+                ),
+              ],
+            ),
+            if (participantCount > 1) ...[
+              SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(Icons.people, color: Colors.green, size: 14),
+                  SizedBox(width: 6),
+                  Text(
+                    'Individual: ৳${individualFare.toStringAsFixed(0)} (${participantCount.toInt()} participants)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.green[700],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        );
+      },
+    );
   }
 
   void _scheduleFareCalculation() {
@@ -967,11 +1087,16 @@ class _RideshareScreenState extends State<RideshareScreen>
       );
 
       if (response['success']) {
+        // Reload all relevant data to show updated state
         await _loadRideRequests();
         await _loadRidePosts();
         await _loadUserRides();
         if (currentUser != null) {
           await _loadUserRequestStatus();
+        }
+        // Also reload friends tab data if needed
+        if (_tabController.index == 1) {
+          await _loadFriends();
         }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -998,14 +1123,21 @@ class _RideshareScreenState extends State<RideshareScreen>
     }
   }
 
-  Future<void> _rejectRideRequest(String requestId) async {
+  Future<void> _rejectRideRequest(String requestId, String ridePostId) async {
     try {
       final response = await RideRequestService.rejectRideRequest(requestId);
 
       if (response['success']) {
+        // Reload all relevant data to show updated state
         await _loadRideRequests();
+        await _loadRidePosts();
+        await _loadUserRides();
         if (currentUser != null) {
           await _loadUserRequestStatus();
+        }
+        // Also reload friends tab data if needed
+        if (_tabController.index == 1) {
+          await _loadFriends();
         }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1119,22 +1251,15 @@ class _RideshareScreenState extends State<RideshareScreen>
     final acceptedRequests =
         requests.where((req) => req['status'] == 'accepted').toList();
 
-    // Create a list of all participants including the ride creator
-    final allParticipants = <Map<String, dynamic>>[];
-
-    // Add the ride creator as the first participant
-    allParticipants.add({
-      'requesterName': post['userName'] ?? 'Unknown User',
-      'isCreator': true,
-    });
-
-    // Add accepted participants
-    allParticipants.addAll(acceptedRequests.map((req) => {
+    // Only show accepted participants (exclude the creator who posted the ride)
+    // The creator is already part of the ride, so we don't need to show them separately
+    final allParticipants = acceptedRequests.map((req) => {
           ...req,
           'isCreator': false,
-        }));
+        }).toList();
 
-    if (allParticipants.length <= 1) return SizedBox.shrink();
+    // Only show section if there are accepted participants (other than creator)
+    if (allParticipants.isEmpty) return SizedBox.shrink();
 
     return Container(
       margin: EdgeInsets.only(top: 12),
@@ -1152,7 +1277,7 @@ class _RideshareScreenState extends State<RideshareScreen>
               Icon(Icons.check_circle, color: Colors.green[700], size: 16),
               SizedBox(width: 8),
               Text(
-                'Participants (${allParticipants.length})',
+                'Accepted Participants (${allParticipants.length})',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -1170,31 +1295,23 @@ class _RideshareScreenState extends State<RideshareScreen>
                       padding:
                           EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: participant['isCreator'] == true
-                            ? Colors.orange[100]
-                            : Colors.green[100],
+                        color: Colors.green[100],
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: participant['isCreator'] == true
-                              ? Colors.orange[300]!
-                              : Colors.green[300]!,
+                          color: Colors.green[300]!,
                         ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           CircleAvatar(
-                            backgroundColor: participant['isCreator'] == true
-                                ? Colors.orange[200]
-                                : Colors.green[200],
+                            backgroundColor: Colors.green[200],
                             radius: 12,
                             child: Text(
                               participant['requesterName']?[0]?.toUpperCase() ??
                                   'U',
                               style: TextStyle(
-                                color: participant['isCreator'] == true
-                                    ? Colors.orange[700]
-                                    : Colors.green[700],
+                                color: Colors.green[700],
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -1202,13 +1319,11 @@ class _RideshareScreenState extends State<RideshareScreen>
                           ),
                           SizedBox(width: 8),
                           Text(
-                            '${participant['requesterName'] ?? 'Unknown User'}${participant['isCreator'] == true ? ' (Creator)' : ''}',
+                            participant['requesterName'] ?? 'Unknown User',
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: participant['isCreator'] == true
-                                  ? Colors.orange[700]
-                                  : Colors.green[700],
+                              color: Colors.green[700],
                             ),
                           ),
                         ],
@@ -1321,8 +1436,8 @@ class _RideshareScreenState extends State<RideshareScreen>
                             ),
                             SizedBox(width: 8),
                             ElevatedButton(
-                              onPressed: () =>
-                                  _rejectRideRequest(request['_id']),
+                              onPressed: () => _rejectRideRequest(
+                                  request['_id'], post['_id']),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.red,
                                 padding: EdgeInsets.symmetric(
@@ -1434,74 +1549,7 @@ class _RideshareScreenState extends State<RideshareScreen>
             ),
           ),
           SizedBox(height: 8),
-          FutureBuilder<Map<String, double>?>(
-            future:
-                _computeFare(post['source'] ?? '', post['destination'] ?? ''),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return Row(
-                  children: [
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    SizedBox(width: 8),
-                    Text('Calculating fare...'),
-                  ],
-                );
-              }
-              final data = snapshot.data;
-              if (data == null) return SizedBox.shrink();
-              final km = data['distanceKm'] ?? 0;
-              final fare = data['fare'] ?? 0;
-
-              // Calculate individual fare
-              final individualFareData = _computeIndividualFare(post, data);
-              final originalFare = individualFareData?['originalFare'] ?? fare;
-              final individualFare =
-                  individualFareData?['individualFare'] ?? fare;
-              final participantCount =
-                  individualFareData?['participantCount'] ?? 1;
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.payments, color: Colors.blue, size: 16),
-                      SizedBox(width: 6),
-                      Text(
-                        '${km.toStringAsFixed(1)} km · ৳${originalFare.toStringAsFixed(0)}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.blue[700],
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (participantCount > 1) ...[
-                    SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(Icons.people, color: Colors.green, size: 14),
-                        SizedBox(width: 6),
-                        Text(
-                          'Individual: ৳${individualFare.toStringAsFixed(0)} (${participantCount.toInt()} participants)',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.green[700],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              );
-            },
-          ),
+          _buildFareDisplay(post),
         ],
       ),
     );
@@ -1836,74 +1884,7 @@ class _RideshareScreenState extends State<RideshareScreen>
                             ),
                           ),
                           SizedBox(height: 8),
-                          FutureBuilder<Map<String, double>?>(
-                            future: _computeFare(post['source'] ?? '',
-                                post['destination'] ?? ''),
-                            builder: (context, snapshot) {
-                              if (snapshot.connectionState ==
-                                  ConnectionState.waiting) {
-                                return SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                );
-                              }
-                              final data = snapshot.data;
-                              if (data == null) return SizedBox.shrink();
-                              final km = data['distanceKm'] ?? 0;
-                              final fare = data['fare'] ?? 0;
-
-                              // Calculate individual fare
-                              final individualFareData =
-                                  _computeIndividualFare(post, data);
-                              final originalFare =
-                                  individualFareData?['originalFare'] ?? fare;
-                              final individualFare =
-                                  individualFareData?['individualFare'] ?? fare;
-                              final participantCount =
-                                  individualFareData?['participantCount'] ?? 1;
-
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(Icons.payments,
-                                          color: Colors.blue, size: 16),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        '${km.toStringAsFixed(1)} km · ৳${originalFare.toStringAsFixed(0)}',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.blue[700],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  if (participantCount > 1) ...[
-                                    SizedBox(height: 4),
-                                    Row(
-                                      children: [
-                                        Icon(Icons.people,
-                                            color: Colors.green, size: 14),
-                                        SizedBox(width: 6),
-                                        Text(
-                                          'Individual: ৳${individualFare.toStringAsFixed(0)} (${participantCount.toInt()} participants)',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w500,
-                                            color: Colors.green[700],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ],
-                              );
-                            },
-                          ),
+                          _buildFareDisplay(post),
                           if (isOwnPost) ...[
                             _buildAcceptedParticipantsSection(post),
                             _buildRideRequestsSection(post),
@@ -2307,74 +2288,7 @@ class _RideshareScreenState extends State<RideshareScreen>
                             ],
                           ),
                           SizedBox(height: 8),
-                          FutureBuilder<Map<String, double>?>(
-                            future: _computeFare(post['source'] ?? '',
-                                post['destination'] ?? ''),
-                            builder: (context, snapshot) {
-                              if (snapshot.connectionState ==
-                                  ConnectionState.waiting) {
-                                return SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                );
-                              }
-                              final data = snapshot.data;
-                              if (data == null) return SizedBox.shrink();
-                              final km = data['distanceKm'] ?? 0;
-                              final fare = data['fare'] ?? 0;
-
-                              // Calculate individual fare
-                              final individualFareData =
-                                  _computeIndividualFare(post, data);
-                              final originalFare =
-                                  individualFareData?['originalFare'] ?? fare;
-                              final individualFare =
-                                  individualFareData?['individualFare'] ?? fare;
-                              final participantCount =
-                                  individualFareData?['participantCount'] ?? 1;
-
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(Icons.payments,
-                                          color: Colors.blue, size: 16),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        '${km.toStringAsFixed(1)} km · ৳${originalFare.toStringAsFixed(0)}',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.blue[700],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  if (participantCount > 1) ...[
-                                    SizedBox(height: 4),
-                                    Row(
-                                      children: [
-                                        Icon(Icons.people,
-                                            color: Colors.green, size: 14),
-                                        SizedBox(width: 6),
-                                        Text(
-                                          'Individual: ৳${individualFare.toStringAsFixed(0)} (${participantCount.toInt()} participants)',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w500,
-                                            color: Colors.green[700],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ],
-                              );
-                            },
-                          ),
+                          _buildFareDisplay(post),
                           _buildAcceptedParticipantsSection(post),
                           if (isOwnPost) _buildRideRequestsSection(post),
                         ],
@@ -2817,49 +2731,24 @@ class _RideshareScreenState extends State<RideshareScreen>
                           color: Colors.grey[500],
                         ),
                       ),
-                      if (friendsList.isNotEmpty && ridePosts.isNotEmpty) ...[
-                        SizedBox(height: 16),
-                        Container(
-                          padding: EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.blue[50],
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.blue[200]!),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Debug Info:',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.blue[900],
-                                ),
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                'Friends: ${friendsList.length}',
-                                style: TextStyle(fontSize: 12, color: Colors.blue[800]),
-                              ),
-                              Text(
-                                'Total ride posts: ${ridePosts.length}',
-                                style: TextStyle(fontSize: 12, color: Colors.blue[800]),
-                              ),
-                              if (friendsList.isNotEmpty)
-                                Text(
-                                  'Friend IDs: ${friendsList.take(3).map((f) => f.id?.toString().substring(0, 8) ?? 'null').join(', ')}${friendsList.length > 3 ? '...' : ''}',
-                                  style: TextStyle(fontSize: 10, color: Colors.blue[700]),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
               )
             else
               ...friendRidePosts.map((post) {
+                // Find the friend user object from friendsList
+                final friendUserId = post['userId']?.toString() ?? '';
+                final friend = friendsList.firstWhere(
+                  (f) => f.id.toString() == friendUserId,
+                  orElse: () => User(
+                    id: friendUserId,
+                    name: post['userName'] ?? 'Unknown User',
+                    email: '',
+                    role: '',
+                  ),
+                );
+                
                 return Container(
                   margin: EdgeInsets.fromLTRB(16, 8, 16, 8),
                   decoration: BoxDecoration(
@@ -2884,9 +2773,7 @@ class _RideshareScreenState extends State<RideshareScreen>
                             CircleAvatar(
                               backgroundColor: Colors.blue[100],
                               child: Text(
-                                post['userName']?.isNotEmpty == true
-                                    ? post['userName'][0].toUpperCase()
-                                    : 'U',
+                                friend.firstNameInitial,
                                 style: TextStyle(
                                   color: Colors.blue[700],
                                   fontWeight: FontWeight.bold,
@@ -2899,7 +2786,7 @@ class _RideshareScreenState extends State<RideshareScreen>
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    post['userName'] ?? 'Unknown User',
+                                    friend.name,
                                     style: TextStyle(
                                       fontWeight: FontWeight.w600,
                                       fontSize: 16,
@@ -3009,78 +2896,24 @@ class _RideshareScreenState extends State<RideshareScreen>
                                 ),
                               ),
                             ),
+                            SizedBox(width: 8),
+                            IconButton(
+                              icon: Icon(Icons.chat, color: Colors.blue),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ChatScreen(friend: friend),
+                                  ),
+                                );
+                              },
+                              tooltip: 'Chat with ${friend.name}',
+                            ),
                             _buildRequestButton(post),
                           ],
                         ),
                         SizedBox(height: 8),
-                        FutureBuilder<Map<String, double>?>(
-                          future: _computeFare(
-                              post['source'] ?? '', post['destination'] ?? ''),
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState ==
-                                ConnectionState.waiting) {
-                              return SizedBox(
-                                width: 16,
-                                height: 16,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              );
-                            }
-                            final data = snapshot.data;
-                            if (data == null) return SizedBox.shrink();
-                            final km = data['distanceKm'] ?? 0;
-                            final fare = data['fare'] ?? 0;
-
-                            // Calculate individual fare
-                            final individualFareData =
-                                _computeIndividualFare(post, data);
-                            final originalFare =
-                                individualFareData?['originalFare'] ?? fare;
-                            final individualFare =
-                                individualFareData?['individualFare'] ?? fare;
-                            final participantCount =
-                                individualFareData?['participantCount'] ?? 1;
-
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(Icons.payments,
-                                        color: Colors.blue, size: 16),
-                                    SizedBox(width: 6),
-                                    Text(
-                                      '${km.toStringAsFixed(1)} km · ৳${originalFare.toStringAsFixed(0)}',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.blue[700],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                if (participantCount > 1) ...[
-                                  SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      Icon(Icons.people,
-                                          color: Colors.green, size: 14),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        'Individual: ৳${individualFare.toStringAsFixed(0)} (${participantCount.toInt()} participants)',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                          color: Colors.green[700],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ],
-                            );
-                          },
-                        ),
+                        _buildFareDisplay(post),
                         _buildAcceptedParticipantsSection(post),
                       ],
                     ),

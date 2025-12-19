@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
 import '../models/user.dart';
 import '../services/auth_service.dart';
+import '../services/chat_service.dart';
+import 'chat.dart';
 
 class FriendsScreen extends StatefulWidget {
   static const routeName = '/friends';
@@ -23,6 +26,8 @@ class _FriendsScreenState extends State<FriendsScreen>
   bool _isLoadingFriends = false;
   bool _isLoadingRequests = false;
   late TabController _tabController;
+  Map<String, int> _unreadCounts = {};
+  Timer? _unreadCountTimer;
 
   @override
   void initState() {
@@ -30,12 +35,28 @@ class _FriendsScreenState extends State<FriendsScreen>
     _tabController = TabController(length: 3, vsync: this);
     _loadFriendsList();
     _loadPendingRequests();
+    _loadUnreadCounts();
+    
+    // Refresh unread counts every 5 seconds
+    _unreadCountTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (mounted) {
+        _loadUnreadCounts();
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh unread counts when screen comes into focus
+    _loadUnreadCounts();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     _tabController.dispose();
+    _unreadCountTimer?.cancel();
     super.dispose();
   }
 
@@ -78,6 +99,18 @@ class _FriendsScreenState extends State<FriendsScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to load pending requests: $e')),
       );
+    }
+  }
+
+  Future<void> _loadUnreadCounts() async {
+    try {
+      final unreadCounts = await ChatService.getUnreadCounts();
+      setState(() {
+        _unreadCounts = unreadCounts;
+      });
+    } catch (e) {
+      // Silently fail - unread counts are not critical
+      print('Error loading unread counts: $e');
     }
   }
 
@@ -326,43 +359,49 @@ class _FriendsScreenState extends State<FriendsScreen>
 
   Widget _buildFriendsTab() {
     return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: _isLoadingFriends
-            ? Center(child: CircularProgressIndicator())
-            : _friendsList.isEmpty
-                ? Center(
-                    child: Column(
-                      children: [
-                        Icon(Icons.people_outline,
-                            size: 64, color: Colors.grey[400]),
-                        SizedBox(height: 16),
-                        Text(
-                          'No friends yet',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.w500,
+      child: RefreshIndicator(
+        onRefresh: () async {
+          await _loadFriendsList();
+          await _loadUnreadCounts();
+        },
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: _isLoadingFriends
+              ? Center(child: CircularProgressIndicator())
+              : _friendsList.isEmpty
+                  ? Center(
+                      child: Column(
+                        children: [
+                          Icon(Icons.people_outline,
+                              size: 64, color: Colors.grey[400]),
+                          SizedBox(height: 16),
+                          Text(
+                            'No friends yet',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Search for users and send friend requests to connect',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[500],
+                          SizedBox(height: 8),
+                          Text(
+                            'Search for users and send friend requests to connect',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[500],
+                            ),
+                            textAlign: TextAlign.center,
                           ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: _friendsList.length,
+                      itemBuilder: (context, index) {
+                        return _buildFriendCard(_friendsList[index]);
+                      },
                     ),
-                  )
-                : ListView.builder(
-                    itemCount: _friendsList.length,
-                    itemBuilder: (context, index) {
-                      return _buildFriendCard(_friendsList[index]);
-                    },
-                  ),
+        ),
       ),
     );
   }
@@ -485,36 +524,64 @@ class _FriendsScreenState extends State<FriendsScreen>
           ),
         ],
       ),
-      child: ListTile(
-        leading: CircleAvatar(
-          radius: 25,
-          backgroundColor: Colors.green[100],
-          child: Text(
-            friend.firstNameInitial,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.green[700],
+      child: InkWell(
+        onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatScreen(friend: friend),
+            ),
+          );
+          // Refresh unread counts when returning from chat
+          _loadUnreadCounts();
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: ListTile(
+          leading: CircleAvatar(
+            radius: 25,
+            backgroundColor: Colors.green[100],
+            child: Text(
+              friend.firstNameInitial,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.green[700],
+              ),
             ),
           ),
-        ),
-        title: Text(
-          friend.name,
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 16,
+          title: Text(
+            friend.name,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 16,
+            ),
           ),
-        ),
-        subtitle: Text(
-          friend.email,
-          style: TextStyle(
-            color: Colors.grey[600],
-            fontSize: 14,
+          subtitle: Text(
+            friend.email,
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 14,
+            ),
           ),
-        ),
-        trailing: Icon(
-          Icons.check_circle,
-          color: Colors.green,
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_unreadCounts[friend.id] != null && _unreadCounts[friend.id]! > 0)
+                Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              Icon(
+                Icons.check_circle,
+                color: Colors.green,
+              ),
+            ],
+          ),
         ),
       ),
     );

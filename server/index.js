@@ -65,6 +65,7 @@ app.use('/offers', require('./routes/offers'));
 app.use('/gpay', require('./routes/gpay'));
 app.use('/verify', require('./routes/verify'));
 app.use('/api/stops', require('./routes/stops'));
+app.use('/api/chat', require('./routes/chat'));
 
 // Test route to verify server is working
 app.get('/test', (req, res) => {

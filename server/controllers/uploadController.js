@@ -1,5 +1,4 @@
 const cloudinary = require('cloudinary').v2;
-const { Readable } = require('stream');
 
 // Configure Cloudinary
 // Priority: 1. CLOUDINARY_URL env variable, 2. Individual env variables
@@ -35,70 +34,32 @@ const uploadImage = async (req, res) => {
       });
     }
 
-    // Extract base64 string from data URI if present
-    // Format: data:image/jpeg;base64,{base64String} or just {base64String}
-    let base64String = image;
-    if (image.startsWith('data:')) {
-      // Extract base64 part after the comma
-      const commaIndex = image.indexOf(',');
-      if (commaIndex !== -1) {
-        base64String = image.substring(commaIndex + 1);
-        console.log('Extracted base64 string, length:', base64String.length);
+    // Use Cloudinary's upload method with base64 data URI directly
+    // This is the most reliable approach that avoids _Namespace errors
+    // Cloudinary can handle base64 data URIs natively
+    console.log('📤 Starting Cloudinary upload...');
+    
+    // Ensure the image is in data URI format
+    let dataUri = image;
+    if (!image.startsWith('data:')) {
+      // If it's just base64, add the data URI prefix
+      dataUri = `data:image/jpeg;base64,${image}`;
+    }
+    
+    const uploadResult = await cloudinary.uploader.upload(
+      dataUri,
+      {
+        folder: 'student_verifications',
+        resource_type: 'image',
+        transformation: [
+          { width: 800, height: 800, crop: 'limit' },
+          { quality: 'auto' }
+        ],
+        allowed_formats: ['jpg', 'jpeg', 'png']
       }
-    }
-
-    // Convert base64 string to Buffer
-    let imageBuffer;
-    try {
-      imageBuffer = Buffer.from(base64String, 'base64');
-      console.log('✅ Buffer created successfully, size:', imageBuffer.length, 'bytes');
-    } catch (bufferError) {
-      console.error('❌ Failed to create buffer:', bufferError);
-      throw new Error(`Invalid base64 data: ${bufferError.message}`);
-    }
-
-    // Method 1: Try using upload_stream with a properly created Readable stream
-    // This is the most reliable method for production environments
-    const uploadResult = await new Promise((resolve, reject) => {
-      // Create a proper Readable stream from the buffer
-      const stream = new Readable();
-      stream.push(imageBuffer);
-      stream.push(null); // Signal end of stream
-
-      const uploadStream = cloudinary.uploader.upload_stream(
-        {
-          folder: 'student_verifications',
-          resource_type: 'image',
-          transformation: [
-            { width: 800, height: 800, crop: 'limit' },
-            { quality: 'auto' }
-          ],
-          allowed_formats: ['jpg', 'jpeg', 'png']
-        },
-        (error, result) => {
-          if (error) {
-            console.error('Cloudinary upload_stream error:', error);
-            reject(error);
-          } else {
-            resolve(result);
-          }
-        }
-      );
-
-      // Pipe the stream to Cloudinary
-      stream.pipe(uploadStream);
-
-      // Handle stream errors
-      stream.on('error', (err) => {
-        console.error('Stream error:', err);
-        reject(err);
-      });
-
-      uploadStream.on('error', (err) => {
-        console.error('Upload stream error:', err);
-        reject(err);
-      });
-    });
+    );
+    
+    console.log('✅ Upload successful:', uploadResult.secure_url);
 
     res.status(200).json({
       success: true,

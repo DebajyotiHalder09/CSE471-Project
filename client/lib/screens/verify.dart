@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/verify_service.dart';
@@ -21,7 +21,7 @@ class _VerifyScreenState extends State<VerifyScreen> {
   bool _isLoading = false;
   bool _hasExistingRequest = false;
   Map<String, dynamic>? _existingVerification;
-  File? _selectedImage;
+  Uint8List? _selectedImageBytes;
   String? _uploadedImageUrl;
   bool _isUploadingImage = false;
   final ImagePicker _picker = ImagePicker();
@@ -56,8 +56,10 @@ class _VerifyScreenState extends State<VerifyScreen> {
       );
 
       if (image != null) {
+        // Read image as bytes (works on both web and mobile)
+        final bytes = await image.readAsBytes();
         setState(() {
-          _selectedImage = File(image.path);
+          _selectedImageBytes = bytes;
           _uploadedImageUrl = null;
         });
       }
@@ -72,23 +74,20 @@ class _VerifyScreenState extends State<VerifyScreen> {
   }
 
   Future<void> _uploadImage() async {
-    if (_selectedImage == null) return;
+    if (_selectedImageBytes == null) return;
 
     setState(() {
       _isUploadingImage = true;
     });
 
     try {
-      // Read image file and convert to base64
-      final bytes = await _selectedImage!.readAsBytes();
-      
       // Check file size (limit to ~5MB for base64)
-      if (bytes.length > 5 * 1024 * 1024) {
+      if (_selectedImageBytes!.length > 5 * 1024 * 1024) {
         setState(() {
           _isUploadingImage = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Image is too large. Please select a smaller image.'),
             backgroundColor: Colors.red,
           ),
@@ -96,7 +95,7 @@ class _VerifyScreenState extends State<VerifyScreen> {
         return;
       }
       
-      final base64Image = base64Encode(bytes);
+      final base64Image = base64Encode(_selectedImageBytes!);
       final imageDataUri = 'data:image/jpeg;base64,$base64Image';
 
       // Upload to server
@@ -108,7 +107,7 @@ class _VerifyScreenState extends State<VerifyScreen> {
           _isUploadingImage = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Image uploaded successfully'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 2),
@@ -144,11 +143,11 @@ class _VerifyScreenState extends State<VerifyScreen> {
     }
 
     // If image is selected but not uploaded, upload it first
-    if (_selectedImage != null && _uploadedImageUrl == null) {
+    if (_selectedImageBytes != null && _uploadedImageUrl == null) {
       await _uploadImage();
       if (_uploadedImageUrl == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Please wait for image to upload'),
             backgroundColor: Colors.orange,
           ),
@@ -467,7 +466,7 @@ class _VerifyScreenState extends State<VerifyScreen> {
                   ),
                 ),
                 SizedBox(height: 12),
-                if (_selectedImage != null) ...[
+                if (_selectedImageBytes != null) ...[
                   Container(
                     height: 200,
                     width: double.infinity,
@@ -477,8 +476,8 @@ class _VerifyScreenState extends State<VerifyScreen> {
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Image.file(
-                        _selectedImage!,
+                      child: Image.memory(
+                        _selectedImageBytes!,
                         fit: BoxFit.cover,
                       ),
                     ),
@@ -530,12 +529,12 @@ class _VerifyScreenState extends State<VerifyScreen> {
                 ],
                 ElevatedButton.icon(
                   onPressed: _pickImage,
-                  icon: Icon(Icons.add_photo_alternate),
-                  label: Text(_selectedImage == null ? 'Select Image' : 'Change Image'),
+                  icon: const Icon(Icons.add_photo_alternate),
+                  label: Text(_selectedImageBytes == null ? 'Select Image' : 'Change Image'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.grey[200],
                     foregroundColor: Colors.grey[800],
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   ),
                 ),
                 SizedBox(height: 20),

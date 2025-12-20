@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/app_theme.dart';
 import '../models/user.dart';
 import '../services/auth_service.dart';
 import '../services/rideshare_service.dart';
@@ -8,6 +9,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'chat.dart';
+import '../utils/loading_widgets.dart';
+import '../utils/error_widgets.dart';
+import 'rideshare_modern_components.dart';
 
 class RideshareScreen extends StatefulWidget {
   final String? source;
@@ -34,6 +38,7 @@ class _RideshareScreenState extends State<RideshareScreen>
   String? selectedGender;
   bool isSearching = false;
   bool isFindRideExpanded = false;
+  bool isPostRideExpanded = true; // Start expanded by default
   Map<String, List<Map<String, dynamic>>> rideRequests = {};
   Map<String, List<Map<String, dynamic>>> rideParticipants = {};
   List<Map<String, dynamic>> userRides = [];
@@ -1058,24 +1063,15 @@ class _RideshareScreenState extends State<RideshareScreen>
         });
         await _loadRideRequests();
         await _loadUserRequestStatus();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ride request sent successfully!')),
-        );
+        SuccessSnackbar.show(context, 'Ride request sent successfully!');
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(response['message'] ?? 'Failed to send ride request'),
-            backgroundColor: Colors.red,
-          ),
+        ErrorSnackbar.show(
+          context,
+          response['message'] ?? 'Failed to send ride request',
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error sending ride request'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      ErrorSnackbar.show(context, 'Error sending ride request');
     }
   }
 
@@ -1114,12 +1110,7 @@ class _RideshareScreenState extends State<RideshareScreen>
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error accepting ride request'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      ErrorSnackbar.show(context, 'Error accepting ride request');
     }
   }
 
@@ -1155,12 +1146,7 @@ class _RideshareScreenState extends State<RideshareScreen>
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error rejecting ride request'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      ErrorSnackbar.show(context, 'Error rejecting ride request');
     }
   }
 
@@ -1605,9 +1591,7 @@ class _RideshareScreenState extends State<RideshareScreen>
         if (currentUser != null) {
           await _loadUserRequestStatus();
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ride posted successfully!')),
-        );
+        SuccessSnackbar.show(context, 'Ride posted successfully!');
       } else {
         setState(() {
           errorMessage = response['message'] ?? 'Failed to post ride';
@@ -1632,20 +1616,15 @@ class _RideshareScreenState extends State<RideshareScreen>
         if (currentUser != null) {
           await _loadUserRequestStatus();
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ride post deleted successfully!')),
-        );
+        SuccessSnackbar.show(context, 'Ride post deleted successfully!');
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content:
-                  Text(response['message'] ?? 'Failed to delete ride post')),
+        ErrorSnackbar.show(
+          context,
+          response['message'] ?? 'Failed to delete ride post',
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error deleting ride post')),
-      );
+      ErrorSnackbar.show(context, 'Error deleting ride post');
     }
   }
 
@@ -2305,27 +2284,56 @@ class _RideshareScreenState extends State<RideshareScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 245, 245, 245),
+      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundLight,
       appBar: AppBar(
-        backgroundColor: Colors.white,
         elevation: 0,
-        title: Text(
-          'Rideshare',
-          style: TextStyle(
-            color: Colors.black87,
-            fontWeight: FontWeight.w600,
+        backgroundColor: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+        foregroundColor: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+        automaticallyImplyLeading: false,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(50),
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+              boxShadow: [
+                BoxShadow(
+                  color: isDark
+                      ? Colors.black.withOpacity(0.3)
+                      : Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: TabBar(
+              controller: _tabController,
+              indicator: BoxDecoration(
+                gradient: AppTheme.primaryGradient,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(12),
+                  topRight: Radius.circular(12),
+                ),
+              ),
+              indicatorSize: TabBarIndicatorSize.tab,
+              indicatorColor: Colors.transparent,
+              labelColor: Colors.white,
+              unselectedLabelColor: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+              labelStyle: AppTheme.labelLarge.copyWith(fontWeight: FontWeight.bold),
+              unselectedLabelStyle: AppTheme.bodyMedium,
+              tabs: const [
+                Tab(
+                  icon: Icon(Icons.add_road, size: 20),
+                  text: 'Post Ride',
+                ),
+                Tab(
+                  icon: Icon(Icons.people, size: 20),
+                  text: 'Friends',
+                ),
+              ],
+            ),
           ),
-        ),
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: Colors.blue,
-          unselectedLabelColor: Colors.grey,
-          indicatorColor: Colors.blue,
-          tabs: [
-            Tab(text: 'Post'),
-            Tab(text: 'Friend'),
-          ],
         ),
       ),
       body: TabBarView(
@@ -2350,53 +2358,106 @@ class _RideshareScreenState extends State<RideshareScreen>
       child: SingleChildScrollView(
         child: Column(
           children: [
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey.withOpacity(0.1),
-                    spreadRadius: 1,
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
+            // Post Ride Section - Expandable
+            Builder(
+              builder: (context) {
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                return Container(
+                  margin: const EdgeInsets.all(16),
+                  decoration: AppTheme.modernCardDecorationDark(
+                    context,
+                    color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
                   ),
-                ],
-              ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Post a Ride',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        isPostRideExpanded = !isPostRideExpanded;
+                      });
+                    },
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            AppTheme.primaryBlue.withOpacity(0.1),
+                            AppTheme.accentGreen.withOpacity(0.1),
+                          ],
+                        ),
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(16),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              gradient: AppTheme.primaryGradient,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.add_road,
+                color: Colors.white,
+                              size: 24,
+                            ),
+                  ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Post a Ride',
+                                  style: AppTheme.heading4Dark(context),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Share your journey with others',
+                                  style: AppTheme.bodySmallDark(context),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Builder(
+                            builder: (context) {
+                              final isDark = Theme.of(context).brightness == Brightness.dark;
+                              return Icon(
+                                isPostRideExpanded
+                                    ? Icons.keyboard_arrow_up
+                                    : Icons.keyboard_arrow_down,
+                                color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                                size: 28,
+                              );
+                            },
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  SizedBox(height: 12),
+                  if (isPostRideExpanded)
+                    Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                   if (_hasExistingPost()) ...[
-                          _buildExistingPostCard(_getExistingPost()!),
-                          SizedBox(height: 12),
+                            _buildModernExistingPostCard(_getExistingPost()!),
+                            const SizedBox(height: 16),
                           SizedBox(
                             width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: () =>
-                                  _deleteRidePost(_getExistingPost()!['_id']),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
-                                padding: EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                              child: Text(
-                                'Delete Current Post',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                              child: OutlinedButton.icon(
+                                onPressed: () => _deleteRidePost(_getExistingPost()!['_id']),
+                                icon: const Icon(Icons.delete_outline),
+                                label: const Text('Delete Current Post'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppTheme.accentRed,
+                                  side: BorderSide(color: AppTheme.accentRed),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
                               ),
                       ),
                     ),
@@ -2405,7 +2466,6 @@ class _RideshareScreenState extends State<RideshareScreen>
                       controller: sourceController,
                       onChanged: (_) {
                         _scheduleFareCalculation();
-                        // Clear previous fare when source changes
                         if (estimatedFare != null) {
                           setState(() {
                             estimatedDistanceKm = null;
@@ -2414,22 +2474,18 @@ class _RideshareScreenState extends State<RideshareScreen>
                         }
                       },
                       decoration: InputDecoration(
+                                labelText: 'From',
                         hintText: 'Enter source location',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        filled: true,
-                        fillColor: Colors.grey[50],
-                        prefixIcon:
-                            Icon(Icons.location_on, color: Colors.green),
+                        prefixIcon: const Icon(Icons.location_on, color: AppTheme.accentGreen),
+                                filled: true,
+                                fillColor: AppTheme.backgroundLight,
                       ),
                     ),
-                    SizedBox(height: 12),
+                            const SizedBox(height: 16),
                     TextField(
                       controller: destinationController,
                       onChanged: (_) {
                         _scheduleFareCalculation();
-                        // Clear previous fare when destination changes
                         if (estimatedFare != null) {
                           setState(() {
                             estimatedDistanceKm = null;
@@ -2438,247 +2494,769 @@ class _RideshareScreenState extends State<RideshareScreen>
                         }
                       },
                       decoration: InputDecoration(
+                                labelText: 'To',
                         hintText: 'Enter destination location',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        filled: true,
-                        fillColor: Colors.grey[50],
-                        prefixIcon: Icon(Icons.flag, color: Colors.red),
+                                prefixIcon: const Icon(Icons.flag, color: AppTheme.accentRed),
+                                filled: true,
+                                fillColor: AppTheme.backgroundLight,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            // Fare estimation card
+                            _buildFareEstimationCardInline(),
+                            const SizedBox(height: 20),
+                            // Post button
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: (isLoading || currentUser == null) ? null : _postRide,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: currentUser == null
+                                      ? AppTheme.textTertiary
+                                      : AppTheme.primaryBlue,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  elevation: 2,
+                                ),
+                                child: isLoading
+                                    ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                        ),
+                                      )
+                                    : Text(
+                                        currentUser == null ? 'Login Required' : 'Post Ride',
+                                        style: AppTheme.labelLarge.copyWith(
+                                          color: Colors.white,
+                    ),
+                                      ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                    SizedBox(height: 12),
-                    Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.blue[50],
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.blue[200]!),
+                ],
+              ),
+                );
+              },
+            ),
+            if (errorMessage != null)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.accentRed.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.accentRed),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.error_outline, color: AppTheme.accentRed, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        errorMessage!,
+                        style: AppTheme.bodyMedium.copyWith(
+                          color: AppTheme.accentRed,
+                        ),
                       ),
-                      child: Row(
+                    ),
+                  ],
+                ),
+              ),
+            _buildModernYourRideSection(),
+            _buildModernFindRideSection(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFareEstimationCardInline() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryBlue.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+          color: AppTheme.primaryBlue.withOpacity(0.2),
+                        ),
+                      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.local_taxi, color: Colors.blue),
-                          SizedBox(width: 8),
+          Row(
+            children: [
+              Icon(Icons.local_taxi, color: AppTheme.primaryBlue, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Fare Estimation',
+                style: AppTheme.labelLarge.copyWith(
+                  color: AppTheme.primaryBlue,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
                           if (isFareCalculating)
                             Row(
                               children: [
-                                SizedBox(
+                const SizedBox(
                                   width: 16,
                                   height: 16,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(strokeWidth: 2),
                                 ),
-                                SizedBox(width: 8),
-                                Text('Estimating fare...'),
+                const SizedBox(width: 12),
+                Text(
+                  'Calculating fare...',
+                  style: AppTheme.bodyMedium,
+                ),
                               ],
                             )
-                          else if (estimatedFare != null &&
-                              estimatedDistanceKm != null)
+          else if (estimatedFare != null && estimatedDistanceKm != null)
+            Row(
+              children: [
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '${estimatedDistanceKm!.toStringAsFixed(1)} km · ৳${estimatedFare!.toStringAsFixed(0)} (৳30/km)',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.blue[800],
+                        '${estimatedDistanceKm!.toStringAsFixed(1)} km',
+                        style: AppTheme.bodySmall.copyWith(
+                          color: AppTheme.textSecondary,
                                     ),
                                   ),
-                                  if (_fareCache[
-                                          '${sourceController.text.trim().toLowerCase()}|${destinationController.text.trim().toLowerCase()}'] !=
-                                      null)
+                      const SizedBox(height: 4),
                                     Text(
-                                      'Fare calculated automatically',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.green[600],
-                                        fontStyle: FontStyle.italic,
+                        '৳${estimatedFare!.toStringAsFixed(0)}',
+                        style: AppTheme.heading4.copyWith(
+                          color: AppTheme.primaryBlue,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '৳30 per km',
+                        style: AppTheme.bodySmall.copyWith(
+                          color: AppTheme.textSecondary,
                                       ),
                                     ),
                                 ],
                               ),
+                ),
+              ],
                             )
                           else
-                            Expanded(
-                              child: Column(
+            Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     sourceController.text.trim().isNotEmpty &&
-                                            destinationController.text
-                                                .trim()
-                                                .isNotEmpty
-                                        ? 'Click Calculate Fare to see pricing'
-                                        : 'Enter source and destination to see fare (৳30/km)',
-                                    style: TextStyle(color: Colors.blue[800]),
+                          destinationController.text.trim().isNotEmpty
+                      ? 'Click to calculate fare'
+                      : 'Enter locations to see fare',
+                  style: AppTheme.bodyMedium.copyWith(
+                    color: AppTheme.textSecondary,
+                  ),
                                   ),
                                   if (_shouldShowCalculateFareButton()) ...[
-                                    SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: ElevatedButton(
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
                                             onPressed: _forceFareCalculation,
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: Colors.blue[600],
-                                              padding: EdgeInsets.symmetric(
-                                                  horizontal: 16, vertical: 8),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(6),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: AppTheme.primaryBlue),
+                                            ),
+                      child: const Text('Calculate Fare'),
+                    ),
+                  ),
+                ],
+              ],
                                               ),
-                                            ),
-                                            child: Text(
-                                              'Calculate Fare',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
+        ],
                                           ),
-                                        ),
-                                        SizedBox(width: 8),
-                                        ElevatedButton(
-                                          onPressed: () {
-                                            print('=== DEBUG INFO ===');
-                                            print(
-                                                'Source: "${sourceController.text}"');
-                                            print(
-                                                'Destination: "${destinationController.text}"');
-                                            print(
-                                                'Source length: ${sourceController.text.length}');
-                                            print(
-                                                'Destination length: ${destinationController.text.length}');
-                                            print(
-                                                'Estimated fare: $estimatedFare');
-                                            print(
-                                                'Estimated distance: $estimatedDistanceKm');
-                                            print(
-                                                'Is calculating: $isFareCalculating');
-                                            print('==================');
-                                          },
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.grey[600],
-                                            padding: EdgeInsets.symmetric(
-                                                horizontal: 8, vertical: 8),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(6),
-                                            ),
+    );
+  }
+
+  Widget _buildModernExistingPostCard(Map<String, dynamic> post) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.accentGreen.withOpacity(0.1),
+            AppTheme.primaryBlue.withOpacity(0.1),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppTheme.accentGreen.withOpacity(0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.accentGreen.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
                                           ),
-                                          child: Text(
-                                            'Debug',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w600,
+                child: const Icon(
+                  Icons.check_circle,
+                  color: AppTheme.accentGreen,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Active Ride Post',
+                  style: AppTheme.heading4.copyWith(
+                    color: AppTheme.accentGreen,
                                             ),
                                           ),
                                         ),
                                       ],
                                     ),
-                                  ],
-                                  if (sourceController.text.trim().isNotEmpty &&
-                                      destinationController.text
-                                          .trim()
-                                          .isNotEmpty &&
-                                      estimatedFare == null &&
-                                      !isFareCalculating) ...[
-                                    SizedBox(height: 8),
-                                    Text(
-                                      'If geocoding fails, try using more specific addresses',
-                                      style: TextStyle(
-                                        color: Colors.orange[700],
-                                        fontSize: 11,
-                                        fontStyle: FontStyle.italic,
-                                      ),
+          const SizedBox(height: 16),
+          _buildLocationRow(
+            icon: Icons.location_on,
+            iconColor: AppTheme.accentGreen,
+            label: 'From',
+            location: post['source'] ?? 'Unknown location',
+          ),
+          const SizedBox(height: 12),
+          _buildLocationRow(
+            icon: Icons.flag,
+            iconColor: AppTheme.accentRed,
+            label: 'To',
+            location: post['destination'] ?? 'Unknown location',
+          ),
+          const SizedBox(height: 12),
+          _buildFareDisplay(post),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocationRow({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required String location,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: iconColor.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
                                     ),
-                                  ],
-                                ],
-                              ),
+          child: Icon(icon, color: iconColor, size: 18),
                             ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(height: 12),
-                    if (currentUser != null) ...[
-                      Row(
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.person, color: Colors.blue, size: 16),
-                          SizedBox(width: 8),
                           Text(
-                            'Posted by: ${currentUser!.name}',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
+                label,
+                style: AppTheme.labelSmall.copyWith(
+                  color: AppTheme.textSecondary,
                             ),
                           ),
-                          SizedBox(width: 16),
-                          Icon(Icons.wc, color: Colors.purple, size: 16),
-                          SizedBox(width: 8),
+              const SizedBox(height: 2),
                           Text(
-                            'Gender: ${currentUser!.gender ?? 'Not specified'}',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
+                location,
+                style: AppTheme.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w600,
                             ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
-                      SizedBox(height: 12),
-                    ],
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: (isLoading || currentUser == null)
-                            ? null
-                            : _postRide,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              currentUser == null ? Colors.grey : Colors.blue,
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildModernYourRideSection() {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      decoration: AppTheme.modernCardDecoration(),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () {
+              setState(() {
+                isYourRideExpanded = !isYourRideExpanded;
+              });
+            },
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppTheme.accentPurple.withOpacity(0.1),
+                    AppTheme.accentOrange.withOpacity(0.1),
+                  ],
+                ),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(16),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [AppTheme.accentPurple, AppTheme.accentOrange],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Text(
-                          currentUser == null ? 'Login Required' : 'Post Ride',
-                          style: TextStyle(
+                    child: const Icon(
+                      Icons.directions_car,
                             color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                          ),
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Your Rides',
+                          style: AppTheme.heading4,
                         ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${userRides.length} active ride${userRides.length != 1 ? 's' : ''}',
+                          style: AppTheme.bodySmall.copyWith(
+                            color: AppTheme.textSecondary,
                       ),
                     ),
-                  ],
                 ],
               ),
             ),
-            if (errorMessage != null)
-              Container(
-                width: double.infinity,
-                margin: EdgeInsets.all(16),
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.red[50],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red[200]!),
+                  Icon(
+                    isYourRideExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    color: AppTheme.textSecondary,
+                    size: 28,
                 ),
-                child: Text(
-                  errorMessage!,
-                  style: TextStyle(
-                    color: Colors.red[700],
-                    fontWeight: FontWeight.w500,
+                ],
                   ),
                 ),
               ),
-            _buildYourRideSection(),
-            _buildFindRideSection(),
+          if (isYourRideExpanded) ...[
+            if (userRides.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(32),
+                child: EmptyStateWidget(
+                  title: 'No rides yet',
+                  message: 'Post a ride or join one to see it here',
+                  icon: Icons.directions_car_outlined,
+                ),
+              )
+            else
+              ...userRides.map((post) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                  child: _buildModernRideCard(post, isUserRide: true),
+                );
+              }),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModernFindRideSection() {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      decoration: AppTheme.modernCardDecoration(),
+        child: Column(
+          children: [
+          InkWell(
+            onTap: () {
+              setState(() {
+                isFindRideExpanded = !isFindRideExpanded;
+              });
+            },
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppTheme.primaryBlue.withOpacity(0.1),
+                    AppTheme.accentGreen.withOpacity(0.1),
+                  ],
+                ),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(16),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      gradient: AppTheme.primaryGradient,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.search,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                        Text(
+                          'Find a Ride',
+                          style: AppTheme.heading4,
+                      ),
+                        const SizedBox(height: 4),
+                      Text(
+                          isSearching
+                              ? '${filteredRidePosts.length} result${filteredRidePosts.length != 1 ? 's' : ''}'
+                              : '${filteredRidePosts.length} available ride${filteredRidePosts.length != 1 ? 's' : ''}',
+                          style: AppTheme.bodySmall.copyWith(
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    isFindRideExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    color: AppTheme.textSecondary,
+                    size: 28,
+                        ),
+                ],
+              ),
+            ),
+          ),
+          if (isFindRideExpanded) ...[
+            _buildSearchSection(),
+            if (isLoading)
+              const Padding(
+                padding: EdgeInsets.all(32),
+                child: LoadingWidget(message: 'Loading rides...'),
+              )
+            else if (filteredRidePosts.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(32),
+                child: EmptyStateWidget(
+                  title: isSearching
+                      ? 'No matching rides found'
+                      : 'No ride posts available',
+                  message: isSearching
+                      ? 'Try adjusting your search criteria'
+                      : 'Be the first to post a ride request!',
+                  icon: isSearching ? Icons.search_off : Icons.local_taxi,
+                ),
+              )
+            else
+              ...filteredRidePosts.map((post) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                  child: _buildModernRideCard(post),
+                );
+              }),
+          ],
+        ],
+                  ),
+                );
+  }
+
+  Widget _buildSearchSection() {
+                return Container(
+      margin: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+        color: AppTheme.backgroundLight,
+                    borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.borderLight),
+                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+              Icon(Icons.filter_list, color: AppTheme.primaryBlue, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Search & Filter',
+                style: AppTheme.labelLarge.copyWith(
+                  color: AppTheme.primaryBlue,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: searchSourceController,
+            decoration: InputDecoration(
+              labelText: 'From',
+              hintText: 'Search by source location',
+              prefixIcon: const Icon(Icons.location_on, color: AppTheme.accentGreen),
+              filled: true,
+              fillColor: Colors.white,
+                              ),
+                            ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: searchDestinationController,
+            decoration: InputDecoration(
+              labelText: 'To',
+              hintText: 'Search by destination location',
+              prefixIcon: const Icon(Icons.flag, color: AppTheme.accentRed),
+              filled: true,
+              fillColor: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 16),
+                                  Row(
+                                    children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _applySearch,
+                  icon: const Icon(Icons.search, size: 18),
+                  label: const Text('Search'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              OutlinedButton.icon(
+                onPressed: () {
+                  searchSourceController.clear();
+                  searchDestinationController.clear();
+                  _applySearch();
+                },
+                icon: const Icon(Icons.clear, size: 18),
+                label: const Text('Clear'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+    );
+  }
+
+  Widget _buildModernRideCard(Map<String, dynamic> post, {bool isUserRide = false}) {
+    final isOwnPost = currentUser?.id == post['userId']?.toString();
+    final requests = rideRequests[post['_id']?.toString() ?? ''] ?? [];
+    final acceptedRequests = requests.where((req) => req['status'] == 'accepted').toList();
+    final participantCount = acceptedRequests.length + 1; // +1 for creator
+    
+    final savedDistance = post['distance'];
+    final savedFare = post['fare'];
+    double? distance;
+    double? fare;
+    double? individualFare;
+    
+    if (savedDistance != null && savedFare != null) {
+      distance = (savedDistance is num) ? savedDistance.toDouble() : double.tryParse(savedDistance.toString());
+      fare = (savedFare is num) ? savedFare.toDouble() : double.tryParse(savedFare.toString());
+      if (fare != null && participantCount > 1) {
+        individualFare = fare / participantCount;
+      }
+    }
+
+    return ModernRideCard(
+      post: post,
+      currentUser: currentUser,
+      userRequestStatus: userRequestStatus,
+      rideRequests: rideRequests,
+      onRequestJoin: isOwnPost ? null : () => _sendRideRequest(post['_id']),
+      onDelete: isOwnPost ? () => _deleteRidePost(post['_id']) : null,
+      onChat: () {
+        final friend = User(
+          id: post['userId']?.toString() ?? '',
+          name: post['userName'] ?? 'Unknown',
+          email: '',
+          role: '',
+        );
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(friend: friend),
+          ),
+        );
+      },
+      fareDisplay: (distance != null && fare != null)
+          ? ModernFareDisplay(
+              distance: distance,
+              fare: fare,
+              individualFare: individualFare,
+              participantCount: participantCount,
+            )
+          : null,
+      participantsSection: acceptedRequests.isNotEmpty
+          ? ModernParticipantsSection(participants: acceptedRequests)
+          : null,
+      requestsSection: isOwnPost ? _buildModernRequestsSection(post, requests) : null,
+    );
+  }
+
+  Widget _buildModernRequestsSection(
+    Map<String, dynamic> post,
+    List<Map<String, dynamic>> requests,
+  ) {
+    final pendingRequests = requests.where((req) => req['status'] == 'pending').toList();
+    
+    if (pendingRequests.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryBlue.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppTheme.primaryBlue.withOpacity(0.2),
         ),
+      ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+              Icon(Icons.pending_actions, color: AppTheme.primaryBlue, size: 20),
+              const SizedBox(width: 8),
+                                      Text(
+                'Pending Requests (${pendingRequests.length})',
+                style: AppTheme.labelLarge.copyWith(
+                  color: AppTheme.primaryBlue,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+          const SizedBox(height: 12),
+          ...pendingRequests.map((request) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.borderLight),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: AppTheme.primaryBlue.withOpacity(0.1),
+                    radius: 20,
+                    child: Text(
+                      (request['requesterName']?[0] ?? 'U').toUpperCase(),
+                                    style: TextStyle(
+                        color: AppTheme.primaryBlue,
+                        fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                              ),
+                  const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                      Text(
+                          request['requesterName'] ?? 'Unknown',
+                          style: AppTheme.bodyMedium.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                        const SizedBox(height: 2),
+                                  Text(
+                          'Gender: ${request['requesterGender'] ?? 'Not specified'}',
+                          style: AppTheme.bodySmall.copyWith(
+                            color: AppTheme.textSecondary,
+                          ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        Row(
+                          children: [
+                      ElevatedButton(
+                        onPressed: () => _acceptRideRequest(
+                          request['_id'],
+                          post['_id'],
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.accentGreen,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          minimumSize: Size.zero,
+                        ),
+                        child: const Text('Accept'),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton(
+                        onPressed: () => _rejectRideRequest(
+                          request['_id'],
+                          post['_id'],
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppTheme.accentRed,
+                          side: BorderSide(color: AppTheme.accentRed),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                                ),
+                          minimumSize: Size.zero,
+                            ),
+                        child: const Text('Reject'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
@@ -2692,234 +3270,99 @@ class _RideshareScreenState extends State<RideshareScreen>
       child: SingleChildScrollView(
         child: Column(
           children: [
+            // Header
+            Container(
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppTheme.accentPurple,
+                    AppTheme.primaryBlue,
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.accentPurple.withOpacity(0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                                  ),
+                    child: const Icon(
+                      Icons.people,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Friends\' Rides',
+                          style: AppTheme.heading3.copyWith(
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          isLoadingFriends
+                              ? 'Loading...'
+                              : friendRidePosts.isEmpty
+                                  ? 'No friend rides available'
+                                  : '${friendRidePosts.length} ride${friendRidePosts.length != 1 ? 's' : ''} from your friends',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Content
             if (isLoadingFriends)
-              Padding(
+              const Padding(
                 padding: EdgeInsets.all(32),
-                child: Center(child: CircularProgressIndicator()),
+                child: LoadingWidget(message: 'Loading friends\' rides...'),
               )
             else if (friendRidePosts.isEmpty)
               Padding(
-                padding: EdgeInsets.all(32),
-                child: Center(
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.people_outline,
-                        size: 64,
-                        color: Colors.grey[400],
-                      ),
-                      SizedBox(height: 16),
-                      Text(
-                        'No friend ride posts available',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.grey[600],
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        currentUser == null
-                            ? 'Please login to see your friends\' ride posts'
-                            : friendsList.isEmpty
-                                ? 'You don\'t have any friends yet. Add friends from the Friends screen.'
-                                : ridePosts.isEmpty
-                                    ? 'No ride posts available yet'
-                                    : 'None of your ${friendsList.length} friend(s) have posted rides yet',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[500],
-                        ),
-                      ),
-                    ],
-                  ),
+                padding: const EdgeInsets.all(32),
+                child: EmptyStateWidget(
+                  title: 'No friend ride posts available',
+                  message: currentUser == null
+                      ? 'Please login to see your friends\' ride posts'
+                      : friendsList.isEmpty
+                          ? 'You don\'t have any friends yet. Add friends from the Friends screen.'
+                          : ridePosts.isEmpty
+                              ? 'No ride posts available yet'
+                              : 'None of your ${friendsList.length} friend(s) have posted rides yet',
+                  icon: Icons.people_outline,
                 ),
               )
             else
               ...friendRidePosts.map((post) {
-                // Find the friend user object from friendsList
-                final friendUserId = post['userId']?.toString() ?? '';
-                final friend = friendsList.firstWhere(
-                  (f) => f.id.toString() == friendUserId,
-                  orElse: () => User(
-                    id: friendUserId,
-                    name: post['userName'] ?? 'Unknown User',
-                    email: '',
-                    role: '',
-                  ),
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: _buildModernRideCard(post),
                 );
-                
-                return Container(
-                  margin: EdgeInsets.fromLTRB(16, 8, 16, 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.grey.withOpacity(0.1),
-                        spreadRadius: 1,
-                        blurRadius: 4,
-                        offset: Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            CircleAvatar(
-                              backgroundColor: Colors.blue[100],
-                              child: Text(
-                                friend.firstNameInitial,
-                                style: TextStyle(
-                                  color: Colors.blue[700],
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    friend.name,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                  Row(
-                                    children: [
-                                      Icon(Icons.wc,
-                                          color: Colors.purple, size: 14),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        post['gender'] ?? 'Not specified',
-                                        style: TextStyle(
-                                          color: Colors.grey[600],
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(Icons.location_on,
-                                          color: Colors.green, size: 16),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        'From:',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 14,
-                                          color: Colors.grey[700],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    post['source'] ?? 'Unknown location',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.black87,
-                                    ),
-                                    softWrap: true,
-                                    overflow: TextOverflow.visible,
-                                    maxLines: null,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(Icons.flag,
-                                          color: Colors.red, size: 16),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        'To:',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 14,
-                                          color: Colors.grey[700],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    post['destination'] ?? 'Unknown location',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.black87,
-                                    ),
-                                    softWrap: true,
-                                    overflow: TextOverflow.visible,
-                                    maxLines: null,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Posted ${_formatDate(DateTime.parse(post['createdAt'] ?? DateTime.now().toIso8601String()))}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[500],
-                                  fontStyle: FontStyle.italic,
-                                ),
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            IconButton(
-                              icon: Icon(Icons.chat, color: Colors.blue),
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => ChatScreen(friend: friend),
-                                  ),
-                                );
-                              },
-                              tooltip: 'Chat with ${friend.name}',
-                            ),
-                            _buildRequestButton(post),
-                          ],
-                        ),
-                        SizedBox(height: 8),
-                        _buildFareDisplay(post),
-                        _buildAcceptedParticipantsSection(post),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
+              }),
           ],
         ),
       ),

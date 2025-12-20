@@ -3,6 +3,7 @@ import 'dart:async';
 import '../services/chat_service.dart';
 import '../services/auth_service.dart';
 import '../models/user.dart';
+import '../utils/app_theme.dart';
 
 class ChatScreen extends StatefulWidget {
   final User friend;
@@ -73,7 +74,10 @@ class _ChatScreenState extends State<ChatScreen> {
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading chat: $e')),
+          SnackBar(
+            content: Text('Error loading chat: $e'),
+            backgroundColor: AppTheme.accentRed,
+          ),
         );
       }
     }
@@ -131,7 +135,10 @@ class _ChatScreenState extends State<ChatScreen> {
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error sending message: $e')),
+          SnackBar(
+            content: Text('Error sending message: $e'),
+            backgroundColor: AppTheme.accentRed,
+          ),
         );
       }
     }
@@ -154,20 +161,41 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundLight,
       appBar: AppBar(
+        elevation: 0,
+        backgroundColor: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+        foregroundColor: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: Row(
           children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: Colors.blue[100],
-              child: Text(
-                widget.friend.firstNameInitial,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue[700],
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: AppTheme.primaryGradient,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryBlue.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(2),
+              child: CircleAvatar(
+                radius: 18,
+                backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
+                child: Text(
+                  widget.friend.firstNameInitial,
+                  style: AppTheme.heading4.copyWith(
+                    color: AppTheme.primaryBlue,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
@@ -178,29 +206,26 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [
                   Text(
                     widget.friend.name,
-                    style: const TextStyle(
-                      fontSize: 16,
+                    style: AppTheme.heading4Dark(context).copyWith(
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   Text(
                     widget.friend.email,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white70,
-                    ),
+                    style: AppTheme.bodySmallDark(context),
                   ),
                 ],
               ),
             ),
           ],
         ),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
-        elevation: 0,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryBlue),
+              ),
+            )
           : Column(
               children: [
                 // Messages list
@@ -210,26 +235,38 @@ class _ChatScreenState extends State<ChatScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(
-                                Icons.chat_bubble_outline,
-                                size: 64,
-                                color: Colors.grey[400],
+                              Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: isDark 
+                                      ? AppTheme.darkSurface 
+                                      : AppTheme.backgroundLight,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.chat_bubble_outline_rounded,
+                                  size: 64,
+                                  color: isDark 
+                                      ? AppTheme.darkTextTertiary 
+                                      : AppTheme.textTertiary,
+                                ),
                               ),
-                              const SizedBox(height: 16),
+                              const SizedBox(height: 24),
                               Text(
                                 'No messages yet',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  color: Colors.grey[600],
-                                  fontWeight: FontWeight.w500,
+                                style: AppTheme.heading4Dark(context).copyWith(
+                                  color: isDark 
+                                      ? AppTheme.darkTextSecondary 
+                                      : AppTheme.textSecondary,
                                 ),
                               ),
                               const SizedBox(height: 8),
                               Text(
                                 'Start a conversation!',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[500],
+                                style: AppTheme.bodyMediumDark(context).copyWith(
+                                  color: isDark 
+                                      ? AppTheme.darkTextTertiary 
+                                      : AppTheme.textTertiary,
                                 ),
                               ),
                             ],
@@ -237,74 +274,111 @@ class _ChatScreenState extends State<ChatScreen> {
                         )
                       : ListView.builder(
                           controller: _scrollController,
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
                           itemCount: _messages.length,
                           itemBuilder: (context, index) {
                             final message = _messages[index];
                             final isMe = _isCurrentUser(message.senderId);
-                            return _buildMessageBubble(message, isMe);
+                            return _buildMessageBubble(message, isMe, isDark);
                           },
                         ),
                 ),
                 // Message input
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.grey.withOpacity(0.1),
+                        color: isDark
+                            ? Colors.black.withOpacity(0.3)
+                            : Colors.black.withOpacity(0.05),
                         spreadRadius: 1,
-                        blurRadius: 4,
+                        blurRadius: 10,
                         offset: const Offset(0, -2),
                       ),
                     ],
                   ),
                   child: SafeArea(
                     child: Padding(
-                      padding: const EdgeInsets.all(8.0),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       child: Row(
                         children: [
                           Expanded(
-                            child: TextField(
-                              controller: _messageController,
-                              decoration: InputDecoration(
-                                hintText: 'Type a message...',
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                  borderSide: BorderSide.none,
-                                ),
-                                filled: true,
-                                fillColor: Colors.grey[200],
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                  vertical: 10,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: isDark 
+                                    ? AppTheme.darkSurfaceElevated 
+                                    : AppTheme.backgroundLight,
+                                borderRadius: BorderRadius.circular(28),
+                                border: Border.all(
+                                  color: isDark 
+                                      ? AppTheme.darkBorder 
+                                      : AppTheme.borderLight,
+                                  width: 1,
                                 ),
                               ),
-                              maxLines: null,
-                              textCapitalization: TextCapitalization.sentences,
-                              onSubmitted: (_) => _sendMessage(),
+                              child: TextField(
+                                controller: _messageController,
+                                style: AppTheme.bodyLargeDark(context),
+                                decoration: InputDecoration(
+                                  hintText: 'Type a message...',
+                                  hintStyle: AppTheme.bodyMediumDark(context).copyWith(
+                                    color: isDark 
+                                        ? AppTheme.darkTextTertiary 
+                                        : AppTheme.textTertiary,
+                                  ),
+                                  border: InputBorder.none,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 14,
+                                  ),
+                                ),
+                                maxLines: null,
+                                textCapitalization: TextCapitalization.sentences,
+                                onSubmitted: (_) => _sendMessage(),
+                              ),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 12),
                           Container(
                             decoration: BoxDecoration(
-                              color: Colors.blue,
+                              gradient: AppTheme.primaryGradient,
                               shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppTheme.primaryBlue.withOpacity(0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
-                            child: IconButton(
-                              icon: _isSending
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor: AlwaysStoppedAnimation<Color>(
-                                          Colors.white,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: _isSending ? null : _sendMessage,
+                                borderRadius: BorderRadius.circular(28),
+                                child: Container(
+                                  width: 56,
+                                  height: 56,
+                                  alignment: Alignment.center,
+                                  child: _isSending
+                                      ? const SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2.5,
+                                            valueColor: AlwaysStoppedAnimation<Color>(
+                                              Colors.white,
+                                            ),
+                                          ),
+                                        )
+                                      : const Icon(
+                                          Icons.send_rounded,
+                                          color: Colors.white,
+                                          size: 24,
                                         ),
-                                      ),
-                                    )
-                                  : const Icon(Icons.send, color: Colors.white),
-                              onPressed: _isSending ? null : _sendMessage,
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -317,24 +391,38 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildMessageBubble(ChatMessage message, bool isMe) {
+  Widget _buildMessageBubble(ChatMessage message, bool isMe, bool isDark) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Row(
         mainAxisAlignment:
             isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isMe) ...[
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: Colors.blue[100],
-              child: Text(
-                widget.friend.firstNameInitial,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue[700],
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: AppTheme.primaryGradient,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryBlue.withOpacity(0.2),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(2),
+              child: CircleAvatar(
+                radius: 18,
+                backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
+                child: Text(
+                  widget.friend.firstNameInitial,
+                  style: AppTheme.bodyMedium.copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.primaryBlue,
+                  ),
                 ),
               ),
             ),
@@ -342,32 +430,76 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
           Flexible(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
               decoration: BoxDecoration(
-                color: isMe ? Colors.blue : Colors.white,
-                borderRadius: BorderRadius.circular(18),
+                gradient: isMe 
+                    ? AppTheme.primaryGradient
+                    : null,
+                color: isMe 
+                    ? null 
+                    : (isDark ? AppTheme.darkSurfaceElevated : Colors.white),
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(20),
+                  topRight: const Radius.circular(20),
+                  bottomLeft: Radius.circular(isMe ? 20 : 4),
+                  bottomRight: Radius.circular(isMe ? 4 : 20),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.grey.withOpacity(0.1),
-                    spreadRadius: 1,
-                    blurRadius: 2,
-                    offset: const Offset(0, 1),
+                    color: isMe
+                        ? AppTheme.primaryBlue.withOpacity(0.2)
+                        : (isDark
+                            ? Colors.black.withOpacity(0.2)
+                            : Colors.black.withOpacity(0.05)),
+                    spreadRadius: 0,
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
               child: Text(
                 message.text,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: isMe ? Colors.white : Colors.black87,
+                style: AppTheme.bodyLarge.copyWith(
+                  fontSize: 15,
+                  color: isMe 
+                      ? Colors.white 
+                      : (isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
+                  height: 1.4,
                 ),
               ),
             ),
           ),
+          if (isMe) ...[
+            const SizedBox(width: 8),
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: AppTheme.primaryGradient,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryBlue.withOpacity(0.2),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(2),
+              child: CircleAvatar(
+                radius: 18,
+                backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
+                child: Text(
+                  _currentUser?.firstNameInitial ?? 'U',
+                  style: AppTheme.bodyMedium.copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.primaryBlue,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
-
 }
-

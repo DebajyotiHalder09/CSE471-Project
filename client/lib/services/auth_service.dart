@@ -4,9 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user.dart';
 
 class AuthService {
-  static const String baseUrl = 'https://smartdhaka0.onrender.com';
+  //static const String baseUrl = 'https://smartdhaka0.onrender.com';
   //static const String baseUrl = 'http://localhost:3000';
-  //static const String baseUrl = 'http://10.0.2.2:3000'; // For Android emulator
+  static const String baseUrl = 'http://10.0.2.2:3000'; // For Android emulator
   // static const String baseUrl = 'http://localhost:3000'; // For iOS simulator
   // static const String baseUrl = 'http://192.168.1.2:3000'; // For physical device
 

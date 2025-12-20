@@ -6,6 +6,8 @@ import 'package:http/http.dart' as http;
 import '../services/auth_service.dart';
 import '../services/stops_service.dart' show StopsService, StopData;
 import '../models/bus.dart';
+import '../utils/app_theme.dart';
+import '../utils/error_widgets.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -112,15 +114,12 @@ class _SearchScreenState extends State<SearchScreen> {
 
   void _onSourceChanged() {
     _sourceDebounceTimer?.cancel();
-    // Optimized debounce: 250ms for faster response
     _sourceDebounceTimer = Timer(const Duration(milliseconds: 250), () {
       final query = _sourceController.text.trim();
       if (query.isNotEmpty) {
-        // Generate new request ID for cancellation
         _sourceRequestId = 'source_${DateTime.now().millisecondsSinceEpoch}';
         _getSearchSuggestions(query, 'source', _sourceRequestId);
       } else {
-        // Cancel previous request
         if (_sourceRequestId != null) {
           StopsService.cancelAllRequests();
           _sourceRequestId = null;
@@ -134,15 +133,12 @@ class _SearchScreenState extends State<SearchScreen> {
 
   void _onDestinationChanged() {
     _destinationDebounceTimer?.cancel();
-    // Optimized debounce: 250ms for faster response
     _destinationDebounceTimer = Timer(const Duration(milliseconds: 250), () {
       final query = _destinationController.text.trim();
       if (query.isNotEmpty) {
-        // Generate new request ID for cancellation
         _destinationRequestId = 'destination_${DateTime.now().millisecondsSinceEpoch}';
         _getSearchSuggestions(query, 'destination', _destinationRequestId);
       } else {
-        // Cancel previous request
         if (_destinationRequestId != null) {
           StopsService.cancelAllRequests();
           _destinationRequestId = null;
@@ -156,7 +152,6 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Future<void> _getSearchSuggestions(String query, String field, String? requestId) async {
     if (query.isEmpty) {
-      // Use microtask for faster state update
       Future.microtask(() {
         if (mounted) {
           setState(() {
@@ -173,19 +168,15 @@ class _SearchScreenState extends State<SearchScreen> {
 
     final List<Map<String, dynamic>> suggestions = [];
 
-    // 1. Fast autocomplete search from MongoDB stops collection (optimized)
+    // 1. Fast autocomplete search from MongoDB stops collection
     try {
       final stopsData = await StopsService.searchStops(query, requestId: requestId);
       
-      // Check if widget is still mounted before processing
       if (!mounted) return;
       
-      // Get reference point for distance calculation (use Dhaka center as default)
-      // In future, this can be user's current location
       const referenceLat = 23.8103; // Dhaka center
       const referenceLng = 90.4125;
       
-      // Create list with distance for sorting
       final stopsWithDistance = stopsData.map((stop) {
         final distance = _fastDistance(
           referenceLat, referenceLng,
@@ -197,12 +188,10 @@ class _SearchScreenState extends State<SearchScreen> {
         };
       }).toList();
       
-      // Sort by distance (closest first)
       stopsWithDistance.sort((a, b) => 
         (a['distance'] as double).compareTo(b['distance'] as double)
       );
       
-      // Add stops to suggestions with coordinates from MongoDB
       for (final item in stopsWithDistance) {
         final stop = item['stop'] as StopData;
         
@@ -215,36 +204,31 @@ class _SearchScreenState extends State<SearchScreen> {
         });
       }
     } catch (e) {
-      // Don't log timeout errors (expected behavior)
       if (e.toString().contains('timeout') == false) {
         print('Error searching stops from MongoDB: $e');
       }
     }
 
-    // 2. Get geocoding suggestions (detailed addresses) if we have less than 10 suggestions
+    // 2. Get geocoding suggestions if we have less than 10 suggestions
     if (suggestions.length < 10) {
       try {
         final geocodingResults = await _getGeocodingSuggestions(query);
         
-        // Deduplicate: check if geocoding result matches any stop
         for (final geoResult in geocodingResults) {
           final geoName = geoResult['displayName'].toString().toLowerCase();
           final geoLat = geoResult['latitude'] as double;
           final geoLng = geoResult['longitude'] as double;
           
-          // Check if this geocoding result matches any existing suggestion
           bool isDuplicate = suggestions.any((s) => 
             s['displayName'].toString().toLowerCase() == geoName
           );
           
-          // Also check if too close to any bus stop
           if (!isDuplicate) {
             for (final stop in _allBusStops) {
               final distance = _calculateDistance(
                 geoLat, geoLng,
                 stop.latitude, stop.longitude,
               );
-              // If within 100 meters, consider it a duplicate
               if (distance < 0.1) {
                 isDuplicate = true;
                 break;
@@ -269,17 +253,14 @@ class _SearchScreenState extends State<SearchScreen> {
       if (aType == 'stop' && bType != 'stop') return -1;
       if (bType == 'stop' && aType != 'stop') return 1;
       
-      // Within same type, sort alphabetically
       final aName = a['displayName'].toString().toLowerCase();
       final bName = b['displayName'].toString().toLowerCase();
       
       return aName.compareTo(bName);
     });
 
-    // Limit total suggestions to 10
     final limitedSuggestions = suggestions.take(10).toList();
 
-    // Use microtask for faster state update (non-blocking)
     Future.microtask(() {
       if (mounted) {
         setState(() {
@@ -293,22 +274,16 @@ class _SearchScreenState extends State<SearchScreen> {
     });
   }
 
-  /// Ultra-fast distance calculation using optimized Haversine formula
-  /// Returns distance in kilometers
-  /// Optimized for speed: pre-calculated constants, minimized function calls
   double _fastDistance(double lat1, double lng1, double lat2, double lng2) {
-    // Pre-calculated constants for speed
     const double earthRadiusKm = 6371.0;
-    const double piOver180 = 0.017453292519943295; // pi / 180
+    const double piOver180 = 0.017453292519943295;
     
-    // Convert to radians (optimized)
     final dLat = (lat2 - lat1) * piOver180;
     final dLng = (lng2 - lng1) * piOver180;
     
     final lat1Rad = lat1 * piOver180;
     final lat2Rad = lat2 * piOver180;
     
-    // Haversine formula (optimized)
     final sinDLat = math.sin(dLat * 0.5);
     final sinDLng = math.sin(dLng * 0.5);
     final a = sinDLat * sinDLat + 
@@ -365,8 +340,8 @@ class _SearchScreenState extends State<SearchScreen> {
   void _showSuggestionModal(String field) {
     final controller = field == 'source' ? _sourceController : _destinationController;
     final currentText = controller.text.trim();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     
-    // If there's text, trigger search immediately
     if (currentText.isNotEmpty) {
       final requestId = '${field}_${DateTime.now().millisecondsSinceEpoch}';
       if (field == 'source') {
@@ -386,62 +361,105 @@ class _SearchScreenState extends State<SearchScreen> {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return Container(
-              height: MediaQuery.of(context).size.height * 0.6,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              height: MediaQuery.of(context).size.height * 0.95,
+              decoration: BoxDecoration(
+                color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               ),
               child: Column(
                 children: [
+                  // Handle bar
+                  Container(
+                    margin: const EdgeInsets.only(top: 12),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                   // Fixed search bar at top
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                      color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 4,
-                          offset: const Offset(0, -2),
+                          color: isDark
+                              ? Colors.black.withOpacity(0.3)
+                              : Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
                         ),
                       ],
                     ),
                     child: TextField(
                       controller: controller,
                       autofocus: true,
+                      style: AppTheme.bodyLargeDark(context),
                       decoration: InputDecoration(
                         hintText: field == 'source' 
                             ? 'Enter source location' 
                             : 'Enter destination location',
+                        hintStyle: AppTheme.bodyMediumDark(context).copyWith(
+                          color: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+                        ),
                         filled: true,
-                        fillColor: Colors.grey[50],
-                        prefixIcon: Icon(
-                          field == 'source' ? Icons.location_on : Icons.flag,
-                          color: field == 'source' ? Colors.green : Colors.red,
+                        fillColor: isDark ? AppTheme.darkSurfaceElevated : AppTheme.backgroundLight,
+                        prefixIcon: Container(
+                          margin: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            gradient: field == 'source'
+                                ? LinearGradient(
+                                    colors: [
+                                      AppTheme.accentGreen,
+                                      AppTheme.accentGreen.withOpacity(0.8),
+                                    ],
+                                  )
+                                : LinearGradient(
+                                    colors: [
+                                      AppTheme.accentRed,
+                                      AppTheme.accentRed.withOpacity(0.8),
+                                    ],
+                                  ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            field == 'source' ? Icons.location_on_rounded : Icons.flag_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
                         ),
                         suffixIcon: IconButton(
-                          icon: const Icon(Icons.close),
+                          icon: Icon(
+                            Icons.close_rounded,
+                            color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                          ),
                           onPressed: () => Navigator.of(context).pop(),
                         ),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.grey[300]!),
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(
+                            color: isDark ? AppTheme.darkBorder : AppTheme.borderLight,
+                          ),
                         ),
                         enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.grey[300]!),
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(
+                            color: isDark ? AppTheme.darkBorder : AppTheme.borderLight,
+                          ),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(16),
                           borderSide: BorderSide(
-                            color: field == 'source' ? Colors.green : Colors.red,
+                            color: field == 'source' ? AppTheme.accentGreen : AppTheme.accentRed,
                             width: 2,
                           ),
                         ),
                         contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 16,
+                          horizontal: 20,
+                          vertical: 18,
                         ),
                       ),
                       onChanged: (value) {
@@ -453,7 +471,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             _destinationRequestId = requestId;
                           }
                           _getSearchSuggestions(value.trim(), field, requestId);
-                          setModalState(() {}); // Trigger rebuild
+                          setModalState(() {});
                         } else {
                           setModalState(() {
                             if (field == 'source') {
@@ -473,25 +491,47 @@ class _SearchScreenState extends State<SearchScreen> {
                         final suggestions = field == 'source' 
                             ? _sourceSuggestions 
                             : _destinationSuggestions;
+                        final isDark = Theme.of(context).brightness == Brightness.dark;
                         
                         if (suggestions.isEmpty) {
                           return Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(
-                                  Icons.search,
-                                  size: 48,
-                                  color: Colors.grey[400],
+                                Container(
+                                  padding: const EdgeInsets.all(24),
+                                  decoration: BoxDecoration(
+                                    color: isDark 
+                                        ? AppTheme.darkSurfaceElevated 
+                                        : AppTheme.backgroundLight,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.search_rounded,
+                                    size: 48,
+                                    color: isDark 
+                                        ? AppTheme.darkTextTertiary 
+                                        : AppTheme.textTertiary,
+                                  ),
                                 ),
-                                const SizedBox(height: 16),
+                                const SizedBox(height: 24),
                                 Text(
                                   controller.text.trim().isEmpty
                                       ? 'Start typing to search...'
                                       : 'No suggestions found',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.grey[600],
+                                  style: AppTheme.heading4Dark(context).copyWith(
+                                    color: isDark 
+                                        ? AppTheme.darkTextSecondary 
+                                        : AppTheme.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Try searching for bus stops or locations',
+                                  style: AppTheme.bodyMediumDark(context).copyWith(
+                                    color: isDark 
+                                        ? AppTheme.darkTextTertiary 
+                                        : AppTheme.textTertiary,
                                   ),
                                 ),
                               ],
@@ -500,28 +540,105 @@ class _SearchScreenState extends State<SearchScreen> {
                         }
                         
                         return ListView.builder(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
                           itemCount: suggestions.length,
                           itemBuilder: (context, index) {
                             final suggestion = suggestions[index];
                             final isStop = suggestion['type'] == 'stop';
                             
-                            return ListTile(
-                              leading: Icon(
-                                isStop ? Icons.directions_bus : Icons.location_on,
-                                color: isStop 
-                                    ? Colors.blue 
-                                    : (field == 'source' ? Colors.green : Colors.red),
+                            return Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                              decoration: AppTheme.modernCardDecorationDark(
+                                context,
+                                color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
                               ),
-                              title: Text(
-                                suggestion['displayName'] as String,
-                                style: const TextStyle(fontSize: 14),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () {
+                                    _selectSuggestion(suggestion, field);
+                                    Navigator.of(context).pop();
+                                  },
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(10),
+                                          decoration: BoxDecoration(
+                                            gradient: isStop
+                                                ? AppTheme.primaryGradient
+                                                : (field == 'source'
+                                                    ? LinearGradient(
+                                                        colors: [
+                                                          AppTheme.accentGreen,
+                                                          AppTheme.accentGreen.withOpacity(0.8),
+                                                        ],
+                                                      )
+                                                    : LinearGradient(
+                                                        colors: [
+                                                          AppTheme.accentRed,
+                                                          AppTheme.accentRed.withOpacity(0.8),
+                                                        ],
+                                                      )),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Icon(
+                                            isStop 
+                                                ? Icons.directions_bus_filled 
+                                                : Icons.location_on_rounded,
+                                            color: Colors.white,
+                                            size: 20,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                suggestion['displayName'] as String,
+                                                style: AppTheme.bodyLargeDark(context).copyWith(
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              if (isStop) ...[
+                                                const SizedBox(height: 4),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 2,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: AppTheme.primaryBlue.withOpacity(0.1),
+                                                    borderRadius: BorderRadius.circular(8),
+                                                  ),
+                                                  child: Text(
+                                                    'Bus Stop',
+                                                    style: AppTheme.labelSmall.copyWith(
+                                                      color: AppTheme.primaryBlue,
+                                                      fontWeight: FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                        Icon(
+                                          Icons.chevron_right_rounded,
+                                          color: isDark 
+                                              ? AppTheme.darkTextTertiary 
+                                              : AppTheme.textTertiary,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
                               ),
-                              onTap: () {
-                                _selectSuggestion(suggestion, field);
-                                Navigator.of(context).pop();
-                              },
                             );
                           },
                         );
@@ -546,7 +663,6 @@ class _SearchScreenState extends State<SearchScreen> {
       if (field == 'source') {
         _sourceController.text = selectedText;
         _sourceSuggestions = [];
-        // Store coordinates if available
         if (lat != null && lng != null) {
           _sourceCoordinates = {'lat': lat, 'lon': lng};
         } else {
@@ -555,7 +671,6 @@ class _SearchScreenState extends State<SearchScreen> {
       } else {
         _destinationController.text = selectedText;
         _destinationSuggestions = [];
-        // Store coordinates if available
         if (lat != null && lng != null) {
           _destinationCoordinates = {'lat': lat, 'lon': lng};
         } else {
@@ -568,11 +683,9 @@ class _SearchScreenState extends State<SearchScreen> {
   void _navigateToMap() {
     if (_sourceController.text.trim().isEmpty ||
         _destinationController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter both source and destination'),
-          backgroundColor: Colors.orange,
-        ),
+      ErrorSnackbar.show(
+        context,
+        'Please enter both source and destination',
       );
       return;
     }
@@ -593,7 +706,7 @@ class _SearchScreenState extends State<SearchScreen> {
           _sourceCoordinates = {'lat': sourceStop.latitude, 'lon': sourceStop.longitude};
         }
       } catch (e) {
-        // No matching bus stop found, coordinates will be null
+        // No matching bus stop found
       }
     }
 
@@ -612,7 +725,7 @@ class _SearchScreenState extends State<SearchScreen> {
           _destinationCoordinates = {'lat': destStop.latitude, 'lon': destStop.longitude};
         }
       } catch (e) {
-        // No matching bus stop found, coordinates will be null
+        // No matching bus stop found
       }
     }
 
@@ -626,114 +739,277 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundLight,
       appBar: AppBar(
-        backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text(
-          'Search Location',
-          style: TextStyle(
-            color: Colors.black87,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        backgroundColor: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+        foregroundColor: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
           onPressed: () => Navigator.of(context).pop(),
         ),
-      ),
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 20),
-                // Source field
-                TextField(
-                  controller: _sourceController,
-                  onTap: () {
-                    _showSuggestionModal('source');
-                  },
-                  decoration: InputDecoration(
-                    hintText: 'Enter source location',
-                    filled: true,
-                    fillColor: Colors.grey[50],
-                    prefixIcon: const Icon(Icons.location_on, color: Colors.green),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey[300]!),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey[300]!),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Colors.green, width: 2),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 16,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // Destination field
-                TextField(
-                  controller: _destinationController,
-                  onTap: () {
-                    _showSuggestionModal('destination');
-                  },
-                  decoration: InputDecoration(
-                    hintText: 'Enter destination location',
-                    filled: true,
-                    fillColor: Colors.grey[50],
-                    prefixIcon: const Icon(Icons.flag, color: Colors.red),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey[300]!),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey[300]!),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Colors.red, width: 2),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 16,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                ElevatedButton(
-                  onPressed: _navigateToMap,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue[600],
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 2,
-                  ),
-                  child: const Text(
-                    'Search',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: AppTheme.primaryGradient,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.search_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(width: 12),
+            Text(
+              'Search Location',
+              style: AppTheme.heading3Dark(context).copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 8),
+            // Source field
+            Container(
+              decoration: AppTheme.modernCardDecorationDark(
+                context,
+                color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+              ),
+              child: TextField(
+                controller: _sourceController,
+                style: AppTheme.bodyLargeDark(context),
+                onTap: () {
+                  _showSuggestionModal('source');
+                },
+                readOnly: true,
+                decoration: InputDecoration(
+                  hintText: 'Enter source location',
+                  hintStyle: AppTheme.bodyMediumDark(context).copyWith(
+                    color: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+                  ),
+                  filled: true,
+                  fillColor: isDark ? AppTheme.darkSurfaceElevated : AppTheme.backgroundLight,
+                  prefixIcon: Container(
+                    margin: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          AppTheme.accentGreen,
+                          AppTheme.accentGreen.withOpacity(0.8),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.location_on_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  suffixIcon: _sourceController.text.isNotEmpty
+                      ? IconButton(
+                          icon: Icon(
+                            Icons.close_rounded,
+                            color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _sourceController.clear();
+                              _sourceCoordinates = null;
+                            });
+                          },
+                        )
+                      : Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          size: 16,
+                          color: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+                        ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(
+                      color: isDark ? AppTheme.darkBorder : AppTheme.borderLight,
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(
+                      color: isDark ? AppTheme.darkBorder : AppTheme.borderLight,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(
+                      color: AppTheme.accentGreen,
+                      width: 2,
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 18,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Arrow icon
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark 
+                      ? AppTheme.darkSurfaceElevated 
+                      : AppTheme.backgroundLight,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.arrow_downward_rounded,
+                  color: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+                  size: 24,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Destination field
+            Container(
+              decoration: AppTheme.modernCardDecorationDark(
+                context,
+                color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+              ),
+              child: TextField(
+                controller: _destinationController,
+                style: AppTheme.bodyLargeDark(context),
+                onTap: () {
+                  _showSuggestionModal('destination');
+                },
+                readOnly: true,
+                decoration: InputDecoration(
+                  hintText: 'Enter destination location',
+                  hintStyle: AppTheme.bodyMediumDark(context).copyWith(
+                    color: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+                  ),
+                  filled: true,
+                  fillColor: isDark ? AppTheme.darkSurfaceElevated : AppTheme.backgroundLight,
+                  prefixIcon: Container(
+                    margin: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          AppTheme.accentRed,
+                          AppTheme.accentRed.withOpacity(0.8),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.flag_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  suffixIcon: _destinationController.text.isNotEmpty
+                      ? IconButton(
+                          icon: Icon(
+                            Icons.close_rounded,
+                            color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _destinationController.clear();
+                              _destinationCoordinates = null;
+                            });
+                          },
+                        )
+                      : Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          size: 16,
+                          color: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+                        ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(
+                      color: isDark ? AppTheme.darkBorder : AppTheme.borderLight,
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(
+                      color: isDark ? AppTheme.darkBorder : AppTheme.borderLight,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(
+                      color: AppTheme.accentRed,
+                      width: 2,
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 18,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 32),
+            // Search button
+            Container(
+              decoration: BoxDecoration(
+                gradient: AppTheme.primaryGradient,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryBlue.withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _navigateToMap,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    alignment: Alignment.center,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.search_rounded,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Search Route',
+                          style: AppTheme.labelLarge.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

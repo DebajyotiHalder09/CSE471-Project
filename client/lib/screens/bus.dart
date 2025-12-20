@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import '../services/bus_service.dart';
 import '../services/fav_bus_service.dart';
 import '../services/auth_service.dart';
-import '../services/individual_bus_service.dart';
 import '../models/bus.dart';
 import 'review.dart';
+import '../utils/loading_widgets.dart';
+import '../utils/error_widgets.dart';
+import '../utils/app_theme.dart';
 
 class BusScreen extends StatefulWidget {
   const BusScreen({super.key});
@@ -14,34 +16,73 @@ class BusScreen extends StatefulWidget {
 }
 
 class _BusScreenState extends State<BusScreen> {
-  String selectedSearchType = 'bus';
-  TextEditingController busNameController = TextEditingController();
-  TextEditingController startLocationController = TextEditingController();
-  TextEditingController endLocationController = TextEditingController();
-
-  List<Bus> searchResults = [];
   List<Bus> allBuses = [];
-  bool isLoading = false;
+  List<Bus> filteredBuses = [];
   bool isLoadingAll = false;
   String? errorMessage;
   String? currentUserId;
   String? currentUserGender;
   String? currentUserPass;
   Map<String, bool> favoriteStatus = {};
+  
+  // Search and filter
+  final TextEditingController searchController = TextEditingController();
+  String? selectedTypeFilter; // 'women', 'regular'
+  String? selectedSortFilter; // 'a-z', 'z-a'
+  bool showFavoritesOnly = false;
 
   @override
   void initState() {
     super.initState();
     _loadAllBuses();
     _getCurrentUserId();
+    searchController.addListener(_onSearchChanged);
   }
 
   @override
   void dispose() {
-    busNameController.dispose();
-    startLocationController.dispose();
-    endLocationController.dispose();
+    searchController.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged() {
+    _applyFilters();
+  }
+
+  void _applyFilters() {
+    List<Bus> result = List<Bus>.from(allBuses);
+    
+    // Apply search filter
+    final searchQuery = searchController.text.trim().toLowerCase();
+    if (searchQuery.isNotEmpty) {
+      result = result.where((bus) {
+        return bus.busName.toLowerCase().contains(searchQuery) ||
+               (bus.routeNumber != null && bus.routeNumber!.toLowerCase().contains(searchQuery));
+      }).toList();
+    }
+    
+    // Apply favorites filter
+    if (showFavoritesOnly) {
+      result = result.where((bus) => favoriteStatus[bus.id] == true).toList();
+    }
+    
+    // Apply type filter
+    if (selectedTypeFilter == 'women') {
+      result = result.where((bus) => bus.busType == 'women').toList();
+    } else if (selectedTypeFilter == 'regular') {
+      result = result.where((bus) => bus.busType != 'women').toList();
+    }
+    
+    // Apply sort filter
+    if (selectedSortFilter == 'a-z') {
+      result.sort((a, b) => a.busName.compareTo(b.busName));
+    } else if (selectedSortFilter == 'z-a') {
+      result.sort((a, b) => b.busName.compareTo(a.busName));
+    }
+    
+    setState(() {
+      filteredBuses = result;
+    });
   }
 
   Future<void> _getCurrentUserId() async {
@@ -82,11 +123,9 @@ class _BusScreenState extends State<BusScreen> {
     if (currentUserId == null) return;
 
     if (bus.busType == 'women' && currentUserGender == 'male') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Male users cannot favorite women-designated buses'),
-          backgroundColor: Colors.orange,
-        ),
+      ErrorSnackbar.show(
+        context,
+        'Male users cannot favorite women-designated buses',
       );
       return;
     }
@@ -100,6 +139,8 @@ class _BusScreenState extends State<BusScreen> {
         setState(() {
           favoriteStatus[bus.id] = false;
         });
+        SuccessSnackbar.show(context, 'Removed from favorites');
+        _applyFilters(); // Refresh filter if favorites filter is active
       } else {
         await FavBusService.addToFavorites(
           userId: currentUserId!,
@@ -111,15 +152,98 @@ class _BusScreenState extends State<BusScreen> {
         setState(() {
           favoriteStatus[bus.id] = true;
         });
+        SuccessSnackbar.show(context, 'Added to favorites');
+        _applyFilters(); // Refresh filter if favorites filter is active
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update favorite: ${e.toString()}'),
-          backgroundColor: Colors.red,
+      ErrorSnackbar.show(
+        context,
+        'Failed to update favorite: ${e.toString()}',
+      );
+    }
+  }
+
+  Widget _buildBusList() {
+    final busesToShow = filteredBuses.isEmpty && 
+            searchController.text.isEmpty && 
+            selectedTypeFilter == null && 
+            selectedSortFilter == null &&
+            !showFavoritesOnly
+        ? allBuses
+        : filteredBuses;
+
+    if (isLoadingAll) {
+      return RefreshIndicator(
+        onRefresh: _loadAllBuses,
+        child: ListView.builder(
+          padding: const EdgeInsets.only(top: 80, bottom: 8),
+          itemCount: 5,
+          itemBuilder: (context, index) => const SkeletonCard(),
         ),
       );
     }
+
+    if (errorMessage != null && allBuses.isEmpty) {
+      return ErrorDisplayWidget(
+        message: errorMessage!,
+        onRetry: _loadAllBuses,
+      );
+    }
+
+    if (busesToShow.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _loadAllBuses,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 80),
+            child: EmptyStateWidget(
+              title: searchController.text.isNotEmpty || 
+                      selectedTypeFilter != null || 
+                      selectedSortFilter != null ||
+                      showFavoritesOnly
+                  ? 'No buses found'
+                  : 'No buses available',
+              message: searchController.text.isNotEmpty || 
+                       selectedTypeFilter != null || 
+                       selectedSortFilter != null ||
+                       showFavoritesOnly
+                  ? 'Try adjusting your search or filter'
+                  : 'No buses found in the system',
+              icon: Icons.directions_bus_outlined,
+              action: () {
+                searchController.clear();
+                setState(() {
+                  selectedTypeFilter = null;
+                  selectedSortFilter = null;
+                  showFavoritesOnly = false;
+                });
+                _applyFilters();
+              },
+              actionLabel: 'Clear',
+            ),
+          ),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadAllBuses,
+      child: ListView.builder(
+        padding: const EdgeInsets.only(top: 80, bottom: 8),
+        itemCount: busesToShow.length,
+        itemBuilder: (context, index) {
+          final bus = busesToShow[index];
+          return BusResultCard(
+            bus: bus,
+            isFavorited: favoriteStatus[bus.id] ?? false,
+            onFavoriteToggle: () => _toggleFavorite(bus),
+            userPass: currentUserPass,
+            currentUserGender: currentUserGender,
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _loadAllBuses() async {
@@ -136,9 +260,11 @@ class _BusScreenState extends State<BusScreen> {
           allBuses = (response['data'] as List)
               .map((json) => Bus.fromJson(json))
               .toList();
+          filteredBuses = List<Bus>.from(allBuses);
           isLoadingAll = false;
         });
         _loadFavoriteStatuses();
+        _applyFilters();
       } else {
         setState(() {
           errorMessage = response['message'] ?? 'Failed to load buses';
@@ -153,412 +279,942 @@ class _BusScreenState extends State<BusScreen> {
     }
   }
 
-  void _clearSearch() {
-    setState(() {
-      searchResults.clear();
-      errorMessage = null;
-      busNameController.clear();
-      startLocationController.clear();
-      endLocationController.clear();
-    });
-    _loadFavoriteStatuses();
-  }
 
-  Future<void> _searchBusByName() async {
-    if (busNameController.text.trim().isEmpty) {
-      setState(() {
-        errorMessage = 'Please enter a bus name';
-      });
-      return;
-    }
-
-    setState(() {
-      isLoading = true;
-      errorMessage = null;
-    });
-
-    try {
-      final response =
-          await BusService.searchBusByName(busNameController.text.trim());
-
-      if (response['success']) {
-        List<Bus> buses = (response['data'] as List)
-            .map((json) => Bus.fromJson(json))
-            .toList();
-        
-        // Filter out women-only buses for male users, but keep them for female users
-        if (currentUserGender?.toLowerCase() == 'male') {
-          buses = buses.where((bus) => bus.busType != 'women').toList();
-        }
-        
-        setState(() {
-          searchResults = buses;
-          isLoading = false;
-        });
-        _loadFavoriteStatusesForSearchResults();
-      } else {
-        setState(() {
-          errorMessage = response['message'] ?? 'No buses found';
-          isLoading = false;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        errorMessage = e.toString();
-        isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _searchBusByRoute() async {
-    if (startLocationController.text.trim().isEmpty ||
-        endLocationController.text.trim().isEmpty) {
-      setState(() {
-        errorMessage = 'Please enter both start and end locations';
-      });
-      return;
-    }
-
-    setState(() {
-      isLoading = true;
-      errorMessage = null;
-    });
-
-    try {
-      final response = await BusService.searchBusByRoute(
-        startLocationController.text.trim(),
-        endLocationController.text.trim(),
-      );
-
-      if (response['success']) {
-        setState(() {
-          searchResults = (response['data'] as List)
-              .map((json) => Bus.fromJson(json))
-              .toList();
-          isLoading = false;
-        });
-        _loadFavoriteStatusesForSearchResults();
-      } else {
-        setState(() {
-          errorMessage = response['message'] ?? 'No buses found for this route';
-          isLoading = false;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        errorMessage = e.toString();
-        isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _loadFavoriteStatusesForSearchResults() async {
-    if (currentUserId == null) return;
-
-    for (final bus in searchResults) {
-      try {
-        if (bus.busType == 'women' && currentUserGender == 'male') {
-          setState(() {
-            favoriteStatus[bus.id] = false;
-          });
-          continue;
-        }
-
-        final response = await FavBusService.checkIfFavorited(
-          userId: currentUserId!,
-          busId: bus.id,
-        );
-        if (response['success']) {
-          setState(() {
-            favoriteStatus[bus.id] = response['isFavorited'];
-          });
-        }
-      } catch (e) {
-        setState(() {
-          favoriteStatus[bus.id] = false;
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[100],
-      body: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey.withOpacity(0.1),
-                    spreadRadius: 1,
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
+  void _showBusModal(Bus bus) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Bus name header
+              Row(
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      gradient: bus.busType == 'women'
+                          ? LinearGradient(
+                              colors: [
+                                Colors.pink.shade400,
+                                Colors.pink.shade600,
+                              ],
+                            )
+                          : AppTheme.primaryGradient,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Icon(
+                      Icons.directions_bus_filled,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          bus.busName,
+                          style: AppTheme.heading3Dark(context).copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (bus.routeNumber != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Route ${bus.routeNumber}',
+                            style: AppTheme.bodySmallDark(context),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      Icons.close,
+                      color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+                    ),
+                    onPressed: () => Navigator.pop(context),
                   ),
                 ],
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+              const SizedBox(height: 24),
+              // Action buttons
+              // Add to Favorites
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: (bus.busType == 'women' && currentUserGender?.toLowerCase() == 'male')
+                      ? null
+                      : () {
+                          Navigator.pop(context);
+                          _toggleFavorite(bus);
+                        },
+                  icon: Icon(
+                    favoriteStatus[bus.id] ?? false
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    size: 20,
+                  ),
+                  label: Text(
+                    (bus.busType == 'women' && currentUserGender?.toLowerCase() == 'male')
+                        ? 'Not Available for Male Users'
+                        : (favoriteStatus[bus.id] ?? false)
+                            ? 'Remove from Favorites'
+                            : 'Add to Favorites',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: (bus.busType == 'women' && currentUserGender?.toLowerCase() == 'male')
+                        ? AppTheme.textTertiary.withOpacity(0.1)
+                        : (favoriteStatus[bus.id] ?? false)
+                            ? AppTheme.accentRed.withOpacity(0.1)
+                            : AppTheme.primaryBlue,
+                    foregroundColor: (bus.busType == 'women' && currentUserGender?.toLowerCase() == 'male')
+                        ? AppTheme.textTertiary
+                        : (favoriteStatus[bus.id] ?? false)
+                            ? AppTheme.accentRed
+                            : Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Reviews
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ReviewScreen(bus: bus),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.reviews_rounded, size: 20),
+                  label: const Text('View Reviews'),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: AppTheme.primaryBlue),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Details
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _showBusDetails(bus);
+                  },
+                  icon: const Icon(Icons.info_outline_rounded, size: 20),
+                  label: const Text('View Details'),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: AppTheme.primaryBlue),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showFilterDialog() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Filter Buses',
+                style: AppTheme.heading4Dark(context).copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 24),
+              // Favourite Buses
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    showFavoritesOnly = !showFavoritesOnly;
+                  });
+                  _applyFilters();
+                  Navigator.pop(context);
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: showFavoritesOnly 
+                        ? AppTheme.accentRed.withOpacity(0.1) 
+                        : (isDark ? AppTheme.darkSurface : AppTheme.backgroundLight),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: showFavoritesOnly 
+                          ? AppTheme.accentRed 
+                          : (isDark ? AppTheme.darkBorder : AppTheme.borderLight),
+                      width: showFavoritesOnly ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
                     children: [
-                      Text(
-                        'Search & Filter',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accentRed.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.favorite_rounded,
+                          color: AppTheme.accentRed,
+                          size: 20,
                         ),
                       ),
-                      Spacer(),
-                      Container(
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child:                         Text(
+                          'Favourite Buses',
+                          style: AppTheme.bodyLargeDark(context).copyWith(
+                            fontWeight: showFavoritesOnly 
+                                ? FontWeight.w600 
+                                : FontWeight.normal,
+                            color: showFavoritesOnly 
+                                ? AppTheme.accentRed 
+                                : (isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
+                          ),
                         ),
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              selectedSearchType =
-                                  selectedSearchType == 'bus' ? 'route' : 'bus';
-                              _clearSearch();
-                            });
-                          },
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                selectedSearchType == 'bus'
-                                    ? Icons.route
-                                    : Icons.directions_bus,
-                                size: 16,
-                                color: Colors.grey[600],
+                      ),
+                      if (showFavoritesOnly)
+                        Icon(
+                          Icons.check_circle,
+                          color: AppTheme.accentRed,
+                          size: 24,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Women Only
+              _buildFilterOption(
+                icon: Icons.woman,
+                label: 'Women Only',
+                value: 'women',
+                color: Colors.pink,
+                isTypeFilter: true,
+              ),
+              const SizedBox(height: 12),
+              // Regular
+              _buildFilterOption(
+                icon: Icons.people_alt_rounded,
+                label: 'Regular',
+                value: 'regular',
+                color: AppTheme.primaryBlue,
+                isTypeFilter: true,
+              ),
+              const SizedBox(height: 12),
+              // A-Z
+              _buildFilterOption(
+                icon: Icons.sort_by_alpha_rounded,
+                label: 'Sort A-Z',
+                value: 'a-z',
+                color: AppTheme.accentGreen,
+                isTypeFilter: false,
+              ),
+              const SizedBox(height: 12),
+              // Z-A
+              _buildFilterOption(
+                icon: Icons.sort_by_alpha_rounded,
+                label: 'Sort Z-A',
+                value: 'z-a',
+                color: AppTheme.accentOrange,
+                isTypeFilter: false,
+              ),
+              const SizedBox(height: 12),
+              // Clear filter
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () {
+                    setState(() {
+                      selectedTypeFilter = null;
+                      selectedSortFilter = null;
+                      showFavoritesOnly = false;
+                    });
+                    _applyFilters();
+                    Navigator.pop(context);
+                  },
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: AppTheme.textTertiary),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    'Clear Filter',
+                    style: AppTheme.bodyMediumDark(context).copyWith(
+                      color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterOption({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+    required bool isTypeFilter,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isSelected = isTypeFilter
+        ? selectedTypeFilter == value
+        : selectedSortFilter == value;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          if (isTypeFilter) {
+            selectedTypeFilter = isSelected ? null : value;
+          } else {
+            selectedSortFilter = isSelected ? null : value;
+          }
+        });
+        _applyFilters();
+        Navigator.pop(context);
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSelected 
+              ? color.withOpacity(0.1) 
+              : (isDark ? AppTheme.darkSurface : AppTheme.backgroundLight),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected 
+                ? color 
+                : (isDark ? AppTheme.darkBorder : AppTheme.borderLight),
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: AppTheme.bodyLargeDark(context).copyWith(
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  color: isSelected 
+                      ? color 
+                      : (isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
+                ),
+              ),
+            ),
+            if (isSelected)
+              Icon(
+                Icons.check_circle,
+                color: color,
+                size: 24,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showBusDetails(Bus bus) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.8,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: bus.busType == 'women'
+                      ? LinearGradient(
+                          colors: [
+                            Colors.pink.shade400,
+                            Colors.pink.shade600,
+                          ],
+                        )
+                      : AppTheme.primaryGradient,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.directions_bus_filled,
+                      color: Colors.white,
+                      size: 32,
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            bus.busName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          if (bus.routeNumber != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              'Route ${bus.routeNumber}',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 14,
                               ),
-                              SizedBox(width: 6),
-                              Text(
-                                selectedSearchType == 'bus' ? 'Route' : 'Bus',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.grey[600],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              // Content
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Type and Fare
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                gradient: bus.busType == 'women'
+                                    ? LinearGradient(
+                                        colors: [
+                                          Colors.pink.shade50,
+                                          Colors.pink.shade100,
+                                        ],
+                                      )
+                                    : LinearGradient(
+                                        colors: [
+                                          AppTheme.primaryBlue.withOpacity(0.1),
+                                          AppTheme.primaryBlue.withOpacity(0.15),
+                                        ],
+                                      ),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: bus.busType == 'women'
+                                      ? Colors.pink.shade300
+                                      : AppTheme.primaryBlue.withOpacity(0.3),
                                 ),
                               ),
-                            ],
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    bus.busType == 'women'
+                                        ? Icons.woman
+                                        : Icons.people_alt_rounded,
+                                    size: 20,
+                                    color: bus.busType == 'women'
+                                        ? Colors.pink.shade700
+                                        : AppTheme.primaryBlue,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    bus.busType == 'women' ? 'WOMEN ONLY' : 'REGULAR',
+                                    style: AppTheme.labelLarge.copyWith(
+                                      color: bus.busType == 'women'
+                                          ? Colors.pink.shade700
+                                          : AppTheme.primaryBlue,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
+                          const SizedBox(width: 12),
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              gradient: AppTheme.accentGradient,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Column(
+                              children: [
+                                Text(
+                                  '৳${(currentUserPass == 'student' ? bus.baseFare * 0.5 : bus.baseFare).toStringAsFixed(0)}',
+                                  style: AppTheme.heading3.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                if (currentUserPass == 'student')
+                                  Text(
+                                    'Student',
+                                    style: AppTheme.bodySmall.copyWith(
+                                      color: Colors.white.withOpacity(0.9),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      // Route Information
+                        Text(
+                          'Route Information',
+                          style: AppTheme.heading4Dark(context).copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: isDark ? AppTheme.darkSurface : Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isDark ? AppTheme.darkBorder : AppTheme.borderLight,
+                          ),
+                        ),
+                        child: Column(
+                          children: bus.stopNames.asMap().entries.map((entry) {
+                            int index = entry.key;
+                            String stop = entry.value;
+                            bool isLast = index == bus.stops.length - 1;
+                            bool isFirst = index == 0;
+                            
+                            return Container(
+                              decoration: BoxDecoration(
+                                border: isLast
+                                    ? null
+                                    : Border(
+                                        bottom: BorderSide(
+                                          color: isDark ? AppTheme.darkBorder : AppTheme.borderLight,
+                                          width: 1,
+                                        ),
+                                      ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        gradient: isFirst
+                                            ? LinearGradient(
+                                                colors: [
+                                                  AppTheme.accentGreen,
+                                                  AppTheme.accentGreen.withOpacity(0.8),
+                                                ],
+                                              )
+                                            : isLast
+                                                ? LinearGradient(
+                                                    colors: [
+                                                      AppTheme.accentRed,
+                                                      AppTheme.accentRed.withOpacity(0.8),
+                                                    ],
+                                                  )
+                                                : LinearGradient(
+                                                    colors: [
+                                                      AppTheme.primaryBlue,
+                                                      AppTheme.primaryBlue.withOpacity(0.8),
+                                                    ],
+                                                  ),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        isFirst
+                                            ? Icons.play_circle_filled_rounded
+                                            : isLast
+                                                ? Icons.flag_circle_rounded
+                                                : Icons.location_on_rounded,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                      Text(
+                                        stop,
+                                        style: AppTheme.bodyLargeDark(context).copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        isFirst
+                                            ? 'Starting Point'
+                                            : isLast
+                                                ? 'Final Destination'
+                                                : 'Stop ${index + 1}',
+                                        style: AppTheme.bodySmallDark(context),
+                                      ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      if (bus.operator != null || bus.frequency != null) ...[
+                        const SizedBox(height: 24),
+                        Text(
+                          'Additional Information',
+                          style: AppTheme.heading4Dark(context).copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        if (bus.operator != null)
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: isDark ? AppTheme.darkSurface : AppTheme.backgroundLight,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.business_rounded,
+                                  color: AppTheme.primaryBlue,
+                                  size: 24,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Operator',
+                                        style: AppTheme.bodySmallDark(context),
+                                      ),
+                                      Text(
+                                        bus.operator!,
+                                        style: AppTheme.bodyLargeDark(context).copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (bus.frequency != null) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: isDark ? AppTheme.darkSurface : AppTheme.backgroundLight,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.schedule_rounded,
+                                  color: AppTheme.primaryBlue,
+                                  size: 24,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Frequency',
+                                        style: AppTheme.bodySmallDark(context),
+                                      ),
+                                      Text(
+                                        bus.frequency!,
+                                        style: AppTheme.bodyLargeDark(context).copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accentGreen.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.speed_rounded,
+                              color: AppTheme.accentGreen,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Per Kilometer Fare',
+                                    style: AppTheme.bodySmallDark(context),
+                                  ),
+                                  Text(
+                                    '৳${bus.perKmFare.toStringAsFixed(0)}/km',
+                                    style: AppTheme.bodyLargeDark(context).copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.accentGreen,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                  SizedBox(height: 16),
-                  if (selectedSearchType == 'bus') ...[
-                    TextField(
-                      controller: busNameController,
-                      decoration: InputDecoration(
-                        hintText: 'Enter bus name...',
-                        prefixIcon: Icon(Icons.directions_bus),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        filled: true,
-                        fillColor: Colors.grey[50],
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      ),
-                      onSubmitted: (_) => _searchBusByName(),
-                    ),
-                    SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: isLoading ? null : _searchBusByName,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: isLoading
-                            ? SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.white),
-                                ),
-                              )
-                            : Text(
-                                'Search Bus',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                      ),
-                    ),
-                  ] else ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: startLocationController,
-                            decoration: InputDecoration(
-                              hintText: 'Start location...',
-                              prefixIcon: Icon(Icons.location_on, size: 20),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              filled: true,
-                              fillColor: Colors.grey[50],
-                              contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Scaffold(
+      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundLight,
+      body: Stack(
+        children: [
+          _buildBusList(),
+          // Fixed search bar at top
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark ? AppTheme.darkSurface : Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: isDark
+                        ? Colors.black.withOpacity(0.3)
+                        : Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: SafeArea(
+                bottom: false,
+                child: Row(
+                  children: [
+                    // Search bar
+                    Expanded(
+                      child: ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: searchController,
+                        builder: (context, value, child) {
+                          return TextField(
+                            controller: searchController,
+                          decoration: InputDecoration(
+                            hintText: 'Search buses...',
+                            prefixIcon: Icon(
+                              Icons.search_rounded,
+                              color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                            ),
+                              suffixIcon: value.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.close_rounded),
+                                      onPressed: () {
+                                        searchController.clear();
+                                      },
+                                    )
+                                  : null,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide(
+                              color: isDark ? AppTheme.darkBorder : AppTheme.borderLight,
                             ),
                           ),
-                        ),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: endLocationController,
-                            decoration: InputDecoration(
-                              hintText: 'End location...',
-                              prefixIcon:
-                                  Icon(Icons.location_on_outlined, size: 20),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              filled: true,
-                              fillColor: Colors.grey[50],
-                              contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 12),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide(
+                              color: isDark ? AppTheme.darkBorder : AppTheme.borderLight,
                             ),
-                            onSubmitted: (_) => _searchBusByRoute(),
                           ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: isLoading ? null : _searchBusByRoute,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(
+                              color: AppTheme.primaryBlue,
+                              width: 2,
+                            ),
                           ),
-                        ),
-                        child: isLoading
-                            ? SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.white),
-                                ),
-                              )
-                            : Text(
-                                'Search Route',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                          filled: true,
+                          fillColor: isDark ? AppTheme.darkSurface : AppTheme.backgroundLight,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
                               ),
+                            ),
+                            onSubmitted: (_) => _applyFilters(),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Search/Cross icon button
+                    ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: searchController,
+                      builder: (context, value, child) {
+                        return Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            gradient: AppTheme.primaryGradient,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: IconButton(
+                            icon: Icon(
+                              value.text.isNotEmpty
+                                  ? Icons.close_rounded
+                                  : Icons.search_rounded,
+                              color: Colors.white,
+                            ),
+                            onPressed: () {
+                              if (value.text.isNotEmpty) {
+                                searchController.clear();
+                              } else {
+                                _applyFilters();
+                              }
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 12),
+                    // Filter button
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: (selectedTypeFilter != null || 
+                                selectedSortFilter != null || 
+                                showFavoritesOnly)
+                            ? AppTheme.primaryBlue
+                            : (isDark ? AppTheme.darkSurface : AppTheme.backgroundLight),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: (selectedTypeFilter != null || 
+                                  selectedSortFilter != null || 
+                                  showFavoritesOnly)
+                              ? AppTheme.primaryBlue
+                              : (isDark ? AppTheme.darkBorder : AppTheme.borderLight),
+                        ),
+                      ),
+                      child: IconButton(
+                        icon: Icon(
+                          Icons.tune_rounded,
+                          color: (selectedTypeFilter != null || 
+                                  selectedSortFilter != null || 
+                                  showFavoritesOnly)
+                              ? Colors.white
+                              : AppTheme.primaryBlue,
+                        ),
+                        onPressed: _showFilterDialog,
                       ),
                     ),
                   ],
-                ],
-              ),
-            ),
-            SizedBox(height: 16),
-            if (errorMessage != null)
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.red[50],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red[200]!),
-                ),
-                child: Text(
-                  errorMessage!,
-                  style: TextStyle(
-                    color: Colors.red[700],
-                    fontWeight: FontWeight.w500,
-                  ),
                 ),
               ),
-            SizedBox(height: 16),
-            Expanded(
-              child: searchResults.isNotEmpty
-                  ? ListView.builder(
-                      itemCount: searchResults.length,
-                      itemBuilder: (context, index) {
-                        final bus = searchResults[index];
-                            return BusResultCard(
-                          bus: bus,
-                          isFavorited: favoriteStatus[bus.id] ?? false,
-                          onFavoriteToggle: () => _toggleFavorite(bus),
-                          userPass: currentUserPass,
-                        );
-                      },
-                    )
-                  : allBuses.isNotEmpty
-                      ? ListView.builder(
-                          itemCount: allBuses.length,
-                          itemBuilder: (context, index) {
-                            final bus = allBuses[index];
-                            return BusResultCard(
-                          bus: bus,
-                          isFavorited: favoriteStatus[bus.id] ?? false,
-                          onFavoriteToggle: () => _toggleFavorite(bus),
-                          userPass: currentUserPass,
-                        );
-                          },
-                        )
-                      : Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.directions_bus_outlined,
-                                size: 64,
-                                color: Colors.grey[400],
-                              ),
-                              SizedBox(height: 16),
-                              Text(
-                                'No buses available',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                'No buses found in the system',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[500],
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -569,6 +1225,7 @@ class BusResultCard extends StatefulWidget {
   final bool isFavorited;
   final VoidCallback onFavoriteToggle;
   final String? userPass;
+  final String? currentUserGender;
 
   const BusResultCard({
     super.key,
@@ -576,6 +1233,7 @@ class BusResultCard extends StatefulWidget {
     required this.isFavorited,
     required this.onFavoriteToggle,
     this.userPass,
+    this.currentUserGender,
   });
 
   @override
@@ -583,438 +1241,141 @@ class BusResultCard extends StatefulWidget {
 }
 
 class _BusResultCardState extends State<BusResultCard> {
-  bool isExpanded = false;
-  bool isLoadingIndividualBuses = false;
-  List<Map<String, dynamic>> individualBuses = [];
-
-  Future<void> _loadIndividualBuses() async {
-    if (isLoadingIndividualBuses) return;
-
-    setState(() {
-      isLoadingIndividualBuses = true;
-    });
-
-    try {
-      final response =
-          await IndividualBusService.getIndividualBuses(widget.bus.id);
-      if (response['success']) {
-        setState(() {
-          individualBuses = List<Map<String, dynamic>>.from(response['data']);
-          isLoadingIndividualBuses = false;
-        });
-      } else {
-        setState(() {
-          isLoadingIndividualBuses = false;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        isLoadingIndividualBuses = false;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.blue[100],
-              child: Icon(
-                Icons.directions_bus,
-                color: Colors.blue[700],
-              ),
+    final isWomenBus = widget.bus.busType == 'women';
+    
+    return GestureDetector(
+      onTap: () {
+        final state = context.findAncestorStateOfType<_BusScreenState>();
+        if (state != null) {
+          state._showBusModal(widget.bus);
+        }
+      },
+      child: Builder(
+        builder: (context) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          return Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: isDark ? AppTheme.darkSurface : Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: isDark
+                      ? Colors.black.withOpacity(0.3)
+                      : Colors.black.withOpacity(0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            title: Text(
-              widget.bus.busName,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
-              ),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (widget.bus.routeNumber != null)
-                  Text(
-                    'Route: ${widget.bus.routeNumber}',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 14,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  // Bus icon
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      gradient: isWomenBus
+                          ? LinearGradient(
+                              colors: [
+                                Colors.pink.shade400,
+                                Colors.pink.shade600,
+                              ],
+                            )
+                          : AppTheme.primaryGradient,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Icon(
+                      Icons.directions_bus_filled,
+                      color: Colors.white,
+                      size: 28,
                     ),
                   ),
-                if (widget.bus.operator != null)
-                  Text(
-                    'Operator: ${widget.bus.operator}',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 14,
-                    ),
-                  ),
-                if (widget.bus.frequency != null)
-                  Text(
-                    'Frequency: ${widget.bus.frequency}',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 14,
-                    ),
-                  ),
-                Row(
-                  children: [
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: widget.bus.busType == 'women'
-                            ? Colors.pink[100]
-                            : Colors.blue[100],
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        widget.bus.busType.toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: widget.bus.busType == 'women'
-                              ? Colors.pink[700]
-                              : Colors.blue[700],
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 8),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
+                  const SizedBox(width: 16),
+                  // Bus info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.green[100],
-                            borderRadius: BorderRadius.circular(12),
+                        Text(
+                          widget.bus.busName,
+                          style: AppTheme.heading4Dark(context).copyWith(
+                            fontWeight: FontWeight.bold,
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '৳${(widget.userPass == 'student' ? widget.bus.baseFare * 0.5 : widget.bus.baseFare).toStringAsFixed(0)}',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.green[700],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                gradient: isWomenBus
+                                    ? LinearGradient(
+                                        colors: [
+                                          Colors.pink.shade50,
+                                          Colors.pink.shade100,
+                                        ],
+                                      )
+                                    : LinearGradient(
+                                        colors: [
+                                          AppTheme.primaryBlue.withOpacity(0.1),
+                                          AppTheme.primaryBlue.withOpacity(0.15),
+                                        ],
+                                      ),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isWomenBus
+                                      ? Colors.pink.shade300
+                                      : AppTheme.primaryBlue.withOpacity(0.3),
                                 ),
                               ),
-                              if (widget.userPass == 'student') ...[
-                                SizedBox(width: 4),
-                                Container(
-                                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue[600],
-                                    borderRadius: BorderRadius.circular(6),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    isWomenBus ? Icons.woman : Icons.people_alt_rounded,
+                                    size: 14,
+                                    color: isWomenBus
+                                        ? Colors.pink.shade700
+                                        : AppTheme.primaryBlue,
                                   ),
-                                  child: Text(
-                                    'ST',
-                                    style: TextStyle(
-                                      fontSize: 8,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.white,
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    isWomenBus ? 'WOMEN' : 'REGULAR',
+                                    style: AppTheme.labelSmall.copyWith(
+                                      color: isWomenBus
+                                          ? Colors.pink.shade700
+                                          : AppTheme.primaryBlue,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 10,
                                     ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
+                            ),
+                            if (widget.bus.routeNumber != null) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                'Route ${widget.bus.routeNumber}',
+                                style: AppTheme.bodySmallDark(context),
+                              ),
                             ],
-                          ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ),
-              ],
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: Icon(
-                    Icons.message,
-                    color: Colors.orange,
                   ),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ReviewScreen(bus: widget.bus),
-                      ),
-                    );
-                  },
-                ),
-                IconButton(
-                  icon: Icon(
-                    widget.isFavorited ? Icons.favorite : Icons.favorite_border,
-                    color: widget.bus.busType == 'women' &&
-                            (context
-                                    .findAncestorStateOfType<_BusScreenState>()
-                                    ?.currentUserGender ==
-                                'male')
-                        ? Colors.grey
-                        : Colors.red,
-                  ),
-                  onPressed: widget.bus.busType == 'women' &&
-                          (context
-                                  .findAncestorStateOfType<_BusScreenState>()
-                                  ?.currentUserGender ==
-                              'male')
-                      ? null
-                      : widget.onFavoriteToggle,
-                ),
-                IconButton(
-                  icon: Icon(
-                    isExpanded ? Icons.expand_less : Icons.expand_more,
-                    color: Colors.blue,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      isExpanded = !isExpanded;
-                    });
-                    if (isExpanded && individualBuses.isEmpty) {
-                      _loadIndividualBuses();
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
-          if (isExpanded)
-            Container(
-              padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Divider(),
-                  Row(
-                    children: [
-                      Text(
-                        'Route Information',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                      Spacer(),
-                      Text(
-                        'Per km: ৳${widget.bus.perKmFare.toStringAsFixed(0)}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 12),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey[200]!),
-                    ),
-                    child: Column(
-                      children:
-                          widget.bus.stopNames.asMap().entries.map((entry) {
-                        int index = entry.key;
-                        String stop = entry.value;
-                        bool isLast = index == widget.bus.stops.length - 1;
-                        return Container(
-                          decoration: BoxDecoration(
-                            border: isLast
-                                ? null
-                                : Border(
-                                    bottom: BorderSide(
-                                      color: Colors.grey[200]!,
-                                      width: 0.5,
-                                    ),
-                                  ),
-                          ),
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 24,
-                                  height: 24,
-                                  decoration: BoxDecoration(
-                                    color: index == 0
-                                        ? Colors.green
-                                        : index == widget.bus.stops.length - 1
-                                            ? Colors.red
-                                            : Colors.blue,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Center(
-                                    child: Icon(
-                                      index == 0
-                                          ? Icons.trip_origin
-                                          : index == widget.bus.stops.length - 1
-                                              ? Icons.location_on
-                                              : Icons.circle,
-                                      color: Colors.white,
-                                      size: 16,
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        stop,
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w500,
-                                          color: Colors.grey[800],
-                                        ),
-                                      ),
-                                      Text(
-                                        index == 0
-                                            ? 'Starting Point'
-                                            : index ==
-                                                    widget.bus.stops.length - 1
-                                                ? 'Final Destination'
-                                                : 'Stop ${index + 1}',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Text(
-                        'Available Buses',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                      Spacer(),
-                      if (isLoadingIndividualBuses)
-                        SizedBox(
-                          height: 16,
-                          width: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                    ],
-                  ),
-                  SizedBox(height: 8),
-                  if (individualBuses.isNotEmpty)
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.blue[50],
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.blue[200]!),
-                      ),
-                      child: Column(
-                        children: individualBuses.map((bus) {
-                          return Container(
-                            padding: EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              border: bus != individualBuses.last
-                                  ? Border(
-                                      bottom: BorderSide(
-                                        color: Colors.blue[200]!,
-                                        width: 0.5,
-                                      ),
-                                    )
-                                  : null,
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.directions_bus,
-                                  color: Colors.blue[600],
-                                  size: 20,
-                                ),
-                                SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Bus ID: ${bus['_id'] ?? 'N/A'}',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w500,
-                                          color: Colors.grey[800],
-                                        ),
-                                      ),
-                                      if (bus['status'] != null)
-                                        Text(
-                                          'Status: ${bus['status']}',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey[600],
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    )
-                  else if (!isLoadingIndividualBuses)
-                    Container(
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[50],
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey[200]!),
-                      ),
-                      child: Center(
-                        child: Text(
-                          'No individual buses available',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),
-        ],
+          );
+        },
       ),
     );
   }
 }
+

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../models/offers.dart';
 import '../services/offers_service.dart';
 import '../services/auth_service.dart';
+import '../utils/loading_widgets.dart';
+import '../utils/error_widgets.dart';
 
 class OffersScreen extends StatefulWidget {
   static const routeName = '/offers';
@@ -55,46 +57,13 @@ class _OffersScreenState extends State<OffersScreen> {
 
   Widget _buildContent() {
     if (_isLoading) {
-      return Center(
-        child: CircularProgressIndicator(),
-      );
+      return const LoadingWidget(message: 'Loading offers...');
     }
 
     if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Colors.red[400],
-            ),
-            SizedBox(height: 16),
-            Text(
-              'Error',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[800],
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              _error!,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
-              ),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _loadUserOffers,
-              child: Text('Retry'),
-            ),
-          ],
-        ),
+      return ErrorDisplayWidget(
+        message: _error!,
+        onRetry: _loadUserOffers,
       );
     }
 
@@ -102,45 +71,24 @@ class _OffersScreenState extends State<OffersScreen> {
       return _buildEmptyState();
     }
 
-    return _buildUserOffers();
+    return RefreshIndicator(
+      onRefresh: _loadUserOffers,
+      child: _buildUserOffers(),
+    );
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.local_offer_outlined,
-              size: 64,
-              color: Colors.grey[400],
-            ),
-          ),
-          SizedBox(height: 24),
-          Text(
-            'No Offers Available',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[600],
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Check back later for exciting offers and promotions!',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey[500],
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
+    return RefreshIndicator(
+      onRefresh: _loadUserOffers,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: EmptyStateWidget(
+          title: 'No Offers Available',
+          message: 'Check back later for exciting offers and promotions!',
+          icon: Icons.local_offer_outlined,
+          action: _loadUserOffers,
+          actionLabel: 'Refresh',
+        ),
       ),
     );
   }
@@ -694,12 +642,7 @@ class _OffersScreenState extends State<OffersScreen> {
                             setState(() {
                               isProcessing = false;
                             });
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Error: $e'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
+                            ErrorSnackbar.show(context, 'Error: $e');
                           }
                         },
                   style: ElevatedButton.styleFrom(
@@ -776,13 +719,9 @@ class _OffersScreenState extends State<OffersScreen> {
       print('DEBUG: Refreshing offers...');
       await _loadUserOffers();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content:
-              Text('${amount.toStringAsFixed(2)} added to wallet balance!'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 3),
-        ),
+      SuccessSnackbar.show(
+        context,
+        '${amount.toStringAsFixed(2)} added to wallet balance!',
       );
 
       _showSuccessDialog(type, amount, color);

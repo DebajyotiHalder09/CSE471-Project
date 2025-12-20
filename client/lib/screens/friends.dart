@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
+import '../utils/app_theme.dart';
 import '../models/user.dart';
 import '../services/auth_service.dart';
 import '../services/chat_service.dart';
@@ -197,19 +198,23 @@ class _FriendsScreenState extends State<FriendsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: AppTheme.backgroundLight,
       appBar: AppBar(
-        title: Text('Friends'),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
+        title: Text(
+          'Friends',
+          style: AppTheme.heading3.copyWith(color: AppTheme.textPrimary),
+        ),
         elevation: 0,
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
+          indicatorColor: AppTheme.primaryBlue,
+          indicatorWeight: 3,
+          labelColor: AppTheme.primaryBlue,
+          unselectedLabelColor: AppTheme.textSecondary,
+          labelStyle: AppTheme.labelLarge,
+          unselectedLabelStyle: AppTheme.bodyMedium,
           tabs: [
-            Tab(text: 'Search'),
+            const Tab(text: 'Search'),
             Tab(text: 'Friends (${_friendsList.length})'),
             Tab(text: 'Requests (${_pendingRequests.length})'),
           ],
@@ -234,18 +239,7 @@ class _FriendsScreenState extends State<FriendsScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey.withOpacity(0.1),
-                    spreadRadius: 1,
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
+              decoration: AppTheme.modernCardDecoration(),
               child: Row(
                 children: [
                   Expanded(
@@ -253,11 +247,11 @@ class _FriendsScreenState extends State<FriendsScreen>
                       controller: _searchController,
                       decoration: InputDecoration(
                         hintText: 'Enter friend code',
-                        prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
+                        hintStyle: AppTheme.bodyMedium.copyWith(color: AppTheme.textTertiary),
+                        prefixIcon: const Icon(Icons.search, color: AppTheme.textSecondary),
                         suffixIcon: _searchController.text.isNotEmpty
                             ? IconButton(
-                                icon:
-                                    Icon(Icons.clear, color: Colors.grey[600]),
+                                icon: const Icon(Icons.clear, color: AppTheme.textSecondary),
                                 onPressed: () {
                                   _searchController.clear();
                                   setState(() {
@@ -268,9 +262,9 @@ class _FriendsScreenState extends State<FriendsScreen>
                               )
                             : null,
                         border: InputBorder.none,
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                       ),
+                      style: AppTheme.bodyLarge,
                       onChanged: (value) {
                         if (value.isEmpty) {
                           setState(() {
@@ -294,28 +288,32 @@ class _FriendsScreenState extends State<FriendsScreen>
                   ),
                   Container(
                     margin: EdgeInsets.only(right: 8),
-                    child: ElevatedButton(
-                      onPressed: _isSearching ? null : _searchUserByFriendCode,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      decoration: AppTheme.gradientButtonDecoration(),
+                      child: ElevatedButton(
+                        onPressed: _isSearching ? null : _searchUserByFriendCode,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                         ),
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      ),
-                      child: _isSearching
-                          ? SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(Colors.white),
+                        child: _isSearching
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            : Text(
+                                'Search',
+                                style: AppTheme.labelLarge.copyWith(color: Colors.white),
                               ),
-                            )
-                          : Text('Search'),
+                      ),
                     ),
                   ),
                 ],
@@ -510,77 +508,98 @@ class _FriendsScreenState extends State<FriendsScreen>
   }
 
   Widget _buildFriendCard(User friend) {
+    final hasUnread = _unreadCounts[friend.id] != null && _unreadCounts[friend.id]! > 0;
     return Container(
-      margin: EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: InkWell(
-        onTap: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ChatScreen(friend: friend),
-            ),
-          );
-          // Refresh unread counts when returning from chat
-          _loadUnreadCounts();
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: ListTile(
-          leading: CircleAvatar(
-            radius: 25,
-            backgroundColor: Colors.green[100],
-            child: Text(
-              friend.firstNameInitial,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.green[700],
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: AppTheme.modernCardDecoration(),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ChatScreen(friend: friend),
               ),
-            ),
-          ),
-          title: Text(
-            friend.name,
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 16,
-            ),
-          ),
-          subtitle: Text(
-            friend.email,
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 14,
-            ),
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (_unreadCounts[friend.id] != null && _unreadCounts[friend.id]! > 0)
+            );
+            // Refresh unread counts when returning from chat
+            _loadUnreadCounts();
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
                 Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Colors.red,
+                  decoration: BoxDecoration(
                     shape: BoxShape.circle,
+                    gradient: AppTheme.accentGradient,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.accentGreen.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(2),
+                  child: CircleAvatar(
+                    radius: 28,
+                    backgroundColor: AppTheme.backgroundWhite,
+                    child: Text(
+                      friend.firstNameInitial,
+                      style: AppTheme.heading4.copyWith(
+                        color: AppTheme.accentGreen,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
                 ),
-              Icon(
-                Icons.check_circle,
-                color: Colors.green,
-              ),
-            ],
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        friend.name,
+                        style: AppTheme.heading4.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        friend.email,
+                        style: AppTheme.bodyMedium.copyWith(
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (hasUnread)
+                  Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: AppTheme.accentRed,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.accentRed.withOpacity(0.5),
+                          blurRadius: 4,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                  ),
+                Icon(
+                  Icons.chevron_right,
+                  color: AppTheme.textTertiary,
+                  size: 24,
+                ),
+              ],
+            ),
           ),
         ),
       ),

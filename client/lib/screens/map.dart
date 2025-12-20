@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
+import '../utils/app_theme.dart';
 import '../services/auth_service.dart';
 import '../services/fav_bus_service.dart';
 import '../services/individual_bus_service.dart';
@@ -25,7 +27,7 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMixin {
   MapController? _mapController;
   bool _mapReady = false;
 
@@ -49,6 +51,7 @@ class _MapScreenState extends State<MapScreen> {
   List<BusStop> _allBusStops = [];
 
   DraggableScrollableController? _bottomSheetController;
+  late AnimationController _polylineAnimationController;
 
   static const LatLng dhakaCenter = LatLng(23.8103, 90.4125);
 
@@ -59,11 +62,16 @@ class _MapScreenState extends State<MapScreen> {
     _getCurrentUserId();
     _loadAllBusStops();
     _bottomSheetController = DraggableScrollableController();
+    _polylineAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat();
   }
 
   @override
   void dispose() {
     _bottomSheetController?.dispose();
+    _polylineAnimationController.dispose();
     super.dispose();
   }
 
@@ -411,100 +419,82 @@ class _MapScreenState extends State<MapScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                // Line 1: Individual bus name, running status, passenger count
                                 Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text(
-                                      bus.busCode,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 18,
-                                        color: Colors.grey[900],
-                                      ),
-                                    ),
-                                    SizedBox(width: 10),
-                                    Row(
-                                      children: [
-                                        Container(
-                                          padding: EdgeInsets.symmetric(
-                                              horizontal: 10, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            color: _getStatusColor(bus.status),
-                                            borderRadius:
-                                                BorderRadius.circular(12),
-                                          ),
-                                          child: Text(
-                                            bus.status.toUpperCase(),
+                                    Expanded(
+                                      child: Row(
+                                        children: [
+                                          Text(
+                                            bus.busCode,
                                             style: TextStyle(
-                                              fontSize: 9,
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w800,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 20,
+                                              color: Colors.grey[900],
                                             ),
                                           ),
-                                        ),
-                                        if (bus.busType == 'women') ...[
-                                          SizedBox(width: 8),
+                                          SizedBox(width: 12),
                                           Container(
                                             padding: EdgeInsets.symmetric(
-                                                horizontal: 8, vertical: 6),
+                                                horizontal: 12, vertical: 6),
                                             decoration: BoxDecoration(
-                                              color: Colors.pink[400],
+                                              color: _getStatusColor(bus.status),
                                               borderRadius:
                                                   BorderRadius.circular(12),
                                             ),
                                             child: Text(
-                                              'WOMEN',
+                                              bus.status.toUpperCase(),
                                               style: TextStyle(
-                                                fontSize: 8,
+                                                fontSize: 11,
                                                 color: Colors.white,
                                                 fontWeight: FontWeight.w800,
                                               ),
                                             ),
                                           ),
+                                          if (bus.busType == 'women') ...[
+                                            SizedBox(width: 8),
+                                            Container(
+                                              padding: EdgeInsets.symmetric(
+                                                  horizontal: 10, vertical: 6),
+                                              decoration: BoxDecoration(
+                                                color: Colors.pink[400],
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              child: Text(
+                                                'WOMEN',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ],
-                                      ],
+                                      ),
                                     ),
-                                  ],
-                                ),
-                                SizedBox(height: 12),
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
                                     Row(
                                       children: [
-                                        Container(
-                                          padding: EdgeInsets.all(8),
-                                          decoration: BoxDecoration(
-                                            color: bus.currentPassengerCount >=
-                                                    bus.totalPassengerCapacity
-                                                ? Colors.red[50]
-                                                : bus.currentPassengerCount >=
-                                                        (bus.totalPassengerCapacity *
-                                                            0.8)
-                                                    ? Colors.orange[50]
-                                                    : Colors.blue[50],
-                                            borderRadius:
-                                                BorderRadius.circular(10),
-                                          ),
-                                          child: Icon(
-                                            Icons.people,
-                                            color: bus.currentPassengerCount >=
-                                                    bus.totalPassengerCapacity
-                                                ? Colors.red[600]
-                                                : bus.currentPassengerCount >=
-                                                        (bus.totalPassengerCapacity *
-                                                            0.8)
-                                                    ? Colors.orange[600]
-                                                    : Colors.blue[600],
-                                            size: 16,
-                                          ),
+                                        Icon(
+                                          Icons.people,
+                                          color: bus.currentPassengerCount >=
+                                                  bus.totalPassengerCapacity
+                                              ? Colors.red[600]
+                                              : bus.currentPassengerCount >=
+                                                      (bus.totalPassengerCapacity *
+                                                          0.8)
+                                                  ? Colors.orange[600]
+                                                  : Colors.blue[600],
+                                          size: 20,
                                         ),
-                                        SizedBox(width: 10),
+                                        SizedBox(width: 6),
                                         Text(
                                           '${bus.currentPassengerCount}/${bus.totalPassengerCapacity}',
                                           style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w700,
                                             color: bus.currentPassengerCount >=
                                                     bus.totalPassengerCapacity
                                                 ? Colors.red[700]
@@ -517,220 +507,207 @@ class _MapScreenState extends State<MapScreen> {
                                         ),
                                       ],
                                     ),
-                                    AnimatedSwitcher(
-                                      duration: Duration(milliseconds: 300),
-                                      child: !(_boardedBuses[bus.id] ?? false)
-                                          ? Tooltip(
-                                              message: bus.currentPassengerCount >=
-                                                      bus.totalPassengerCapacity
-                                                  ? 'Bus is at full capacity'
-                                                  : bus.currentPassengerCount >=
-                                                          (bus.totalPassengerCapacity *
-                                                              0.8)
-                                                      ? 'Bus is nearly full'
-                                                      : 'Board this bus',
-                                              child: ElevatedButton(
-                                                key:
-                                                    ValueKey('board_${bus.id}'),
-                                                onPressed:
-                                                    bus.currentPassengerCount >=
-                                                            bus.totalPassengerCapacity
-                                                        ? null
-                                                        : () async {
-                                                            if (_currentUserGender
-                                                                        ?.toLowerCase() ==
-                                                                    'male' &&
-                                                                bus.busType ==
-                                                                    'women') {
-                                                              Navigator.of(
-                                                                      context)
-                                                                  .pop();
-                                                              _showWomenBusPopup();
-                                                              return;
-                                                            }
-
-                                                            final source =
-                                                                _sourceController
-                                                                    .text
-                                                                    .trim();
-                                                            final destination =
-                                                                _destinationController
-                                                                    .text
-                                                                    .trim();
-
-                                                            if (source
-                                                                    .isEmpty ||
-                                                                destination
-                                                                    .isEmpty) {
-                                                              ScaffoldMessenger
-                                                                      .of(context)
-                                                                  .showSnackBar(
-                                                                SnackBar(
-                                                                  content: Text(
-                                                                      'Please set source and destination first'),
-                                                                  backgroundColor:
-                                                                      Colors
-                                                                          .orange,
-                                                                ),
-                                                              );
-                                                              return;
-                                                            }
-
-                                                            await _boardBus(
-                                                                bus.id,
-                                                                busInfoId);
-                                                          },
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: _boardedBuses
-                                                          .values
-                                                          .any((boarded) =>
-                                                              boarded)
-                                                      ? Colors.grey[400]
-                                                      : bus.currentPassengerCount >=
-                                                              bus
-                                                                  .totalPassengerCapacity
-                                                          ? Colors.red[400]
-                                                          : bus.currentPassengerCount >=
-                                                                  (bus.totalPassengerCapacity *
-                                                                      0.8)
-                                                              ? Colors
-                                                                  .orange[600]
-                                                              : Colors
-                                                                  .blue[600],
-                                                  foregroundColor: Colors.white,
-                                                  padding: EdgeInsets.symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 8),
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8),
-                                                  ),
-                                                  minimumSize: Size(0, 0),
-                                                ),
-                                                child: Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    Icon(Icons.directions_bus,
-                                                        size: 14),
-                                                    SizedBox(width: 6),
-                                                    Text(
-                                                      bus.currentPassengerCount >=
-                                                              bus
-                                                                  .totalPassengerCapacity
-                                                          ? 'Full'
-                                                          : bus.currentPassengerCount >=
-                                                                  (bus.totalPassengerCapacity *
-                                                                      0.8)
-                                                              ? 'Nearly Full'
-                                                              : 'Board',
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            )
-                                          : ElevatedButton(
-                                              key: ValueKey('end_${bus.id}'),
-                                              onPressed: () async {
-                                                if (_currentUserGender
-                                                            ?.toLowerCase() ==
-                                                        'male' &&
-                                                    bus.busType == 'women') {
-                                                  Navigator.of(context).pop();
-                                                  _showWomenBusPopup();
-                                                  return;
-                                                }
-
-                                                final source = _sourceController
-                                                    .text
-                                                    .trim();
-                                                final destination =
-                                                    _destinationController.text
-                                                        .trim();
-
-                                                if (source.isEmpty ||
-                                                    destination.isEmpty) {
-                                                  ScaffoldMessenger.of(context)
-                                                      .showSnackBar(
-                                                    SnackBar(
-                                                      content: Text(
-                                                          'Please set source and destination first'),
-                                                      backgroundColor:
-                                                          Colors.orange,
-                                                    ),
-                                                  );
-                                                  return;
-                                                }
-
-                                                await _endTrip(
-                                                    bus.id,
-                                                    busInfoId,
-                                                    source,
-                                                    destination);
-                                              },
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor:
-                                                    Colors.red[600],
-                                                foregroundColor: Colors.white,
-                                                padding: EdgeInsets.symmetric(
-                                                    horizontal: 16,
-                                                    vertical: 8),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                ),
-                                                minimumSize: Size(0, 0),
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(Icons.stop, size: 14),
-                                                  SizedBox(width: 6),
-                                                  Text(
-                                                    'End Trip',
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                    ),
                                   ],
                                 ),
-                                SizedBox(height: 12),
+                                SizedBox(height: 16),
+                                // Line 2: Big Board button covering whole width
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 56,
+                                  child: AnimatedSwitcher(
+                                    duration: Duration(milliseconds: 300),
+                                    child: !(_boardedBuses[bus.id] ?? false)
+                                        ? Tooltip(
+                                            message: bus.currentPassengerCount >=
+                                                    bus.totalPassengerCapacity
+                                                ? 'Bus is at full capacity'
+                                                : bus.currentPassengerCount >=
+                                                        (bus.totalPassengerCapacity *
+                                                            0.8)
+                                                    ? 'Bus is nearly full'
+                                                    : 'Board this bus',
+                                            child: ElevatedButton(
+                                              key: ValueKey('board_${bus.id}'),
+                                              onPressed:
+                                                  bus.currentPassengerCount >=
+                                                          bus.totalPassengerCapacity
+                                                      ? null
+                                                      : () async {
+                                                          if (_currentUserGender
+                                                                      ?.toLowerCase() ==
+                                                                  'male' &&
+                                                              bus.busType ==
+                                                                  'women') {
+                                                            Navigator.of(
+                                                                    context)
+                                                                .pop();
+                                                            _showWomenBusPopup();
+                                                            return;
+                                                          }
+
+                                                          final source =
+                                                              _sourceController
+                                                                  .text
+                                                                  .trim();
+                                                          final destination =
+                                                              _destinationController
+                                                                  .text
+                                                                  .trim();
+
+                                                          if (source
+                                                                  .isEmpty ||
+                                                              destination
+                                                                  .isEmpty) {
+                                                            ScaffoldMessenger
+                                                                    .of(context)
+                                                                .showSnackBar(
+                                                              SnackBar(
+                                                                content: Text(
+                                                                    'Please set source and destination first'),
+                                                                backgroundColor:
+                                                                    Colors
+                                                                        .orange,
+                                                              ),
+                                                            );
+                                                            return;
+                                                          }
+
+                                                          await _boardBus(
+                                                              bus.id,
+                                                              busInfoId);
+                                                        },
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: _boardedBuses
+                                                        .values
+                                                        .any((boarded) =>
+                                                            boarded)
+                                                    ? Colors.grey[400]
+                                                    : bus.currentPassengerCount >=
+                                                            bus
+                                                                .totalPassengerCapacity
+                                                        ? Colors.red[400]
+                                                        : bus.currentPassengerCount >=
+                                                                (bus.totalPassengerCapacity *
+                                                                    0.8)
+                                                            ? Colors
+                                                                .orange[600]
+                                                            : Colors
+                                                                .blue[600],
+                                                foregroundColor: Colors.white,
+                                                minimumSize: Size(double.infinity, 56),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          12),
+                                                ),
+                                                elevation: 2,
+                                              ),
+                                              child: Text(
+                                                bus.currentPassengerCount >=
+                                                        bus
+                                                            .totalPassengerCapacity
+                                                    ? 'FULL'
+                                                    : bus.currentPassengerCount >=
+                                                            (bus.totalPassengerCapacity *
+                                                                0.8)
+                                                        ? 'NEARLY FULL'
+                                                        : 'BOARD',
+                                                style: TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight:
+                                                      FontWeight.w700,
+                                                ),
+                                              ),
+                                            ),
+                                          )
+                                        : ElevatedButton(
+                                            key: ValueKey('end_${bus.id}'),
+                                            onPressed: () async {
+                                              if (_currentUserGender
+                                                          ?.toLowerCase() ==
+                                                      'male' &&
+                                                  bus.busType == 'women') {
+                                                Navigator.of(context).pop();
+                                                _showWomenBusPopup();
+                                                return;
+                                              }
+
+                                              final source = _sourceController
+                                                  .text
+                                                  .trim();
+                                              final destination =
+                                                  _destinationController.text
+                                                      .trim();
+
+                                              if (source.isEmpty ||
+                                                  destination.isEmpty) {
+                                                ScaffoldMessenger.of(context)
+                                                    .showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(
+                                                        'Please set source and destination first'),
+                                                    backgroundColor:
+                                                        Colors.orange,
+                                                  ),
+                                                );
+                                                return;
+                                              }
+
+                                              await _endTrip(
+                                                  bus.id,
+                                                  busInfoId,
+                                                  source,
+                                                  destination);
+                                            },
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor:
+                                                  Colors.red[600],
+                                              foregroundColor: Colors.white,
+                                              minimumSize: Size(double.infinity, 56),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              elevation: 2,
+                                            ),
+                                            child: Text(
+                                              'END TRIP',
+                                              style: TextStyle(
+                                                fontSize: 18,
+                                                fontWeight:
+                                                    FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
+                                  ),
+                                ),
+                                SizedBox(height: 16),
+                                // Line 3: Distance and time
                                 Row(
                                   children: [
                                     Expanded(
                                       child: Container(
-                                        padding: EdgeInsets.all(8),
+                                        padding: EdgeInsets.symmetric(
+                                            horizontal: 16, vertical: 12),
                                         decoration: BoxDecoration(
                                           color: Colors.green[50],
                                           borderRadius:
-                                              BorderRadius.circular(8),
+                                              BorderRadius.circular(10),
                                         ),
                                         child: Row(
                                           mainAxisAlignment:
                                               MainAxisAlignment.center,
                                           children: [
                                             Icon(
-                                              Icons.location_on,
+                                              Icons.straighten,
                                               color: Colors.green[600],
-                                              size: 18,
+                                              size: 22,
                                             ),
-                                            SizedBox(width: 6),
+                                            SizedBox(width: 8),
                                             Text(
                                               '${_calculateDistanceFromSource(bus).toStringAsFixed(1)} km',
                                               style: TextStyle(
-                                                fontSize: 13,
+                                                fontSize: 16,
                                                 fontWeight: FontWeight.w700,
                                                 color: Colors.green[800],
                                               ),
@@ -739,14 +716,15 @@ class _MapScreenState extends State<MapScreen> {
                                         ),
                                       ),
                                     ),
-                                    SizedBox(width: 8),
+                                    SizedBox(width: 12),
                                     Expanded(
                                       child: Container(
-                                        padding: EdgeInsets.all(8),
+                                        padding: EdgeInsets.symmetric(
+                                            horizontal: 16, vertical: 12),
                                         decoration: BoxDecoration(
                                           color: Colors.orange[50],
                                           borderRadius:
-                                              BorderRadius.circular(8),
+                                              BorderRadius.circular(10),
                                         ),
                                         child: Row(
                                           mainAxisAlignment:
@@ -755,13 +733,13 @@ class _MapScreenState extends State<MapScreen> {
                                             Icon(
                                               Icons.access_time,
                                               color: Colors.orange[600],
-                                              size: 18,
+                                              size: 22,
                                             ),
-                                            SizedBox(width: 6),
+                                            SizedBox(width: 8),
                                             Text(
                                               _calculateETA(bus),
                                               style: TextStyle(
-                                                fontSize: 13,
+                                                fontSize: 16,
                                                 fontWeight: FontWeight.w700,
                                                 color: Colors.orange[800],
                                               ),
@@ -2569,55 +2547,87 @@ class _MapScreenState extends State<MapScreen> {
           builder: (context, scrollController) {
             return Column(
               children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(top: 12, bottom: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade400,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Available Bus',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      ElevatedButton(
-                        onPressed: () {
-                          Navigator.of(context).maybePop();
-                          if (widget.onOpenRideshare != null) {
-                            widget.onOpenRideshare!(
-                              _sourceController.text.trim(),
-                              _destinationController.text.trim(),
-                            );
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                          padding:
-                              EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                // Clickable header area for web compatibility
+                GestureDetector(
+                  onTap: () {
+                    if (_bottomSheetController != null && _bottomSheetController!.isAttached) {
+                      final currentSize = _bottomSheetController!.size;
+                      final isExpanded = currentSize >= 0.7;
+                      _bottomSheetController!.animateTo(
+                        isExpanded ? 0.25 : 0.8,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                      );
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade400,
+                            borderRadius: BorderRadius.circular(2),
                           ),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.directions_car, size: 18),
-                            SizedBox(width: 8),
-                            Text('RideShare',
-                                style: TextStyle(fontWeight: FontWeight.w600)),
-                          ],
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              // Title with expand/collapse indicator
+                              Row(
+                                children: [
+                                  const Text(
+                                    'Available Bus',
+                                    style: TextStyle(
+                                        fontSize: 18, fontWeight: FontWeight.bold),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Icon(
+                                    Icons.unfold_more,
+                                    size: 20,
+                                    color: Colors.grey[600],
+                                  ),
+                                ],
+                              ),
+                              ElevatedButton(
+                                onPressed: () {
+                                  Navigator.of(context).maybePop();
+                                  if (widget.onOpenRideshare != null) {
+                                    widget.onOpenRideshare!(
+                                      _sourceController.text.trim(),
+                                      _destinationController.text.trim(),
+                                    );
+                                  }
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                  foregroundColor: Colors.white,
+                                  padding:
+                                      EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.directions_car, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('RideShare',
+                                        style: TextStyle(fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                              )
+                            ],
+                          ),
                         ),
-                      )
-                    ],
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -2983,55 +2993,69 @@ class _MapScreenState extends State<MapScreen> {
           builder: (context, scrollController) {
             return Column(
               children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(top: 12, bottom: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade400,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Custom Location',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      ElevatedButton(
-                        onPressed: () {
-                          Navigator.of(context).maybePop();
-                          if (widget.onOpenRideshare != null) {
-                            widget.onOpenRideshare!(
-                              _sourceController.text.trim(),
-                              _destinationController.text.trim(),
-                            );
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                          padding:
-                              EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                // Clickable header area for web compatibility
+                GestureDetector(
+                  onTap: () {
+                    // Note: This sheet uses a different controller context
+                    // For web, we'll rely on the drag handle being more visible
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade400,
+                            borderRadius: BorderRadius.circular(2),
                           ),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.directions_car, size: 18),
-                            SizedBox(width: 8),
-                            Text('RideShare',
-                                style: TextStyle(fontWeight: FontWeight.w600)),
-                          ],
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Custom Location',
+                                style: TextStyle(
+                                    fontSize: 18, fontWeight: FontWeight.bold),
+                              ),
+                              ElevatedButton(
+                                onPressed: () {
+                                  Navigator.of(context).maybePop();
+                                  if (widget.onOpenRideshare != null) {
+                                    widget.onOpenRideshare!(
+                                      _sourceController.text.trim(),
+                                      _destinationController.text.trim(),
+                                    );
+                                  }
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                  foregroundColor: Colors.white,
+                                  padding:
+                                      EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.directions_car, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('RideShare',
+                                        style: TextStyle(fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                              )
+                            ],
+                          ),
                         ),
-                      )
-                    ],
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -3181,14 +3205,36 @@ class _MapScreenState extends State<MapScreen> {
                 userAgentPackageName: 'com.example.flutter_application_1',
               ),
               if (_routePoints.isNotEmpty)
-                PolylineLayer(
-                  polylines: [
-                    Polyline(
-                      points: _routePoints,
-                      strokeWidth: 6.0,
-                      color: Colors.blue.withValues(alpha: 0.8),
-                    ),
-                  ],
+                AnimatedBuilder(
+                  animation: _polylineAnimationController,
+                  builder: (context, child) {
+                    final animationValue = _polylineAnimationController.value;
+                    // Create a pulsing light effect using multiple polyline layers
+                    // Use sine wave for smooth pulsing animation
+                    final pulseAlpha = 0.3 + (0.5 * (1 + math.sin(animationValue * 2 * math.pi)) / 2);
+                    return PolylineLayer(
+                      polylines: [
+                        // Base shadow layer - thick and semi-transparent
+                        Polyline(
+                          points: _routePoints,
+                          strokeWidth: 12.0,
+                          color: Colors.blue.withValues(alpha: 0.5),
+                        ),
+                        // Animated pulse layer - creates pulsing light effect
+                        Polyline(
+                          points: _routePoints,
+                          strokeWidth: 10.0,
+                          color: Colors.lightBlue.withValues(alpha: pulseAlpha),
+                        ),
+                        // Main visible layer - always fully opaque
+                        Polyline(
+                          points: _routePoints,
+                          strokeWidth: 8.0,
+                          color: Colors.blue.withValues(alpha: 1.0),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               MarkerLayer(
                 markers: [
@@ -3254,107 +3300,93 @@ class _MapScreenState extends State<MapScreen> {
           // Display source and destination at top when set
           if (_sourceController.text.isNotEmpty || _destinationController.text.isNotEmpty)
             Positioned(
-              top: 40,
+              top: 16,
               left: 16,
               right: 16,
               child: Container(
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
+                decoration: AppTheme.modernCardDecoration(),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.location_on, color: Colors.green, size: 20),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  _sourceController.text.isNotEmpty
-                                      ? _sourceController.text
-                                      : 'Source',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: _sourceController.text.isNotEmpty
-                                        ? Colors.grey[800]
-                                        : Colors.grey[400],
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
+                    Row(
+                      children: [
+                        Icon(Icons.search, color: AppTheme.accentGreen, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _sourceController.text.isNotEmpty
+                                ? _sourceController.text
+                                : 'Source',
+                            style: AppTheme.bodyMedium.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: _sourceController.text.isNotEmpty
+                                  ? AppTheme.textPrimary
+                                  : AppTheme.textTertiary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              const Icon(Icons.flag, color: Colors.red, size: 20),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  _destinationController.text.isNotEmpty
-                                      ? _destinationController.text
-                                      : 'Destination',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: _destinationController.text.isNotEmpty
-                                        ? Colors.grey[800]
-                                        : Colors.grey[400],
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    ElevatedButton.icon(
-                      onPressed: _sourceController.text.isNotEmpty && 
-                                _destinationController.text.isNotEmpty
-                          ? () async {
-                              // Process search results and show bus list
-                              await _processSearchResults(
-                                _sourceController.text.trim(),
-                                _destinationController.text.trim(),
-                                null,
-                                null,
-                              );
-                            }
-                          : null,
-                      icon: const Icon(Icons.send, size: 18, color: Colors.white),
-                      label: const Text(
-                        'Send',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.directions_bus, color: AppTheme.accentRed, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _destinationController.text.isNotEmpty
+                                ? _destinationController.text
+                                : 'Destination',
+                            style: AppTheme.bodyMedium.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: _destinationController.text.isNotEmpty
+                                  ? AppTheme.textPrimary
+                                  : AppTheme.textTertiary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue[600],
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                        const SizedBox(width: 8),
+                        Container(
+                          decoration: AppTheme.gradientButtonDecoration(),
+                          child: ElevatedButton(
+                            onPressed: _sourceController.text.isNotEmpty && 
+                                      _destinationController.text.isNotEmpty
+                                ? () async {
+                                    // Process search results and show bus list
+                                    await _processSearchResults(
+                                      _sourceController.text.trim(),
+                                      _destinationController.text.trim(),
+                                      null,
+                                      null,
+                                    );
+                                  }
+                                : null,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              elevation: 0,
+                              minimumSize: const Size(0, 36),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.search, size: 18, color: Colors.white),
+                                const SizedBox(width: 4),
+                                const Icon(Icons.directions_bus, size: 18, color: Colors.white),
+                              ],
+                            ),
+                          ),
                         ),
-                        elevation: 2,
-                      ),
+                      ],
                     ),
                   ],
                 ),
@@ -3362,7 +3394,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
           if (_sourcePoint != null || _destinationPoint != null)
             Positioned(
-              top: 140,
+              top: 110,
               right: 16,
               child: FloatingActionButton(
                 onPressed: _clearRoute,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/app_theme.dart';
 import 'map.dart';
 import 'bus.dart';
 import 'rideshare.dart';
@@ -226,190 +227,233 @@ class NavScreenState extends State<NavScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Top Bar
-            Container(
-              height: 60, // Smaller height than nav.dart
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 10,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // SmartDhaka text on the left
-                    Text(
-                      'SmartDhaka',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue[700],
+            // Top Bar - Modern Compact Design
+            Builder(
+              builder: (context) {
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                return Container(
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+                    boxShadow: [
+                      BoxShadow(
+                        color: isDark
+                            ? Colors.black.withOpacity(0.3)
+                            : Colors.black.withOpacity(0.03),
+                        blurRadius: 10,
+                        offset: const Offset(0, 1),
                       ),
-                    ),
-
-                    // Wallet info and profile picture on the right
-                    Row(
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Gem icon with count
-                        GestureDetector(
-                          onTap: () async {
-                            await _refreshWalletData();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Wallet refreshed!'),
-                                duration: Duration(seconds: 1),
+                        // App Logo - Smaller
+                        Image.asset(
+                          'assets/main.png',
+                          width: 32,
+                          height: 32,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                gradient: AppTheme.primaryGradient,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.directions_bus,
+                                color: Colors.white,
+                                size: 20,
                               ),
                             );
                           },
-                          child: Container(
-                            padding: EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.purple[50]!,
-                                  Colors.purple[100]!
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.purple[200]!),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.purple.withValues(alpha: 0.2),
-                                  blurRadius: 8,
-                                  offset: Offset(0, 2),
+                        ),
+
+                        // Right side: Gems, Wallet, Profile
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Gem icon - No box, just icon with badge
+                            GestureDetector(
+                              onTap: () async {
+                            await _refreshWalletData();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: const Text('Wallet refreshed!'),
+                                  duration: const Duration(seconds: 1),
+                                  backgroundColor: AppTheme.accentGreen,
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
                                 ),
-                              ],
-                            ),
-                            child: Stack(
-                              children: [
-                                _isRefreshingWallet
-                                    ? SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(
-                                                  Colors.purple[700]!),
+                              );
+                            }
+                              },
+                              child: Container(
+                                width: 32,
+                                height: 32,
+                                alignment: Alignment.center,
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    _isRefreshingWallet
+                                        ? const SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor: AlwaysStoppedAnimation<Color>(
+                                                  AppTheme.accentPurple),
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.diamond,
+                                            size: 24,
+                                            color: AppTheme.accentPurple,
+                                          ),
+                                    if (_gems > 0)
+                                      Positioned(
+                                        right: -6,
+                                        top: -6,
+                                        child: Container(
+                                          constraints: const BoxConstraints(
+                                            minWidth: 16,
+                                            minHeight: 16,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 4, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: AppTheme.accentRed,
+                                            borderRadius: BorderRadius.circular(10),
+                                            border: Border.all(
+                                              color: Colors.white,
+                                              width: 1.5,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: AppTheme.accentRed.withOpacity(0.4),
+                                                blurRadius: 4,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Text(
+                                            _gems > 99 ? '99+' : '$_gems',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                              height: 1.0,
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
                                         ),
-                                      )
-                                    : Icon(
-                                        Icons.diamond,
-                                        size: 20,
-                                        color: Colors.purple[700],
                                       ),
-                                if (_gems > 0)
-                                  Positioned(
-                                    right: -2,
-                                    top: -2,
-                                    child: Container(
-                                      padding: EdgeInsets.symmetric(
-                                          horizontal: 4, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: Colors.red,
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Text(
-                                        '$_gems',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        // Wallet balance display
-                        GestureDetector(
-                          onTap: _showWalletPopup,
-                          child: Container(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [Colors.green[50]!, Colors.green[100]!],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
+                                  ],
+                                ),
                               ),
-                              borderRadius: BorderRadius.circular(25),
-                              border: Border.all(color: Colors.green[200]!),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.green.withValues(alpha: 0.2),
-                                  blurRadius: 8,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.account_balance_wallet,
-                                  size: 18,
-                                  color: Colors.green[700],
+                            const SizedBox(width: 12),
+                            // Wallet balance - Bigger and more visible
+                            GestureDetector(
+                              onTap: _showWalletPopup,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  gradient: AppTheme.accentGradient,
+                                  borderRadius: BorderRadius.circular(10),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppTheme.accentGreen.withOpacity(0.25),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
                                 ),
-                                SizedBox(width: 6),
-                                Text(
-                                  '৳${_walletBalance.toStringAsFixed(0)}',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.green[800],
-                                  ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.account_balance_wallet,
+                                      size: 16,
+                                      color: Colors.white,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      '৳${_walletBalance.toStringAsFixed(0)}',
+                                      style: AppTheme.bodyMedium.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
+                              ),
                             ),
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        // Circular avatar
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.pushNamed(context, '/profile');
-                          },
-                          child: CircleAvatar(
-                            radius: 20,
-                            backgroundColor: Colors.blue[100],
-                            child: _isLoading
-                                ? SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                          Colors.blue[700]!),
+                            const SizedBox(width: 12),
+                            // Profile avatar - Smaller
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.pushNamed(context, '/profile');
+                              },
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: AppTheme.primaryGradient,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppTheme.primaryBlue.withOpacity(0.25),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
                                     ),
-                                  )
-                                : Text(
-                                    _currentUser?.firstNameInitial ?? 'U',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.blue[700],
-                                    ),
-                                  ),
-                          ),
-                        ),
-                      ],
+                                  ],
+                                ),
+                                padding: const EdgeInsets.all(1.5),
+                                child: Builder(
+                                  builder: (context) {
+                                    final isDark = Theme.of(context).brightness == Brightness.dark;
+                                    return CircleAvatar(
+                                      radius: 16,
+                                      backgroundColor: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+                                      child: _isLoading
+                                          ? const SizedBox(
+                                              width: 14,
+                                              height: 14,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                valueColor: AlwaysStoppedAnimation<Color>(
+                                                    AppTheme.primaryBlue),
+                                              ),
+                                            )
+                                          : Text(
+                                              _currentUser?.firstNameInitial ?? 'U',
+                                              style: AppTheme.bodyMedium.copyWith(
+                                                color: AppTheme.primaryBlue,
+                                                fontWeight: FontWeight.w800,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
                     ),
                   ],
                 ),
               ),
+                );
+              },
             ),
 
             // Main content area
@@ -450,13 +494,14 @@ class NavScreenState extends State<NavScreen> {
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red[600],
+                      backgroundColor: AppTheme.accentRed,
                       foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(vertical: 16),
+                      padding: const EdgeInsets.symmetric(vertical: 18),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      elevation: 2,
+                      elevation: 0,
+                      shadowColor: Colors.transparent,
                     ),
                   ),
                 ),
@@ -472,43 +517,122 @@ class NavScreenState extends State<NavScreen> {
             ),
           ],
         ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
+        child: Builder(
+          builder: (context) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            return Container(
+              decoration: BoxDecoration(
+                color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+                boxShadow: [
+                  BoxShadow(
+                    color: isDark
+                        ? Colors.black.withOpacity(0.3)
+                        : Colors.black.withOpacity(0.05),
+                    blurRadius: 20,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: BottomNavigationBar(
+                currentIndex: _currentIndex,
+                onTap: (index) {
+                  setState(() {
+                    _currentIndex = index;
+                  });
+                },
+                type: BottomNavigationBarType.fixed,
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                selectedItemColor: AppTheme.primaryBlue,
+                unselectedItemColor: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+                selectedLabelStyle: AppTheme.labelMedium.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+                unselectedLabelStyle: AppTheme.labelMedium.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+                selectedIconTheme: const IconThemeData(
+                  size: 26,
+                ),
+                unselectedIconTheme: const IconThemeData(
+                  size: 24,
+                ),
+            items: [
+              BottomNavigationBarItem(
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: _currentIndex == 0
+                        ? AppTheme.primaryBlue.withOpacity(0.1)
+                        : Colors.transparent,
+                  ),
+                  child: const Icon(Icons.map_outlined),
+                ),
+                activeIcon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: AppTheme.primaryBlue.withOpacity(0.1),
+                  ),
+                  child: const Icon(Icons.map),
+                ),
+                label: 'Map',
+              ),
+              BottomNavigationBarItem(
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: _currentIndex == 1
+                        ? AppTheme.primaryBlue.withOpacity(0.1)
+                        : Colors.transparent,
+                  ),
+                  child: const Icon(Icons.directions_bus_outlined),
+                ),
+                activeIcon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: AppTheme.primaryBlue.withOpacity(0.1),
+                  ),
+                  child: const Icon(Icons.directions_bus),
+                ),
+                label: 'Bus',
+              ),
+              BottomNavigationBarItem(
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: _currentIndex == 2
+                        ? AppTheme.primaryBlue.withOpacity(0.1)
+                        : Colors.transparent,
+                  ),
+                  child: Icon(
+                    _currentUser?.role == 'driver'
+                        ? Icons.directions_car_outlined
+                        : Icons.local_taxi_outlined,
+                  ),
+                ),
+                activeIcon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: AppTheme.primaryBlue.withOpacity(0.1),
+                  ),
+                  child: Icon(
+                    _currentUser?.role == 'driver'
+                        ? Icons.directions_car
+                        : Icons.local_taxi,
+                  ),
+                ),
+                label: _currentUser?.role == 'driver' ? 'Driver' : 'Rideshare',
+              ),
+            ],
+              ),
+            );
           },
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          selectedItemColor: Colors.blue,
-          unselectedItemColor: Colors.grey[600],
-          selectedLabelStyle: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 12,
-          ),
-          unselectedLabelStyle: TextStyle(
-            fontWeight: FontWeight.w500,
-            fontSize: 12,
-          ),
-          items: [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.map, size: 24),
-              label: 'Map',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.directions_bus, size: 24),
-              label: 'Bus',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(
-                  _currentUser?.role == 'driver'
-                      ? Icons.directions_car
-                      : Icons.local_taxi,
-                  size: 24),
-              label: _currentUser?.role == 'driver' ? 'Driver' : 'Rideshare',
-            ),
-          ],
         ),
       ),
     );

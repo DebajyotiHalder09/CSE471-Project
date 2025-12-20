@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/app_theme.dart';
 import '../services/auth_service.dart';
 import '../models/user.dart';
 import 'pinfo.dart';
@@ -52,60 +53,86 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundLight,
       appBar: AppBar(
-        title: Text('Profile'),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
+        title: Text(
+          'Profile',
+          style: AppTheme.heading3Dark(context),
+        ),
         elevation: 0,
+        backgroundColor: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+        iconTheme: IconThemeData(
+          color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+        ),
       ),
       body: SafeArea(
         child: _isLoading
-            ? Center(
+            ? const Center(
                 child: CircularProgressIndicator(),
               )
             : SingleChildScrollView(
-                padding: EdgeInsets.all(16),
+                padding: AppTheme.screenPadding,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Center(
                       child: Column(
                         children: [
-                          CircleAvatar(
-                            radius: 50,
-                            backgroundColor: Colors.blue[100],
-                            child: Text(
-                              _currentUser?.firstNameInitial ?? 'U',
-                              style: TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue[700],
+                          Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: AppTheme.primaryGradient,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppTheme.primaryBlue.withOpacity(0.3),
+                                  blurRadius: 20,
+                                  spreadRadius: 5,
+                                ),
+                              ],
+                            ),
+                            padding: const EdgeInsets.all(4),
+                            child: CircleAvatar(
+                              radius: 50,
+                              backgroundColor: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+                              child: Text(
+                                _currentUser?.firstNameInitial ?? 'U',
+                                style: AppTheme.heading1Dark(context).copyWith(
+                                  color: AppTheme.primaryBlue,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ),
                           ),
-                          SizedBox(height: 16),
+                          const SizedBox(height: 20),
                           Text(
                             _currentUser?.name ?? 'User Name',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
-                            ),
+                            style: AppTheme.heading2Dark(context),
                           ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Friend Code: ${_friendCode ?? 'Loading...'}',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryBlue.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: AppTheme.primaryBlue.withOpacity(0.3),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Text(
+                              'Friend Code: ${_friendCode ?? 'Loading...'}',
+                              style: AppTheme.bodyMedium.copyWith(
+                                color: AppTheme.primaryBlue,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    SizedBox(height: 32),
+                    const SizedBox(height: 32),
                     _buildProfileItem(Icons.person, 'Personal Information',
                         onTap: () {
                       print('Navigating to personal info page');
@@ -142,9 +169,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _buildProfileItem(Icons.qr_code, 'QR Code', onTap: () {
                       Navigator.pushNamed(context, '/qr');
                     }),
-                    _buildProfileItem(Icons.settings, 'Settings'),
+                    _buildProfileItem(Icons.settings, 'Settings', onTap: () {
+                      Navigator.pushNamed(context, '/settings');
+                    }),
                     _buildProfileItem(Icons.help, 'Help & Support'),
-                    _buildProfileItem(Icons.logout, 'Logout', onTap: _logout),
+                    _buildProfileItem(Icons.logout, 'Logout', onTap: _logout, isLogout: true),
                   ],
                 ),
               ),
@@ -152,35 +181,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildProfileItem(IconData icon, String title, {VoidCallback? onTap}) {
+  Widget _buildProfileItem(IconData icon, String title, {VoidCallback? onTap, bool isLogout = false}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      margin: EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
-        ],
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: AppTheme.modernCardDecorationDark(
+        context,
+        color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
       ),
-      child: ListTile(
-        leading: Icon(icon, color: Colors.blue),
-        title: Text(
-          title,
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            fontSize: 16,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap ?? () {},
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: isLogout 
+                        ? AppTheme.accentRed.withOpacity(0.1)
+                        : AppTheme.primaryBlue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: isLogout ? AppTheme.accentRed : AppTheme.primaryBlue,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: AppTheme.bodyLargeDark(context).copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: isLogout 
+                          ? AppTheme.accentRed 
+                          : (isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  color: isLogout 
+                      ? AppTheme.accentRed 
+                      : (isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary),
+                  size: 24,
+                ),
+              ],
+            ),
           ),
         ),
-        trailing: Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-        onTap: onTap ??
-            () {
-              // Handle navigation for each item
-            },
       ),
     );
   }

@@ -1,4 +1,5 @@
 const cloudinary = require('cloudinary').v2;
+const { Readable } = require('stream');
 
 // Configure Cloudinary
 // Priority: 1. CLOUDINARY_URL env variable, 2. Individual env variables
@@ -20,7 +21,7 @@ if (process.env.CLOUDINARY_URL) {
 // Upload image to Cloudinary
 const uploadImage = async (req, res) => {
   try {
-    const { image } = req.body; // Base64 encoded image string
+    const { image } = req.body; // Base64 encoded image string (data URI format)
 
     if (!image) {
       return res.status(400).json({
@@ -29,16 +30,46 @@ const uploadImage = async (req, res) => {
       });
     }
 
-    // Upload to Cloudinary
-    // Cloudinary accepts base64 data URI format
-    const uploadResult = await cloudinary.uploader.upload(image, {
-      folder: 'student_verifications',
-      resource_type: 'image',
-      transformation: [
-        { width: 800, height: 800, crop: 'limit' },
-        { quality: 'auto' }
-      ],
-      allowed_formats: ['jpg', 'jpeg', 'png']
+    // Extract base64 string from data URI if present
+    // Format: data:image/jpeg;base64,{base64String} or just {base64String}
+    let base64String = image;
+    if (image.startsWith('data:')) {
+      // Extract base64 part after the comma
+      const commaIndex = image.indexOf(',');
+      if (commaIndex !== -1) {
+        base64String = image.substring(commaIndex + 1);
+      }
+    }
+
+    // Convert base64 string to Buffer
+    const imageBuffer = Buffer.from(base64String, 'base64');
+
+    // Create a readable stream from the Buffer
+    // Using upload_stream avoids the _Namespace error that occurs with data URI string parsing
+    const imageStream = Readable.from(imageBuffer);
+
+    // Upload to Cloudinary using upload_stream (most reliable method for production)
+    const uploadResult = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'student_verifications',
+          resource_type: 'image',
+          transformation: [
+            { width: 800, height: 800, crop: 'limit' },
+            { quality: 'auto' }
+          ],
+          allowed_formats: ['jpg', 'jpeg', 'png']
+        },
+        (error, result) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(result);
+          }
+        }
+      );
+
+      imageStream.pipe(uploadStream);
     });
 
     res.status(200).json({
@@ -48,6 +79,7 @@ const uploadImage = async (req, res) => {
     });
   } catch (error) {
     console.error('Error uploading image to Cloudinary:', error);
+    console.error('Error details:', JSON.stringify(error, null, 2));
     res.status(500).json({
       success: false,
       message: 'Error uploading image',

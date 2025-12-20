@@ -23,6 +23,11 @@ const uploadImage = async (req, res) => {
   try {
     const { image } = req.body; // Base64 encoded image string (data URI format)
 
+    console.log('📤 Image upload request received');
+    console.log('Image data type:', typeof image);
+    console.log('Image data length:', image ? image.length : 0);
+    console.log('Image starts with data:?:', image ? image.startsWith('data:') : false);
+
     if (!image) {
       return res.status(400).json({
         success: false,
@@ -38,11 +43,19 @@ const uploadImage = async (req, res) => {
       const commaIndex = image.indexOf(',');
       if (commaIndex !== -1) {
         base64String = image.substring(commaIndex + 1);
+        console.log('Extracted base64 string, length:', base64String.length);
       }
     }
 
     // Convert base64 string to Buffer
-    const imageBuffer = Buffer.from(base64String, 'base64');
+    let imageBuffer;
+    try {
+      imageBuffer = Buffer.from(base64String, 'base64');
+      console.log('✅ Buffer created successfully, size:', imageBuffer.length, 'bytes');
+    } catch (bufferError) {
+      console.error('❌ Failed to create buffer:', bufferError);
+      throw new Error(`Invalid base64 data: ${bufferError.message}`);
+    }
 
     // Method 1: Try using upload_stream with a properly created Readable stream
     // This is the most reliable method for production environments
@@ -93,20 +106,40 @@ const uploadImage = async (req, res) => {
       publicId: uploadResult.public_id
     });
   } catch (error) {
-    console.error('Error uploading image to Cloudinary:', error);
-    console.error('Error name:', error.name);
-    console.error('Error message:', error.message);
+    // Detailed error logging for debugging
+    console.error('========== IMAGE UPLOAD ERROR ==========');
+    console.error('Error Type:', error.constructor.name);
+    console.error('Error Name:', error.name);
+    console.error('Error Message:', error.message);
+    console.error('Full Error Object:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    
     if (error.http_code) {
       console.error('HTTP Code:', error.http_code);
     }
     if (error.stack) {
-      console.error('Error stack:', error.stack);
+      console.error('Error Stack:', error.stack);
     }
+    
+    // Log the error details that might help identify the issue
+    if (error.toString().includes('_Namespace')) {
+      console.error('⚠️ DETECTED _Namespace ERROR');
+      console.error('This usually indicates a parsing issue with the image data format');
+    }
+    
+    console.error('========================================');
 
+    // Return detailed error info in response (for debugging)
     res.status(500).json({
       success: false,
       message: 'Error uploading image',
-      error: error.message || 'Unknown error occurred'
+      error: error.message || 'Unknown error occurred',
+      errorType: error.constructor.name,
+      errorName: error.name,
+      // Include full error details in development (remove in production if sensitive)
+      ...(process.env.NODE_ENV !== 'production' && {
+        errorDetails: error.toString(),
+        errorStack: error.stack
+      })
     });
   }
 };

@@ -83,7 +83,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
   Widget _buildSummarySection() {
     return Container(
       margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         gradient: AppTheme.primaryGradient,
         borderRadius: BorderRadius.circular(24),
@@ -95,129 +95,74 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
           ),
         ],
       ),
-      child: Column(
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.analytics_outlined,
-                  color: Colors.white,
-                  size: 24,
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.3),
+                  width: 1.5,
                 ),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  'Trip Summary',
-                  style: AppTheme.heading3.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Total Distance',
+                    style: AppTheme.bodySmall.copyWith(
+                      color: Colors.white.withOpacity(0.9),
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${_totalDistance.toStringAsFixed(2)} km',
+                    style: AppTheme.heading4.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.3),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.straighten_rounded,
-                          size: 28,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Total Distance',
-                        style: AppTheme.bodySmall.copyWith(
-                          color: Colors.white.withOpacity(0.9),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '${_totalDistance.toStringAsFixed(2)} km',
-                        style: AppTheme.heading3.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.3),
+                  width: 1.5,
                 ),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.3),
-                      width: 1.5,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Total Spent',
+                    style: AppTheme.bodySmall.copyWith(
+                      color: Colors.white.withOpacity(0.9),
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.account_balance_wallet_rounded,
-                          size: 28,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Total Spent',
-                        style: AppTheme.bodySmall.copyWith(
-                          color: Colors.white.withOpacity(0.9),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '৳${_totalFare.toStringAsFixed(0)}',
-                        style: AppTheme.heading3.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
+                  const SizedBox(height: 6),
+                  Text(
+                    '৳${_totalFare.toStringAsFixed(0)}',
+                    style: AppTheme.heading4.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
         ],
       ),
@@ -227,7 +172,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
   Widget _buildTripCard(TripHistory trip) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       decoration: AppTheme.modernCardDecorationDark(
         context,
         color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
@@ -240,7 +185,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
           },
           borderRadius: BorderRadius.circular(20),
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -253,18 +198,18 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
                       child: Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(10),
+                            padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
                               gradient: AppTheme.primaryGradient,
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Icon(
                               Icons.directions_bus_filled,
                               color: Colors.white,
-                              size: 20,
+                              size: 18,
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -273,12 +218,15 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
                                   trip.busName,
                                   style: AppTheme.heading4Dark(context).copyWith(
                                     fontWeight: FontWeight.bold,
+                                    fontSize: 16,
                                   ),
                                 ),
-                                const SizedBox(height: 4),
+                                const SizedBox(height: 2),
                                 Text(
                                   _formatDate(trip.createdAt),
-                                  style: AppTheme.bodySmallDark(context),
+                                  style: AppTheme.bodySmallDark(context).copyWith(
+                                    fontSize: 11,
+                                  ),
                                 ),
                               ],
                             ),
@@ -286,42 +234,17 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
                         ],
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            AppTheme.accentGreen.withOpacity(0.2),
-                            AppTheme.accentGreen.withOpacity(0.1),
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: AppTheme.accentGreen.withOpacity(0.3),
-                        ),
-                      ),
-                      child: Text(
-                        'Completed',
-                        style: AppTheme.labelSmall.copyWith(
-                          color: AppTheme.accentGreen,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
                   ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 10),
                 // Route information
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: isDark
                         ? AppTheme.darkSurfaceElevated
                         : AppTheme.backgroundLight,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
                     children: [
@@ -329,8 +252,8 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
                       Row(
                         children: [
                           Container(
-                            width: 40,
-                            height: 40,
+                            width: 32,
+                            height: 32,
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
                                 colors: [
@@ -343,10 +266,10 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
                             child: const Icon(
                               Icons.location_on_rounded,
                               color: Colors.white,
-                              size: 20,
+                              size: 16,
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -355,28 +278,32 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
                                   'From',
                                   style: AppTheme.bodySmallDark(context).copyWith(
                                     fontWeight: FontWeight.w500,
+                                    fontSize: 10,
                                   ),
                                 ),
-                                const SizedBox(height: 4),
+                                const SizedBox(height: 2),
                                 Text(
                                   trip.source,
                                   style: AppTheme.bodyMediumDark(context).copyWith(
                                     fontWeight: FontWeight.w600,
+                                    fontSize: 13,
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ],
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 8),
                       // Arrow
                       Row(
                         children: [
-                          const SizedBox(width: 40),
+                          const SizedBox(width: 32),
                           Container(
                             width: 2,
-                            height: 20,
+                            height: 12,
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
                                 begin: Alignment.topCenter,
@@ -391,13 +318,13 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 8),
                       // Destination
                       Row(
                         children: [
                           Container(
-                            width: 40,
-                            height: 40,
+                            width: 32,
+                            height: 32,
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
                                 colors: [
@@ -410,10 +337,10 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
                             child: const Icon(
                               Icons.flag_rounded,
                               color: Colors.white,
-                              size: 20,
+                              size: 16,
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -422,14 +349,18 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
                                   'To',
                                   style: AppTheme.bodySmallDark(context).copyWith(
                                     fontWeight: FontWeight.w500,
+                                    fontSize: 10,
                                   ),
                                 ),
-                                const SizedBox(height: 4),
+                                const SizedBox(height: 2),
                                 Text(
                                   trip.destination,
                                   style: AppTheme.bodyMediumDark(context).copyWith(
                                     fontWeight: FontWeight.w600,
+                                    fontSize: 13,
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ],
                             ),
@@ -439,46 +370,35 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 10),
                 // Stats row
                 Row(
                   children: [
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
                         decoration: BoxDecoration(
                           color: AppTheme.primaryBlue.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(10),
                           border: Border.all(
                             color: AppTheme.primaryBlue.withOpacity(0.2),
                           ),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.straighten_rounded,
-                              size: 18,
-                              color: AppTheme.primaryBlue,
-                            ),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                '${trip.distance.toStringAsFixed(2)} km',
-                                style: AppTheme.bodyMediumDark(context).copyWith(
-                                  color: AppTheme.primaryBlue,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          '${trip.distance.toStringAsFixed(2)} km',
+                          style: AppTheme.bodyMediumDark(context).copyWith(
+                            color: AppTheme.primaryBlue,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [
@@ -486,30 +406,19 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
                               AppTheme.accentGreen.withOpacity(0.1),
                             ],
                           ),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(10),
                           border: Border.all(
                             color: AppTheme.accentGreen.withOpacity(0.3),
                           ),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.account_balance_wallet_rounded,
-                              size: 18,
-                              color: AppTheme.accentGreen,
-                            ),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                '৳${trip.fare.toStringAsFixed(0)}',
-                                style: AppTheme.bodyLargeDark(context).copyWith(
-                                  color: AppTheme.accentGreen,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          '৳${trip.fare.toStringAsFixed(0)}',
+                          style: AppTheme.bodyMediumDark(context).copyWith(
+                            color: AppTheme.accentGreen,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
                       ),
                     ),

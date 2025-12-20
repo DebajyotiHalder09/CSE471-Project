@@ -44,12 +44,14 @@ const uploadImage = async (req, res) => {
     // Convert base64 string to Buffer
     const imageBuffer = Buffer.from(base64String, 'base64');
 
-    // Create a readable stream from the Buffer
-    // Using upload_stream avoids the _Namespace error that occurs with data URI string parsing
-    const imageStream = Readable.from(imageBuffer);
-
-    // Upload to Cloudinary using upload_stream (most reliable method for production)
+    // Method 1: Try using upload_stream with a properly created Readable stream
+    // This is the most reliable method for production environments
     const uploadResult = await new Promise((resolve, reject) => {
+      // Create a proper Readable stream from the buffer
+      const stream = new Readable();
+      stream.push(imageBuffer);
+      stream.push(null); // Signal end of stream
+
       const uploadStream = cloudinary.uploader.upload_stream(
         {
           folder: 'student_verifications',
@@ -62,6 +64,7 @@ const uploadImage = async (req, res) => {
         },
         (error, result) => {
           if (error) {
+            console.error('Cloudinary upload_stream error:', error);
             reject(error);
           } else {
             resolve(result);
@@ -69,7 +72,19 @@ const uploadImage = async (req, res) => {
         }
       );
 
-      imageStream.pipe(uploadStream);
+      // Pipe the stream to Cloudinary
+      stream.pipe(uploadStream);
+
+      // Handle stream errors
+      stream.on('error', (err) => {
+        console.error('Stream error:', err);
+        reject(err);
+      });
+
+      uploadStream.on('error', (err) => {
+        console.error('Upload stream error:', err);
+        reject(err);
+      });
     });
 
     res.status(200).json({
@@ -79,11 +94,19 @@ const uploadImage = async (req, res) => {
     });
   } catch (error) {
     console.error('Error uploading image to Cloudinary:', error);
-    console.error('Error details:', JSON.stringify(error, null, 2));
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    if (error.http_code) {
+      console.error('HTTP Code:', error.http_code);
+    }
+    if (error.stack) {
+      console.error('Error stack:', error.stack);
+    }
+
     res.status(500).json({
       success: false,
       message: 'Error uploading image',
-      error: error.message
+      error: error.message || 'Unknown error occurred'
     });
   }
 };

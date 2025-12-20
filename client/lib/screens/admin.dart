@@ -3,6 +3,10 @@ import '../services/bus_service.dart';
 import '../services/auth_service.dart';
 import '../services/verify_service.dart';
 import '../models/bus.dart';
+import '../utils/app_theme.dart';
+import '../utils/error_widgets.dart';
+import '../utils/loading_widgets.dart';
+import 'review.dart';
 
 class AdminScreen extends StatefulWidget {
   static const routeName = '/admin';
@@ -86,6 +90,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       SnackBar(
         content: Text('Bus list refreshed'),
         duration: Duration(seconds: 1),
+        backgroundColor: AppTheme.accentGreen,
       ),
     );
   }
@@ -124,25 +129,18 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Verification approved successfully'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppTheme.accentGreen,
           ),
         );
         _loadVerifications();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(response['message'] ?? 'Failed to approve verification'),
-            backgroundColor: Colors.red,
-          ),
+        ErrorSnackbar.show(
+          context,
+          response['message'] ?? 'Failed to approve verification',
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      ErrorSnackbar.show(context, 'Error: ${e.toString()}');
     }
   }
 
@@ -153,26 +151,239 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Verification rejected'),
-            backgroundColor: Colors.orange,
+            backgroundColor: AppTheme.accentOrange,
           ),
         );
         _loadVerifications();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(response['message'] ?? 'Failed to reject verification'),
-            backgroundColor: Colors.red,
-          ),
+        ErrorSnackbar.show(
+          context,
+          response['message'] ?? 'Failed to reject verification',
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      ErrorSnackbar.show(context, 'Error: ${e.toString()}');
     }
+  }
+
+  Future<void> _blockBus(String busId) async {
+    // TODO: Implement bus blocking functionality
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Bus blocking functionality will be implemented'),
+        backgroundColor: AppTheme.accentRed,
+      ),
+    );
+  }
+
+  void _showBusOptionsModal(Bus bus) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      gradient: AppTheme.primaryGradient,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.directions_bus_filled,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          bus.busName,
+                          style: AppTheme.heading4Dark(context).copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (bus.routeNumber != null)
+                          Text(
+                            'Route: ${bus.routeNumber}',
+                            style: AppTheme.bodySmallDark(context),
+                          ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      Icons.close_rounded,
+                      color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              // Options
+              _buildModalOption(
+                icon: Icons.reviews_rounded,
+                title: 'View Reviews',
+                subtitle: 'See all reviews for this bus',
+                color: AppTheme.primaryBlue,
+                onTap: () {
+                  Navigator.of(context).pop();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ReviewScreen(bus: bus),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildModalOption(
+                icon: Icons.block_rounded,
+                title: 'Block Bus',
+                subtitle: 'Block this bus from the system',
+                color: AppTheme.accentRed,
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _showBlockConfirmation(bus);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModalOption({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? AppTheme.darkSurfaceElevated : AppTheme.backgroundLight,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: color.withOpacity(0.2),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: color, size: 24),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTheme.bodyLargeDark(context).copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: AppTheme.bodySmallDark(context),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showBlockConfirmation(Bus bus) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Text(
+          'Block Bus',
+          style: AppTheme.heading4Dark(context).copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to block "${bus.busName}"? This action can be reversed later.',
+          style: AppTheme.bodyMediumDark(context),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              'Cancel',
+              style: AppTheme.labelMedium.copyWith(
+                color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+              ),
+            ),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppTheme.accentRed, AppTheme.accentRed.withOpacity(0.8)],
+              ),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _blockBus(bus.id);
+              },
+              child: Text(
+                'Block',
+                style: AppTheme.labelMedium.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _logout() async {
@@ -182,21 +393,39 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundLight,
       appBar: AppBar(
-        title: Text(
-          'Admin Dashboard',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        backgroundColor: Colors.blue[700],
         elevation: 0,
+        backgroundColor: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+        foregroundColor: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: AppTheme.primaryGradient,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.admin_panel_settings_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Admin Dashboard',
+              style: AppTheme.heading3Dark(context).copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
-            icon: Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
             onPressed: () {
               if (_tabController.index == 0) {
                 _refreshBuses();
@@ -207,19 +436,19 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             tooltip: 'Refresh',
           ),
           IconButton(
-            icon: Icon(Icons.logout),
+            icon: const Icon(Icons.logout_rounded),
             onPressed: _logout,
             tooltip: 'Logout',
           ),
         ],
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          tabs: [
-            Tab(icon: Icon(Icons.directions_bus), text: 'Buses'),
-            Tab(icon: Icon(Icons.verified_user), text: 'Verify'),
+          indicatorColor: AppTheme.primaryBlue,
+          labelColor: AppTheme.primaryBlue,
+          unselectedLabelColor: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+          tabs: const [
+            Tab(icon: Icon(Icons.directions_bus_rounded), text: 'Buses'),
+            Tab(icon: Icon(Icons.verified_user_rounded), text: 'Verify'),
           ],
         ),
       ),
@@ -228,14 +457,14 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           // Welcome Header
           Container(
             width: double.infinity,
-            padding: EdgeInsets.all(20),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.blue[700],
+              gradient: AppTheme.primaryGradient,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 4,
-                  offset: Offset(0, 2),
+                  color: AppTheme.primaryBlue.withOpacity(0.3),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
@@ -244,19 +473,17 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
               children: [
                 Text(
                   'Welcome, ${currentUserName ?? 'Admin'}!',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
+                  style: AppTheme.heading3.copyWith(
                     color: Colors.white,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Text(
                   _tabController.index == 0
                       ? 'Total Buses: ${allBuses.length}'
                       : 'Pending Verifications: ${verifications.where((v) => v['status'] == 'hold').length}',
-                  style: TextStyle(
-                    fontSize: 16,
+                  style: AppTheme.bodyMedium.copyWith(
                     color: Colors.white.withOpacity(0.9),
                   ),
                 ),
@@ -281,39 +508,27 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
 
   Widget _buildBusesTab() {
     return isLoading
-        ? Center(child: CircularProgressIndicator())
+        ? Center(
+            child: LoadingWidget(
+              message: 'Loading buses...',
+            ),
+          )
         : errorMessage != null
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
-                    SizedBox(height: 16),
-                    Text(
-                      errorMessage!,
-                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                      textAlign: TextAlign.center,
-                    ),
-                    SizedBox(height: 16),
-                    ElevatedButton(onPressed: _loadAllBuses, child: Text('Retry')),
-                  ],
-                ),
+            ? ErrorDisplayWidget(
+                message: errorMessage!,
+                icon: Icons.error_outline_rounded,
+                onRetry: _loadAllBuses,
               )
             : allBuses.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.directions_bus_outlined, size: 64, color: Colors.grey[400]),
-                        SizedBox(height: 16),
-                        Text('No buses found', style: TextStyle(fontSize: 18, color: Colors.grey[600])),
-                      ],
-                    ),
+                ? EmptyStateWidget(
+                    title: 'No buses found',
+                    message: 'No buses are registered in the system',
+                    icon: Icons.directions_bus_outlined,
                   )
                 : RefreshIndicator(
                     onRefresh: _loadAllBuses,
                     child: ListView.builder(
-                      padding: EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(16),
                       itemCount: allBuses.length,
                       itemBuilder: (context, index) {
                         return _buildBusCard(allBuses[index]);
@@ -324,39 +539,27 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
 
   Widget _buildVerifyTab() {
     return isLoadingVerifications
-        ? Center(child: CircularProgressIndicator())
+        ? Center(
+            child: LoadingWidget(
+              message: 'Loading verifications...',
+            ),
+          )
         : verifyErrorMessage != null
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
-                    SizedBox(height: 16),
-                    Text(
-                      verifyErrorMessage!,
-                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                      textAlign: TextAlign.center,
-                    ),
-                    SizedBox(height: 16),
-                    ElevatedButton(onPressed: _loadVerifications, child: Text('Retry')),
-                  ],
-                ),
+            ? ErrorDisplayWidget(
+                message: verifyErrorMessage!,
+                icon: Icons.error_outline_rounded,
+                onRetry: _loadVerifications,
               )
             : verifications.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.verified_user_outlined, size: 64, color: Colors.grey[400]),
-                        SizedBox(height: 16),
-                        Text('No verification requests', style: TextStyle(fontSize: 18, color: Colors.grey[600])),
-                      ],
-                    ),
+                ? EmptyStateWidget(
+                    title: 'No verification requests',
+                    message: 'All verification requests have been processed',
+                    icon: Icons.verified_user_outlined,
                   )
                 : RefreshIndicator(
                     onRefresh: _loadVerifications,
                     child: ListView.builder(
-                      padding: EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(16),
                       itemCount: verifications.length,
                       itemBuilder: (context, index) {
                         return _buildVerificationCard(verifications[index]);
@@ -366,242 +569,314 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   }
 
   Widget _buildVerificationCard(Map<String, dynamic> verification) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final status = verification['status'] ?? 'hold';
     final statusColor = status == 'approved'
-        ? Colors.green
+        ? AppTheme.accentGreen
         : status == 'rejected'
-            ? Colors.red
-            : Colors.orange;
+            ? AppTheme.accentRed
+            : AppTheme.accentOrange;
 
     return Container(
-      margin: EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
-        ],
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: AppTheme.modernCardDecorationDark(
+        context,
+        color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
       ),
-      child: ExpansionTile(
-        leading: Container(
-          padding: EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: statusColor.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            status == 'approved'
-                ? Icons.check_circle
-                : status == 'rejected'
-                    ? Icons.cancel
-                    : Icons.pending,
-            color: statusColor,
-            size: 24,
-          ),
-        ),
-        title: Text(
-          verification['userName'] ?? 'Unknown User',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.grey[800],
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(height: 4),
-            Text(
-              'Email: ${verification['userEmail'] ?? 'N/A'}',
-              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+      child: Material(
+        color: Colors.transparent,
+        child: ExpansionTile(
+          leading: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  statusColor,
+                  statusColor.withOpacity(0.8),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(12),
             ),
-            Text(
-              'Status: ${status.toUpperCase()}',
-              style: TextStyle(fontSize: 14, color: statusColor, fontWeight: FontWeight.w600),
+            child: Icon(
+              status == 'approved'
+                  ? Icons.check_circle_rounded
+                  : status == 'rejected'
+                      ? Icons.cancel_rounded
+                      : Icons.pending_rounded,
+              color: Colors.white,
+              size: 24,
             ),
-          ],
-        ),
-        trailing: Container(
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: statusColor.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
           ),
-          child: Text(
-            status.toUpperCase(),
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: statusColor),
+          title: Text(
+            verification['userName'] ?? 'Unknown User',
+            style: AppTheme.heading4Dark(context).copyWith(
+              fontWeight: FontWeight.bold,
+            ),
           ),
-        ),
-        children: [
-          Padding(
-            padding: EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildDetailRow('Institution Name', verification['institutionName'] ?? 'N/A'),
-                _buildDetailRow('Institution ID', verification['institutionId'] ?? 'N/A'),
-                _buildDetailRow('Gmail', verification['gmail'] ?? 'N/A'),
-                _buildDetailRow('Submitted', verification['createdAt'] != null
-                    ? DateTime.parse(verification['createdAt']).toString().split('.')[0]
-                    : 'N/A'),
-                if (verification['imageUrl'] != null && verification['imageUrl'].toString().isNotEmpty) ...[
-                  SizedBox(height: 16),
-                  Text(
-                    'Student ID Image:',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[700],
-                    ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 4),
+              Text(
+                'Email: ${verification['userEmail'] ?? 'N/A'}',
+                style: AppTheme.bodySmallDark(context),
+              ),
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: statusColor.withOpacity(0.3),
                   ),
-                  SizedBox(height: 8),
-                  GestureDetector(
-                    onTap: () {
-                      // Show full screen image
-                      showDialog(
-                        context: context,
-                        builder: (context) => Dialog(
-                          child: Container(
-                            constraints: BoxConstraints(
-                              maxHeight: MediaQuery.of(context).size.height * 0.8,
-                              maxWidth: MediaQuery.of(context).size.width * 0.9,
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                AppBar(
-                                  title: Text('Student ID Image'),
-                                  actions: [
-                                    IconButton(
-                                      icon: Icon(Icons.close),
-                                      onPressed: () => Navigator.pop(context),
+                ),
+                child: Text(
+                  status.toUpperCase(),
+                  style: AppTheme.labelSmall.copyWith(
+                    color: statusColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildDetailRow('Institution Name', verification['institutionName'] ?? 'N/A'),
+                  _buildDetailRow('Institution ID', verification['institutionId'] ?? 'N/A'),
+                  _buildDetailRow('Gmail', verification['gmail'] ?? 'N/A'),
+                  _buildDetailRow('Submitted', verification['createdAt'] != null
+                      ? DateTime.parse(verification['createdAt']).toString().split('.')[0]
+                      : 'N/A'),
+                  if (verification['imageUrl'] != null && verification['imageUrl'].toString().isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      'Student ID Image:',
+                      style: AppTheme.heading4Dark(context).copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    GestureDetector(
+                      onTap: () {
+                        showDialog(
+                          context: context,
+                          builder: (context) => Dialog(
+                            backgroundColor: Colors.transparent,
+                            child: Container(
+                              constraints: BoxConstraints(
+                                maxHeight: MediaQuery.of(context).size.height * 0.8,
+                                maxWidth: MediaQuery.of(context).size.width * 0.9,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  AppBar(
+                                    backgroundColor: Colors.transparent,
+                                    elevation: 0,
+                                    title: Text(
+                                      'Student ID Image',
+                                      style: AppTheme.heading4Dark(context),
                                     ),
-                                  ],
-                                ),
-                                Expanded(
-                                  child: Image.network(
-                                    verification['imageUrl'],
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Center(
-                                        child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Icon(Icons.error, color: Colors.red, size: 48),
-                                            SizedBox(height: 16),
-                                            Text('Failed to load image'),
-                                          ],
-                                        ),
-                                      );
-                                    },
+                                    actions: [
+                                      IconButton(
+                                        icon: const Icon(Icons.close_rounded),
+                                        onPressed: () => Navigator.pop(context),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                              ],
+                                  Expanded(
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(24),
+                                      child: Image.network(
+                                        verification['imageUrl'],
+                                        fit: BoxFit.contain,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return Center(
+                                            child: Column(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Icon(Icons.error_outline_rounded, color: AppTheme.accentRed, size: 48),
+                                                const SizedBox(height: 16),
+                                                Text(
+                                                  'Failed to load image',
+                                                  style: AppTheme.bodyMediumDark(context),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
+                        );
+                      },
+                      child: Container(
+                        height: 200,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isDark ? AppTheme.darkBorder : AppTheme.borderLight,
+                          ),
                         ),
-                      );
-                    },
-                    child: Container(
-                      height: 200,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey[300]!),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Stack(
-                          children: [
-                            Image.network(
-                              verification['imageUrl'],
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: double.infinity,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  color: Colors.grey[200],
-                                  child: Center(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.error, color: Colors.red),
-                                        SizedBox(height: 8),
-                                        Text('Failed to load image'),
-                                      ],
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Stack(
+                            children: [
+                              Image.network(
+                                verification['imageUrl'],
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: double.infinity,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    color: isDark ? AppTheme.darkSurfaceElevated : AppTheme.backgroundLight,
+                                    child: Center(
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.error_outline_rounded, color: AppTheme.accentRed),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            'Failed to load image',
+                                            style: AppTheme.bodySmallDark(context),
+                                          ),
+                                        ],
+                                      ),
                                     ),
+                                  );
+                                },
+                              ),
+                              Positioned(
+                                bottom: 8,
+                                right: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.6),
+                                    borderRadius: BorderRadius.circular(10),
                                   ),
-                                );
-                              },
-                            ),
-                            Positioned(
-                              bottom: 8,
-                              right: 8,
-                              child: Container(
-                                padding: EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.6),
-                                  borderRadius: BorderRadius.circular(8),
+                                  child: const Icon(
+                                    Icons.zoom_in_rounded,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
                                 ),
-                                child: Icon(
-                                  Icons.zoom_in,
-                                  color: Colors.white,
-                                  size: 20,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (status == 'hold') ...[
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  AppTheme.accentGreen,
+                                  AppTheme.accentGreen.withOpacity(0.8),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () => _approveVerification(verification['_id']),
+                                borderRadius: BorderRadius.circular(12),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.check_rounded, color: Colors.white, size: 20),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Approve',
+                                        style: AppTheme.labelLarge.copyWith(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-                          ],
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  AppTheme.accentRed,
+                                  AppTheme.accentRed.withOpacity(0.8),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () => _rejectVerification(verification['_id']),
+                                borderRadius: BorderRadius.circular(12),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Reject',
+                                        style: AppTheme.labelLarge.copyWith(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
+                  ],
                 ],
-                if (status == 'hold') ...[
-                  SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () => _approveVerification(verification['_id']),
-                          icon: Icon(Icons.check),
-                          label: Text('Approve'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () => _rejectVerification(verification['_id']),
-                          icon: Icon(Icons.close),
-                          label: Text('Reject'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildDetailRow(String label, String value) {
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -609,14 +884,16 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             flex: 2,
             child: Text(
               '$label:',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey[700]),
+              style: AppTheme.bodyMediumDark(context).copyWith(
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           Expanded(
             flex: 3,
             child: Text(
               value,
-              style: TextStyle(fontSize: 14, color: Colors.grey[900]),
+              style: AppTheme.bodyMediumDark(context),
             ),
           ),
         ],
@@ -625,211 +902,128 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   }
 
   Widget _buildBusCard(Bus bus) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final busTypeColor = _getBusTypeColor(bus.busType);
+    
     return Container(
-      margin: EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
-        ],
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: AppTheme.modernCardDecorationDark(
+        context,
+        color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
       ),
-      child: ExpansionTile(
-        leading: Container(
-          padding: EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: _getBusTypeColor(bus.busType).withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            Icons.directions_bus,
-            color: _getBusTypeColor(bus.busType),
-            size: 24,
-          ),
-        ),
-        title: Text(
-          bus.busName,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.grey[800],
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(height: 4),
-            if (bus.routeNumber != null)
-              Text(
-                'Route: ${bus.routeNumber}',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
-              ),
-            if (bus.operator != null)
-              Text(
-                'Operator: ${bus.operator}',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
-              ),
-          ],
-        ),
-        trailing: Container(
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: _getBusTypeColor(bus.busType).withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            bus.busType.toUpperCase(),
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: _getBusTypeColor(bus.busType),
-            ),
-          ),
-        ),
-        children: [
-          Padding(
-            padding: EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showBusOptionsModal(bus),
+          borderRadius: BorderRadius.circular(24),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
               children: [
-                // Fare Information
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildInfoChip(
-                        Icons.attach_money,
-                        'Base Fare',
-                        '৳${bus.baseFare.toStringAsFixed(0)}',
-                        Colors.green,
-                      ),
-                    ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: _buildInfoChip(
-                        Icons.straighten,
-                        'Per KM',
-                        '৳${bus.perKmFare.toStringAsFixed(0)}',
-                        Colors.blue,
-                      ),
-                    ),
-                  ],
-                ),
-                if (bus.frequency != null) ...[
-                  SizedBox(height: 12),
-                  _buildInfoChip(
-                    Icons.schedule,
-                    'Frequency',
-                    bus.frequency!,
-                    Colors.orange,
-                  ),
-                ],
-                SizedBox(height: 16),
-                // Stops Information
-                Text(
-                  'Bus Stops (${bus.stops.length}):',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey[800],
-                  ),
-                ),
-                SizedBox(height: 8),
                 Container(
-                  constraints: BoxConstraints(maxHeight: 200),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: bus.stops.length,
-                    itemBuilder: (context, index) {
-                      final stop = bus.stops[index];
-                      return Padding(
-                        padding: EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                color: Colors.blue,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                stop.name,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[700],
-                                ),
-                              ),
-                            ),
-                            if (stop.latitude != 0 && stop.longitude != 0)
-                              Text(
-                                '${stop.latitude.toStringAsFixed(4)}, ${stop.longitude.toStringAsFixed(4)}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[500],
-                                ),
-                              ),
-                          ],
-                        ),
-                      );
-                    },
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        busTypeColor,
+                        busTypeColor.withOpacity(0.8),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
                   ),
+                  child: const Icon(
+                    Icons.directions_bus_filled,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        bus.busName,
+                        style: AppTheme.heading4Dark(context).copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      if (bus.routeNumber != null)
+                        Text(
+                          'Route: ${bus.routeNumber}',
+                          style: AppTheme.bodySmallDark(context),
+                        ),
+                      if (bus.operator != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          'Operator: ${bus.operator}',
+                          style: AppTheme.bodySmallDark(context),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: busTypeColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: busTypeColor.withOpacity(0.3),
+                              ),
+                            ),
+                            child: Text(
+                              bus.busType.toUpperCase(),
+                              style: AppTheme.labelSmall.copyWith(
+                                color: busTypeColor,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryBlue.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppTheme.primaryBlue.withOpacity(0.3),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.location_on_rounded,
+                                  size: 12,
+                                  color: AppTheme.primaryBlue,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${bus.stops.length} stops',
+                                  style: AppTheme.labelSmall.copyWith(
+                                    color: AppTheme.primaryBlue,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+                  size: 24,
                 ),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoChip(IconData icon, String label, String value, Color color) {
-    return Container(
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 18, color: color),
-          SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
-              ),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -839,10 +1033,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       case 'women':
         return Colors.pink;
       case 'general':
-        return Colors.blue;
+        return AppTheme.primaryBlue;
       default:
-        return Colors.grey;
+        return AppTheme.textSecondary;
     }
   }
 }
-

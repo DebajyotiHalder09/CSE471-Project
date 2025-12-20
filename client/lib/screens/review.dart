@@ -4,6 +4,9 @@ import '../models/review.dart';
 import '../models/user.dart';
 import '../services/review_service.dart';
 import '../services/auth_service.dart';
+import '../utils/app_theme.dart';
+import '../utils/error_widgets.dart';
+import '../utils/loading_widgets.dart';
 
 class ReviewScreen extends StatefulWidget {
   final Bus bus;
@@ -85,9 +88,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   Future<void> _addReview() async {
     if (commentController.text.trim().isEmpty) {
-      setState(() {
-        errorMessage = 'Please enter a comment';
-      });
+      ErrorSnackbar.show(context, 'Please enter a comment');
       return;
     }
 
@@ -122,7 +123,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
         });
         commentController.clear();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Review added successfully!')),
+          SnackBar(
+            content: Text('Review added successfully!'),
+            backgroundColor: AppTheme.accentGreen,
+          ),
         );
       } else {
         setState(() {
@@ -180,7 +184,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
         });
         replyController.clear();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Reply added successfully!')),
+          SnackBar(
+            content: Text('Reply added successfully!'),
+            backgroundColor: AppTheme.accentGreen,
+          ),
         );
       }
     } catch (e) {
@@ -193,9 +200,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   Future<void> _likeReview(String reviewId) async {
     if (currentUser == null) {
-      setState(() {
-        errorMessage = 'Please login to like reviews';
-      });
+      ErrorSnackbar.show(context, 'Please login to like reviews');
       return;
     }
 
@@ -218,22 +223,16 @@ class _ReviewScreenState extends State<ReviewScreen> {
           }
         });
       } else {
-        setState(() {
-          errorMessage = response['message'] ?? 'Failed to like review';
-        });
+        ErrorSnackbar.show(context, response['message'] ?? 'Failed to like review');
       }
     } catch (e) {
-      setState(() {
-        errorMessage = e.toString();
-      });
+      ErrorSnackbar.show(context, e.toString());
     }
   }
 
   Future<void> _dislikeReview(String reviewId) async {
     if (currentUser == null) {
-      setState(() {
-        errorMessage = 'Please login to dislike reviews';
-      });
+      ErrorSnackbar.show(context, 'Please login to dislike reviews');
       return;
     }
 
@@ -256,29 +255,21 @@ class _ReviewScreenState extends State<ReviewScreen> {
           }
         });
       } else {
-        setState(() {
-          errorMessage = response['message'] ?? 'Failed to dislike review';
-        });
+        ErrorSnackbar.show(context, response['message'] ?? 'Failed to dislike review');
       }
     } catch (e) {
-      setState(() {
-        errorMessage = e.toString();
-      });
+      ErrorSnackbar.show(context, e.toString());
     }
   }
 
   Future<void> _editReview(String reviewId, String newComment) async {
     if (newComment.trim().isEmpty) {
-      setState(() {
-        errorMessage = 'Please enter a comment';
-      });
+      ErrorSnackbar.show(context, 'Please enter a comment');
       return;
     }
 
-    // Store the original comment for potential revert
     final originalComment = editController.text.trim();
 
-    // Update local state immediately for instant feedback
     setState(() {
       editingReviewId = null;
       final reviewIndex = reviews.indexWhere((r) => r.id == reviewId);
@@ -292,12 +283,13 @@ class _ReviewScreenState extends State<ReviewScreen> {
     });
     editController.clear();
 
-    // Show success message immediately
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Review updated successfully!')),
+      SnackBar(
+        content: Text('Review updated successfully!'),
+        backgroundColor: AppTheme.accentGreen,
+      ),
     );
 
-    // Make API call in background
     try {
       final response = await ReviewService.updateReview(
         reviewId: reviewId,
@@ -305,7 +297,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
       );
 
       if (!response['success']) {
-        // If API call failed, revert the local change
         setState(() {
           final reviewIndex = reviews.indexWhere((r) => r.id == reviewId);
           if (reviewIndex != -1) {
@@ -317,15 +308,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
           }
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(response['message'] ?? 'Failed to update review'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ErrorSnackbar.show(context, response['message'] ?? 'Failed to update review');
       }
     } catch (e) {
-      // If API call failed, revert the local change
       setState(() {
         final reviewIndex = reviews.indexWhere((r) => r.id == reviewId);
         if (reviewIndex != -1) {
@@ -337,12 +322,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
         }
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update review: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      ErrorSnackbar.show(context, 'Failed to update review: ${e.toString()}');
     }
   }
 
@@ -363,7 +343,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
           isLoading = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Review deleted successfully!')),
+          SnackBar(
+            content: Text('Review deleted successfully!'),
+            backgroundColor: AppTheme.accentGreen,
+          ),
         );
       } else {
         setState(() {
@@ -394,25 +377,58 @@ class _ReviewScreenState extends State<ReviewScreen> {
   }
 
   Future<void> _showDeleteConfirmation(String reviewId) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text('Delete Review'),
+          backgroundColor: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          title: Text(
+            'Delete Review',
+            style: AppTheme.heading4Dark(context).copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           content: Text(
-              'Are you sure you want to delete this review? This action cannot be undone.'),
+            'Are you sure you want to delete this review? This action cannot be undone.',
+            style: AppTheme.bodyMediumDark(context),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: Text('Cancel'),
+              child: Text(
+                'Cancel',
+                style: AppTheme.labelMedium.copyWith(
+                  color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                ),
+              ),
             ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _deleteReview(reviewId);
-              },
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: Text('Delete'),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppTheme.accentRed,
+                    AppTheme.accentRed.withOpacity(0.8),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _deleteReview(reviewId);
+                },
+                child: Text(
+                  'Delete',
+                  style: AppTheme.labelMedium.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
             ),
           ],
         );
@@ -422,29 +438,49 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundLight,
       appBar: AppBar(
-        title: Text('Reviews - ${widget.bus.busName}'),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
         elevation: 0,
+        backgroundColor: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+        foregroundColor: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: AppTheme.primaryGradient,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.reviews_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                widget.bus.busName,
+                style: AppTheme.heading3Dark(context).copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
       ),
       body: Column(
         children: [
           Container(
             width: double.infinity,
-            padding: EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.1),
-                  spreadRadius: 1,
-                  blurRadius: 4,
-                  offset: Offset(0, 2),
-                ),
-              ],
+            padding: const EdgeInsets.all(20),
+            decoration: AppTheme.modernCardDecorationDark(
+              context,
+              color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -453,44 +489,57 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   children: [
                     Text(
                       'Add a Review',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
+                      style: AppTheme.heading4Dark(context).copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                     if (currentUser != null) ...[
-                      Spacer(),
-                      Text(
-                        'as ${currentUser!.name}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                          fontStyle: FontStyle.italic,
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryBlue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppTheme.primaryBlue.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Text(
+                          'as ${currentUser!.name}',
+                          style: AppTheme.bodySmallDark(context).copyWith(
+                            color: AppTheme.primaryBlue,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
                   ],
                 ),
-                SizedBox(height: 12),
+                const SizedBox(height: 16),
                 if (currentUser == null)
                   Container(
-                    padding: EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.orange[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.orange[200]!),
+                      color: AppTheme.accentOrange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: AppTheme.accentOrange.withOpacity(0.3),
+                      ),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.info_outline, color: Colors.orange[700]),
-                        SizedBox(width: 8),
+                        Icon(
+                          Icons.info_outline_rounded,
+                          color: AppTheme.accentOrange,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Text(
                             'Please login to post a review',
-                            style: TextStyle(
-                              color: Colors.orange[700],
-                              fontWeight: FontWeight.w500,
+                            style: AppTheme.bodyMediumDark(context).copyWith(
+                              color: AppTheme.accentOrange,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -501,34 +550,77 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   TextField(
                     controller: commentController,
                     maxLines: 3,
+                    style: AppTheme.bodyLargeDark(context),
                     decoration: InputDecoration(
                       hintText: 'Share your experience with this bus...',
+                      hintStyle: AppTheme.bodyMediumDark(context).copyWith(
+                        color: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+                      ),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(
+                          color: isDark ? AppTheme.darkBorder : AppTheme.borderLight,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(
+                          color: isDark ? AppTheme.darkBorder : AppTheme.borderLight,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(
+                          color: AppTheme.primaryBlue,
+                          width: 2,
+                        ),
                       ),
                       filled: true,
-                      fillColor: Colors.grey[50],
+                      fillColor: isDark ? AppTheme.darkSurfaceElevated : AppTheme.backgroundLight,
+                      contentPadding: const EdgeInsets.all(16),
                     ),
                   ),
-                SizedBox(height: 12),
+                const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed:
-                        (isLoading || currentUser == null) ? null : _addReview,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          currentUser == null ? Colors.grey : Colors.blue,
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: (isLoading || currentUser == null)
+                          ? LinearGradient(
+                              colors: [
+                                Colors.grey[400]!,
+                                Colors.grey[500]!,
+                              ],
+                            )
+                          : AppTheme.primaryGradient,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: (isLoading || currentUser == null)
+                          ? null
+                          : [
+                              BoxShadow(
+                                color: AppTheme.primaryBlue.withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
                     ),
-                    child: Text(
-                      currentUser == null ? 'Login Required' : 'Post Review',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: (isLoading || currentUser == null) ? null : _addReview,
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          alignment: Alignment.center,
+                          child: Text(
+                            currentUser == null ? 'Login Required' : 'Post Review',
+                            style: AppTheme.labelLarge.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -539,87 +631,82 @@ class _ReviewScreenState extends State<ReviewScreen> {
           if (errorMessage != null)
             Container(
               width: double.infinity,
-              margin: EdgeInsets.all(16),
-              padding: EdgeInsets.all(12),
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.red[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red[200]!),
-              ),
-              child: Text(
-                errorMessage!,
-                style: TextStyle(
-                  color: Colors.red[700],
-                  fontWeight: FontWeight.w500,
+                color: AppTheme.accentRed.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: AppTheme.accentRed.withOpacity(0.3),
                 ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.error_outline_rounded,
+                    color: AppTheme.accentRed,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      errorMessage!,
+                      style: AppTheme.bodyMediumDark(context).copyWith(
+                        color: AppTheme.accentRed,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           Expanded(
             child: isLoading
                 ? Center(
-                    child: CircularProgressIndicator(),
+                    child: LoadingWidget(
+                      message: 'Loading reviews...',
+                    ),
                   )
                 : reviews.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.message_outlined,
-                              size: 64,
-                              color: Colors.grey[400],
-                            ),
-                            SizedBox(height: 16),
-                            Text(
-                              'No reviews yet',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            SizedBox(height: 8),
-                            Text(
-                              'Be the first to share your experience!',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[500],
-                              ),
-                            ),
-                          ],
-                        ),
+                    ? EmptyStateWidget(
+                        title: 'No reviews yet',
+                        message: 'Be the first to share your experience!',
+                        icon: Icons.reviews_outlined,
                       )
-                    : ListView.builder(
-                        padding: EdgeInsets.all(16),
-                        itemCount: reviews.length,
-                        itemBuilder: (context, index) {
-                          final review = reviews[index];
-                          return ReviewCard(
-                            review: review,
-                            onLike: () => _likeReview(review.id),
-                            onDislike: () => _dislikeReview(review.id),
-                            onReply: () {
-                              setState(() {
-                                replyingToReviewId =
-                                    replyingToReviewId == review.id
-                                        ? null
-                                        : review.id;
-                              });
-                            },
-                            isReplying: replyingToReviewId == review.id,
-                            replyController: replyController,
-                            onAddReply: () => _addReply(review.id),
-                            onEdit: () =>
-                                _startEditing(review.id, review.comment),
-                            onDelete: () => _showDeleteConfirmation(review.id),
-                            canEdit: currentUser?.id == review.userId,
-                            isEditing: editingReviewId == review.id,
-                            editController: editController,
-                            onSaveEdit: () => _editReview(
-                                editingReviewId!, editController.text.trim()),
-                            onCancelEdit: _cancelEditing,
-                          );
-                        },
+                    : RefreshIndicator(
+                        onRefresh: _loadReviews,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: reviews.length,
+                          itemBuilder: (context, index) {
+                            final review = reviews[index];
+                            return ReviewCard(
+                              review: review,
+                              onLike: () => _likeReview(review.id),
+                              onDislike: () => _dislikeReview(review.id),
+                              onReply: () {
+                                setState(() {
+                                  replyingToReviewId =
+                                      replyingToReviewId == review.id
+                                          ? null
+                                          : review.id;
+                                });
+                              },
+                              isReplying: replyingToReviewId == review.id,
+                              replyController: replyController,
+                              onAddReply: () => _addReply(review.id),
+                              onEdit: () =>
+                                  _startEditing(review.id, review.comment),
+                              onDelete: () => _showDeleteConfirmation(review.id),
+                              canEdit: currentUser?.id == review.userId,
+                              isEditing: editingReviewId == review.id,
+                              editController: editController,
+                              onSaveEdit: () => _editReview(
+                                  editingReviewId!, editController.text.trim()),
+                              onCancelEdit: _cancelEditing,
+                            );
+                          },
+                        ),
                       ),
           ),
         ],
@@ -664,56 +751,57 @@ class ReviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      margin: EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
-        ],
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: AppTheme.modernCardDecorationDark(
+        context,
+        color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
       ),
       child: Padding(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  backgroundColor: Colors.blue[100],
-                  child: Text(
-                    review.userName.isNotEmpty
-                        ? review.userName[0].toUpperCase()
-                        : 'U',
-                    style: TextStyle(
-                      color: Colors.blue[700],
-                      fontWeight: FontWeight.bold,
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    gradient: AppTheme.primaryGradient,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      review.userName.isNotEmpty
+                          ? review.userName[0].toUpperCase()
+                          : 'U',
+                      style: AppTheme.bodyMedium.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
                 ),
-                SizedBox(width: 12),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         review.userName,
-                        style: TextStyle(
+                        style: AppTheme.bodyMediumDark(context).copyWith(
                           fontWeight: FontWeight.w600,
-                          fontSize: 16,
+                          fontSize: 14,
                         ),
                       ),
+                      const SizedBox(height: 2),
                       Text(
                         _formatDate(review.createdAt),
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 12,
+                        style: AppTheme.bodySmallDark(context).copyWith(
+                          fontSize: 11,
                         ),
                       ),
                     ],
@@ -721,7 +809,13 @@ class ReviewCard extends StatelessWidget {
                 ),
                 if (canEdit)
                   PopupMenuButton<String>(
-                    icon: Icon(Icons.more_vert, color: Colors.grey[600]),
+                    icon: Icon(
+                      Icons.more_vert_rounded,
+                      color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     onSelected: (value) {
                       if (value == 'edit') {
                         onEdit?.call();
@@ -734,9 +828,12 @@ class ReviewCard extends StatelessWidget {
                         value: 'edit',
                         child: Row(
                           children: [
-                            Icon(Icons.edit, size: 18, color: Colors.blue),
-                            SizedBox(width: 8),
-                            Text('Edit'),
+                            Icon(Icons.edit_rounded, size: 20, color: AppTheme.primaryBlue),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Edit',
+                              style: AppTheme.bodyMediumDark(context),
+                            ),
                           ],
                         ),
                       ),
@@ -744,9 +841,14 @@ class ReviewCard extends StatelessWidget {
                         value: 'delete',
                         child: Row(
                           children: [
-                            Icon(Icons.delete, size: 18, color: Colors.red),
-                            SizedBox(width: 8),
-                            Text('Delete'),
+                            Icon(Icons.delete_rounded, size: 20, color: AppTheme.accentRed),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Delete',
+                              style: AppTheme.bodyMediumDark(context).copyWith(
+                                color: AppTheme.accentRed,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -754,38 +856,76 @@ class ReviewCard extends StatelessWidget {
                   ),
               ],
             ),
-            SizedBox(height: 12),
+            const SizedBox(height: 16),
             if (isEditing && editController != null) ...[
               TextField(
                 controller: editController!,
                 maxLines: 3,
+                style: AppTheme.bodyLargeDark(context),
                 decoration: InputDecoration(
                   hintText: 'Edit your review...',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+                  hintStyle: AppTheme.bodyMediumDark(context).copyWith(
+                    color: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
                   ),
-                  contentPadding: EdgeInsets.all(12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(
+                      color: isDark ? AppTheme.darkBorder : AppTheme.borderLight,
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(
+                      color: isDark ? AppTheme.darkBorder : AppTheme.borderLight,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(
+                      color: AppTheme.primaryBlue,
+                      width: 2,
+                    ),
+                  ),
+                  filled: true,
+                  fillColor: isDark ? AppTheme.darkSurfaceElevated : AppTheme.backgroundLight,
+                  contentPadding: const EdgeInsets.all(16),
                 ),
               ),
-              SizedBox(height: 12),
+              const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
                     onPressed: onCancelEdit,
-                    child: Text('Cancel'),
-                  ),
-                  SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: onSaveEdit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    ),
                     child: Text(
-                      'Save',
-                      style: TextStyle(color: Colors.white),
+                      'Cancel',
+                      style: AppTheme.labelMedium.copyWith(
+                        color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: AppTheme.primaryGradient,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: onSaveEdit,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          child: Text(
+                            'Save',
+                            style: AppTheme.labelLarge.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -793,77 +933,99 @@ class ReviewCard extends StatelessWidget {
             ] else ...[
               Text(
                 review.comment,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: Colors.grey[800],
-                  height: 1.4,
+                style: AppTheme.heading4Dark(context).copyWith(
+                  fontSize: 18,
+                  height: 1.6,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
-            SizedBox(height: 16),
+            const SizedBox(height: 20),
             Row(
               children: [
                 _ActionButton(
-                  icon: Icons.thumb_up_outlined,
+                  icon: Icons.thumb_up_rounded,
                   label: '${review.likes}',
                   onPressed: onLike,
-                  color: Colors.green,
+                  color: AppTheme.accentGreen,
                 ),
-                SizedBox(width: 16),
+                const SizedBox(width: 12),
                 _ActionButton(
-                  icon: Icons.thumb_down_outlined,
+                  icon: Icons.thumb_down_rounded,
                   label: '${review.dislikes}',
                   onPressed: onDislike,
-                  color: Colors.red,
+                  color: AppTheme.accentRed,
                 ),
-                SizedBox(width: 16),
+                const SizedBox(width: 12),
                 _ActionButton(
-                  icon: Icons.reply,
+                  icon: Icons.reply_rounded,
                   label: '${review.replies}',
                   onPressed: onReply,
-                  color: Colors.blue,
+                  color: AppTheme.primaryBlue,
                 ),
               ],
             ),
             if (isReplying) ...[
-              SizedBox(height: 16),
+              const SizedBox(height: 20),
               Container(
-                padding: EdgeInsets.all(12),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.grey[50],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey[200]!),
+                  color: isDark ? AppTheme.darkSurfaceElevated : AppTheme.backgroundLight,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isDark ? AppTheme.darkBorder : AppTheme.borderLight,
+                  ),
                 ),
                 child: Column(
                   children: [
                     TextField(
                       controller: replyController,
                       maxLines: 2,
+                      style: AppTheme.bodyLargeDark(context),
                       decoration: InputDecoration(
                         hintText: 'Write a reply...',
+                        hintStyle: AppTheme.bodyMediumDark(context).copyWith(
+                          color: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+                        ),
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.zero,
                       ),
                     ),
-                    SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         TextButton(
                           onPressed: onReply,
-                          child: Text('Cancel'),
-                        ),
-                        SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: onAddReply,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 8),
-                          ),
                           child: Text(
-                            'Reply',
-                            style: TextStyle(color: Colors.white),
+                            'Cancel',
+                            style: AppTheme.labelMedium.copyWith(
+                              color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: AppTheme.primaryGradient,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: onAddReply,
+                              borderRadius: BorderRadius.circular(12),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                child: Text(
+                                  'Reply',
+                                  style: AppTheme.labelLarge.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -873,59 +1035,70 @@ class ReviewCard extends StatelessWidget {
               ),
             ],
             if (review.repliesList.isNotEmpty) ...[
-              SizedBox(height: 16),
+              const SizedBox(height: 20),
               Text(
                 'Replies',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                  color: Colors.grey[700],
+                style: AppTheme.heading4Dark(context).copyWith(
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              SizedBox(height: 8),
+              const SizedBox(height: 12),
               ...review.repliesList.map((reply) => Container(
-                    margin: EdgeInsets.only(top: 8),
-                    padding: EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: BorderRadius.circular(8),
+                      color: isDark ? AppTheme.darkSurfaceElevated : AppTheme.backgroundLight,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isDark ? AppTheme.darkBorder : AppTheme.borderLight,
+                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            CircleAvatar(
-                              radius: 12,
-                              backgroundColor: Colors.orange[100],
-                              child: Text(
-                                reply.userName.isNotEmpty
-                                    ? reply.userName[0].toUpperCase()
-                                    : 'U',
-                                style: TextStyle(
-                                  color: Colors.orange[700],
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
+                            Container(
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    AppTheme.accentOrange,
+                                    AppTheme.accentOrange.withOpacity(0.8),
+                                  ],
+                                ),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  reply.userName.isNotEmpty
+                                      ? reply.userName[0].toUpperCase()
+                                      : 'U',
+                                  style: AppTheme.bodySmall.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ),
                             ),
-                            SizedBox(width: 8),
+                            const SizedBox(width: 10),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     reply.userName,
-                                    style: TextStyle(
+                                    style: AppTheme.bodySmallDark(context).copyWith(
                                       fontWeight: FontWeight.w600,
                                       fontSize: 13,
                                     ),
                                   ),
                                   Text(
                                     _formatDate(reply.createdAt),
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontSize: 11,
+                                    style: AppTheme.bodySmallDark(context).copyWith(
+                                      fontSize: 10,
                                     ),
                                   ),
                                 ],
@@ -933,30 +1106,31 @@ class ReviewCard extends StatelessWidget {
                             ),
                           ],
                         ),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 10),
                         Text(
                           reply.comment,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[800],
+                          style: AppTheme.bodyLargeDark(context).copyWith(
+                            fontSize: 16,
+                            height: 1.5,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 12),
                         Row(
                           children: [
                             _ActionButton(
-                              icon: Icons.thumb_up_outlined,
+                              icon: Icons.thumb_up_rounded,
                               label: '${reply.likes}',
                               onPressed: () {},
-                              color: Colors.green,
+                              color: AppTheme.accentGreen,
                               isSmall: true,
                             ),
-                            SizedBox(width: 12),
+                            const SizedBox(width: 12),
                             _ActionButton(
-                              icon: Icons.thumb_down_outlined,
+                              icon: Icons.thumb_down_rounded,
                               label: '${reply.dislikes}',
                               onPressed: () {},
-                              color: Colors.red,
+                              color: AppTheme.accentRed,
                               isSmall: true,
                             ),
                           ],
@@ -1004,29 +1178,39 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onPressed,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: isSmall ? 16 : 18,
-              color: color,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: isSmall ? 12 : 16, vertical: isSmall ? 8 : 10),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: color.withOpacity(0.3),
             ),
-            SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: isSmall ? 18 : 20,
                 color: color,
-                fontSize: isSmall ? 12 : 14,
-                fontWeight: FontWeight.w500,
               ),
-            ),
-          ],
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: AppTheme.bodyMediumDark(context).copyWith(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                  fontSize: isSmall ? 14 : 15,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -3334,12 +3334,12 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                     
                     return Stack(
                       children: [
-                        // Base shadow layer - thick and semi-transparent for depth
+                        // Base shadow layer - thin and semi-transparent for depth
                         PolylineLayer(
                           polylines: [
                             Polyline(
                               points: _routePoints,
-                              strokeWidth: 16.0,
+                              strokeWidth: 8.0,
                               color: AppTheme.primaryBlue.withValues(alpha: 0.15),
                               borderStrokeWidth: 0,
                             ),
@@ -3350,7 +3350,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                           polylines: [
                             Polyline(
                               points: _routePoints,
-                              strokeWidth: 10.0,
+                              strokeWidth: 6.0,
                               color: AppTheme.primaryBlue.withValues(alpha: 0.7),
                               borderStrokeWidth: 0,
                             ),
@@ -3362,9 +3362,9 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                             polylines: [
                               Polyline(
                                 points: animatedSegment,
-                                strokeWidth: 14.0,
+                                strokeWidth: 8.0,
                                 color: AppTheme.primaryBlueLight.withValues(alpha: pulseIntensity),
-                                borderStrokeWidth: 3.0,
+                                borderStrokeWidth: 2.0,
                                 borderColor: Colors.white.withValues(alpha: 0.9),
                               ),
                             ],

@@ -59,7 +59,7 @@ class MyApp extends StatelessWidget {
           
           return MaterialApp(
             debugShowCheckedModeBanner: false,
-            title: 'Bus Transit',
+            title: 'SmartCommute Dhaka',
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
             themeMode: themeProvider.themeMode,

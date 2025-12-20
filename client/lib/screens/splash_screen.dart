@@ -107,10 +107,18 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       ),
                       const SizedBox(height: 32),
                       Text(
-                        'Bus Transit',
+                        'SmartCommute',
                         style: AppTheme.heading1.copyWith(
                           color: AppTheme.primaryBlue,
                           fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Dhaka',
+                        style: AppTheme.heading2.copyWith(
+                          color: AppTheme.primaryBlue,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 8),

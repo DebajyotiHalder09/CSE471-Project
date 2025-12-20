@@ -74,53 +74,75 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Logo and Title
-                          Center(
-                            child: Column(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(20),
-                                  decoration: BoxDecoration(
-                                    gradient: AppTheme.primaryGradient,
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: AppTheme.primaryBlue.withOpacity(0.3),
-                                        blurRadius: 20,
-                                        spreadRadius: 5,
+                          // Logo and Title Row
+                          Row(
+                            children: [
+                              // Logo on left
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppTheme.primaryBlue.withOpacity(0.15),
+                                      blurRadius: 20,
+                                      spreadRadius: 2,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Image.asset(
+                                  'assets/main.png',
+                                  width: 60,
+                                  height: 60,
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Icon(
+                                      Icons.directions_bus,
+                                      size: 40,
+                                      color: AppTheme.primaryBlue,
+                                    );
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 20),
+                              // App Name on right with gradient
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        gradient: AppTheme.primaryGradient,
+                                        border: Border.all(
+                                          color: AppTheme.primaryBlue,
+                                          width: 2.5,
+                                        ),
+                                        borderRadius: BorderRadius.circular(14),
                                       ),
-                                    ],
-                                  ),
-                                  child: Image.asset(
-                                    'assets/main.png',
-                                    width: 80,
-                                    height: 80,
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return const Icon(
-                                        Icons.directions_bus,
-                                        size: 50,
-                                        color: Colors.white,
-                                      );
-                                    },
-                                  ),
+                                      child: Text(
+                                        'SmartCommute',
+                                        style: AppTheme.heading3.copyWith(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 20,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      'Dhaka',
+                                      style: AppTheme.heading4.copyWith(
+                                        color: AppTheme.primaryBlue,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 24),
-                                Text(
-                                  'Welcome Back',
-                                  style: AppTheme.heading2.copyWith(
-                                    color: AppTheme.textPrimary,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Sign in to continue your journey',
-                                  style: AppTheme.bodyMedium.copyWith(
-                                    color: AppTheme.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 40),
 

@@ -157,7 +157,7 @@ class SettingsScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Bus Transit App',
+                                'SmartCommute Dhaka',
                                 style: AppTheme.bodyLarge.copyWith(
                                   fontWeight: FontWeight.w600,
                                   color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,

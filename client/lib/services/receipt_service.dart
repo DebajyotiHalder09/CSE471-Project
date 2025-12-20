@@ -80,7 +80,7 @@ class ReceiptService {
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Text(
-                'Bus Transit System',
+                'SmartCommute Dhaka',
                 style: pw.TextStyle(
                   color: PdfColors.white,
                   fontSize: 24,

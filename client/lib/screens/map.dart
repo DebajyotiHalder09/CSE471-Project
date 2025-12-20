@@ -64,7 +64,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
     _bottomSheetController = DraggableScrollableController();
     _polylineAnimationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000),
+      duration: const Duration(milliseconds: 3000),
     )..repeat();
   }
 
@@ -2528,108 +2528,145 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   }
 
   void _showResultsSheet() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      isDismissible: false,
+      isDismissible: true,
       enableDrag: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(0.5),
       builder: (context) {
-        return DraggableScrollableSheet(
-          controller: _bottomSheetController,
-          initialChildSize: 0.35,
-          minChildSize: 0.25,
-          maxChildSize: 0.8,
-          expand: false,
-          builder: (context, scrollController) {
-            return Column(
-              children: [
-                // Clickable header area for web compatibility
-                GestureDetector(
-                  onTap: () {
-                    if (_bottomSheetController != null && _bottomSheetController!.isAttached) {
-                      final currentSize = _bottomSheetController!.size;
-                      final isExpanded = currentSize >= 0.7;
-                      _bottomSheetController!.animateTo(
-                        isExpanded ? 0.25 : 0.8,
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                      );
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 4,
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade400,
-                            borderRadius: BorderRadius.circular(2),
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: DraggableScrollableSheet(
+            controller: _bottomSheetController,
+            initialChildSize: 0.35,
+            minChildSize: 0.25,
+            maxChildSize: 0.8,
+            expand: false,
+            builder: (context, scrollController) {
+              return Column(
+                children: [
+                  // Clickable header area for web compatibility
+                  GestureDetector(
+                    onTap: () {
+                      if (_bottomSheetController != null && _bottomSheetController!.isAttached) {
+                        final currentSize = _bottomSheetController!.size;
+                        final isExpanded = currentSize >= 0.7;
+                        _bottomSheetController!.animateTo(
+                          isExpanded ? 0.25 : 0.8,
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                        );
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 4,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
                           ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              // Title with expand/collapse indicator
-                              Row(
-                                children: [
-                                  const Text(
-                                    'Available Bus',
-                                    style: TextStyle(
-                                        fontSize: 18, fontWeight: FontWeight.bold),
-                                  ),
-                                  SizedBox(width: 8),
-                                  Icon(
-                                    Icons.unfold_more,
-                                    size: 20,
-                                    color: Colors.grey[600],
-                                  ),
-                                ],
-                              ),
-                              ElevatedButton(
-                                onPressed: () {
-                                  Navigator.of(context).maybePop();
-                                  if (widget.onOpenRideshare != null) {
-                                    widget.onOpenRideshare!(
-                                      _sourceController.text.trim(),
-                                      _destinationController.text.trim(),
-                                    );
-                                  }
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
-                                  foregroundColor: Colors.white,
-                                  padding:
-                                      EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                // Title with expand/collapse indicator
+                                Row(
                                   children: [
-                                    Icon(Icons.directions_car, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('RideShare',
-                                        style: TextStyle(fontWeight: FontWeight.w600)),
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        gradient: AppTheme.primaryGradient,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: const Icon(
+                                        Icons.directions_bus_filled,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      'Available Buses',
+                                      style: AppTheme.heading3Dark(context).copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                   ],
                                 ),
-                              )
-                            ],
+                                Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        AppTheme.accentGreen,
+                                        AppTheme.accentGreen.withOpacity(0.8),
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppTheme.accentGreen.withOpacity(0.3),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: () {
+                                        Navigator.of(context).maybePop();
+                                        if (widget.onOpenRideshare != null) {
+                                          widget.onOpenRideshare!(
+                                            _sourceController.text.trim(),
+                                            _destinationController.text.trim(),
+                                          );
+                                        }
+                                      },
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.directions_car_rounded, size: 18, color: Colors.white),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'RideShare',
+                                              style: AppTheme.labelLarge.copyWith(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
                 const SizedBox(height: 8),
                 // Show women-only bus suggestion for female users
                 if (_currentUserGender?.toLowerCase() == 'female' &&
@@ -2703,19 +2740,86 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                       ],
                     ),
                   ),
-                Expanded(
-                  child: _busesLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : _busesError != null
-                          ? Center(child: Text(_busesError!))
-                          : _availableBuses.isEmpty
-                              ? const Center(child: Text('No bus available'))
-                              : ListView.separated(
-                                  controller: scrollController,
-                                  itemCount: _getSortedBuses().length,
-                                  separatorBuilder: (_, __) =>
-                                      const Divider(height: 1),
-                                  itemBuilder: (context, index) {
+                  Expanded(
+                    child: _busesLoading
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                CircularProgressIndicator(
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    AppTheme.primaryBlue,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Loading buses...',
+                                  style: AppTheme.bodyMediumDark(context).copyWith(
+                                    color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : _busesError != null
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.error_outline_rounded,
+                                      size: 48,
+                                      color: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      _busesError!,
+                                      style: AppTheme.bodyMediumDark(context).copyWith(
+                                        color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : _availableBuses.isEmpty
+                                ? Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(24),
+                                          decoration: BoxDecoration(
+                                            color: isDark ? AppTheme.darkSurfaceElevated : AppTheme.backgroundLight,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(
+                                            Icons.directions_bus_outlined,
+                                            size: 48,
+                                            color: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          'No buses available',
+                                          style: AppTheme.heading4Dark(context).copyWith(
+                                            color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'Try adjusting your route',
+                                          style: AppTheme.bodyMediumDark(context).copyWith(
+                                            color: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : ListView.builder(
+                                    controller: scrollController,
+                                    padding: const EdgeInsets.only(bottom: 20),
+                                    itemCount: _getSortedBuses().length,
+                                    itemBuilder: (context, index) {
                                     final bus = _getSortedBuses()[index];
                                     final isFavorited =
                                         _favoriteStatus[bus.id] ?? false;
@@ -2731,259 +2835,258 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                             isWomenBus;
 
                                     return Container(
-                                      margin: EdgeInsets.symmetric(
-                                          horizontal: 16, vertical: 8),
-                                      padding: EdgeInsets.all(16),
-                                      decoration: BoxDecoration(
+                                      margin: const EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 6),
+                                      decoration: AppTheme.modernCardDecorationDark(
+                                        context,
                                         color: isGreyedOut
-                                            ? Colors.grey[100]
-                                            : Colors.white,
-                                        borderRadius: BorderRadius.circular(16),
-                                        border: Border.all(
-                                            color: isGreyedOut
-                                                ? Colors.grey[300]!
-                                                : Colors.grey[100]!),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withValues(
-                                                alpha:
-                                                    isGreyedOut ? 0.03 : 0.06),
-                                            blurRadius: 8,
-                                            offset: Offset(0, 2),
-                                          ),
-                                        ],
+                                            ? (isDark ? AppTheme.darkSurfaceElevated : Colors.grey[100])
+                                            : (isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite),
                                       ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  bus.busName,
-                                                  style: TextStyle(
-                                                    fontSize: 18,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: isGreyedOut
-                                                        ? Colors.grey[500]
-                                                        : Colors.grey[900],
-                                                  ),
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          onTap: () {
+                                            if (_currentUserGender?.toLowerCase() == 'male' && bus.busType == 'women') {
+                                              _showWomenBusPopup();
+                                            } else {
+                                              _toggleIndividualBuses(bus.id);
+                                            }
+                                          },
+                                          borderRadius: BorderRadius.circular(20),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(16),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Container(
+                                                      padding: const EdgeInsets.all(10),
+                                                      decoration: BoxDecoration(
+                                                        gradient: isGreyedOut
+                                                            ? LinearGradient(
+                                                                colors: [
+                                                                  Colors.grey[400]!,
+                                                                  Colors.grey[500]!,
+                                                                ],
+                                                              )
+                                                            : AppTheme.primaryGradient,
+                                                        borderRadius: BorderRadius.circular(12),
+                                                      ),
+                                                      child: const Icon(
+                                                        Icons.directions_bus_filled,
+                                                        color: Colors.white,
+                                                        size: 24,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 12),
+                                                    Expanded(
+                                                      child: Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                        children: [
+                                                          Text(
+                                                            bus.busName,
+                                                            style: AppTheme.heading4Dark(context).copyWith(
+                                                              fontWeight: FontWeight.bold,
+                                                              color: isGreyedOut
+                                                                  ? (isDark ? AppTheme.darkTextTertiary : Colors.grey[500])
+                                                                  : null,
+                                                            ),
+                                                          ),
+                                                          if (bus.routeNumber != null) ...[
+                                                            const SizedBox(height: 4),
+                                                            Text(
+                                                              'Route: ${bus.routeNumber}',
+                                                              style: AppTheme.bodySmall.copyWith(
+                                                                color: isGreyedOut
+                                                                    ? (isDark ? AppTheme.darkTextTertiary : Colors.grey[500])
+                                                                    : (isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Container(
+                                                          padding: const EdgeInsets.all(8),
+                                                          decoration: BoxDecoration(
+                                                            color: isGreyedOut
+                                                                ? (isDark ? AppTheme.darkSurfaceElevated : Colors.grey[200])
+                                                                : (isDark ? AppTheme.darkSurfaceElevated : AppTheme.backgroundLight),
+                                                            borderRadius: BorderRadius.circular(10),
+                                                          ),
+                                                          child: Icon(
+                                                            Icons.info_outline_rounded,
+                                                            color: isGreyedOut
+                                                                ? (isDark ? AppTheme.darkTextTertiary : Colors.grey[500])
+                                                                : AppTheme.primaryBlue,
+                                                            size: 18,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(width: 8),
+                                                        Container(
+                                                          padding: const EdgeInsets.all(8),
+                                                          decoration: BoxDecoration(
+                                                            color: isGreyedOut
+                                                                ? (isDark ? AppTheme.darkSurfaceElevated : Colors.grey[200])
+                                                                : (isDark ? AppTheme.darkSurfaceElevated : AppTheme.backgroundLight),
+                                                            borderRadius: BorderRadius.circular(10),
+                                                          ),
+                                                          child: Icon(
+                                                            Icons.route_rounded,
+                                                            color: isGreyedOut
+                                                                ? (isDark ? AppTheme.darkTextTertiary : Colors.grey[500])
+                                                                : AppTheme.accentGreen,
+                                                            size: 18,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ],
                                                 ),
-                                              ),
-                                              Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Container(
-                                                    padding: EdgeInsets.all(6),
-                                                    decoration: BoxDecoration(
-                                                      color: isGreyedOut
-                                                          ? Colors.grey[200]
-                                                          : Colors.blue[50],
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              8),
-                                                      border: Border.all(
+                                                const SizedBox(height: 16),
+                                                Wrap(
+                                                  spacing: 8,
+                                                  runSpacing: 8,
+                                                  children: [
+                                                    if (isWomenBus)
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                        decoration: BoxDecoration(
+                                                          gradient: LinearGradient(
+                                                            colors: [
+                                                              Colors.pink[400]!,
+                                                              Colors.pink[600]!,
+                                                            ],
+                                                          ),
+                                                          borderRadius: BorderRadius.circular(10),
+                                                        ),
+                                                        child: Row(
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            const Icon(Icons.woman_rounded, color: Colors.white, size: 14),
+                                                            const SizedBox(width: 4),
+                                                            Text(
+                                                              'Women Only',
+                                                              style: AppTheme.labelSmall.copyWith(
+                                                                color: Colors.white,
+                                                                fontWeight: FontWeight.bold,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                      decoration: BoxDecoration(
                                                         color: isGreyedOut
-                                                            ? Colors.grey[400]!
-                                                            : Colors
-                                                                .transparent,
-                                                        width: 1,
+                                                            ? (isDark ? AppTheme.darkSurfaceElevated : Colors.grey[200])
+                                                            : (isDark ? AppTheme.darkSurfaceElevated : AppTheme.backgroundLight),
+                                                        borderRadius: BorderRadius.circular(10),
+                                                        border: Border.all(
+                                                          color: isGreyedOut
+                                                              ? (isDark ? AppTheme.darkBorder : Colors.grey[300]!)
+                                                              : AppTheme.primaryBlue.withOpacity(0.3),
+                                                        ),
+                                                      ),
+                                                      child: Row(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          Icon(
+                                                            Icons.straighten_rounded,
+                                                            size: 14,
+                                                            color: isGreyedOut
+                                                                ? (isDark ? AppTheme.darkTextTertiary : Colors.grey[500])
+                                                                : AppTheme.primaryBlue,
+                                                          ),
+                                                          const SizedBox(width: 4),
+                                                          Text(
+                                                            '${distance.toStringAsFixed(1)} km',
+                                                            style: AppTheme.labelMedium.copyWith(
+                                                              color: isGreyedOut
+                                                                  ? (isDark ? AppTheme.darkTextTertiary : Colors.grey[500])
+                                                                  : AppTheme.primaryBlue,
+                                                              fontWeight: FontWeight.w600,
+                                                            ),
+                                                          ),
+                                                        ],
                                                       ),
                                                     ),
-                                                    child: IconButton(
-                                                      icon: Icon(
-                                                        Icons.info_outline,
-                                                        color: isGreyedOut
-                                                            ? Colors.grey[500]
-                                                            : Colors.blue[600],
-                                                        size: 16,
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                      decoration: BoxDecoration(
+                                                        gradient: isGreyedOut
+                                                            ? LinearGradient(
+                                                                colors: [
+                                                                  Colors.grey[400]!,
+                                                                  Colors.grey[500]!,
+                                                                ],
+                                                              )
+                                                            : LinearGradient(
+                                                                colors: [
+                                                                  AppTheme.accentGreen,
+                                                                  AppTheme.accentGreen.withOpacity(0.8),
+                                                                ],
+                                                              ),
+                                                        borderRadius: BorderRadius.circular(10),
+                                                        boxShadow: isGreyedOut
+                                                            ? null
+                                                            : [
+                                                                BoxShadow(
+                                                                  color: AppTheme.accentGreen.withOpacity(0.3),
+                                                                  blurRadius: 4,
+                                                                  offset: const Offset(0, 2),
+                                                                ),
+                                                              ],
                                                       ),
-                                                      onPressed: () {
-                                                        if (_currentUserGender
-                                                                    ?.toLowerCase() ==
-                                                                'male' &&
-                                                            bus.busType ==
-                                                                'women') {
-                                                          _showWomenBusPopup();
-                                                        } else {
-                                                          _toggleIndividualBuses(
-                                                              bus.id);
-                                                        }
-                                                      },
-                                                      tooltip: isGreyedOut
-                                                          ? 'Women only bus - Not available for male passengers'
-                                                          : 'Show individual buses',
-                                                      padding: EdgeInsets.zero,
-                                                      constraints:
-                                                          BoxConstraints(),
-                                                      style:
-                                                          IconButton.styleFrom(
-                                                        disabledForegroundColor:
-                                                            Colors.grey[500],
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  SizedBox(width: 6),
-                                                  Container(
-                                                    padding: EdgeInsets.all(6),
-                                                    decoration: BoxDecoration(
-                                                      color: isGreyedOut
-                                                          ? Colors.grey[200]
-                                                          : Colors.green[50],
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              8),
-                                                      border: Border.all(
-                                                        color: isGreyedOut
-                                                            ? Colors.grey[400]!
-                                                            : Colors
-                                                                .transparent,
-                                                        width: 1,
+                                                      child: Row(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          const Text('৳', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                                                          const SizedBox(width: 4),
+                                                          Text(
+                                                            totalFare.toStringAsFixed(0),
+                                                            style: AppTheme.labelMedium.copyWith(
+                                                              color: Colors.white,
+                                                              fontWeight: FontWeight.bold,
+                                                            ),
+                                                          ),
+                                                        ],
                                                       ),
                                                     ),
-                                                    child: IconButton(
-                                                      icon: Icon(
-                                                        Icons.route,
-                                                        color: isGreyedOut
-                                                            ? Colors.grey[500]
-                                                            : Colors.green[600],
-                                                        size: 16,
-                                                      ),
-                                                      onPressed: () {
-                                                        if (_currentUserGender
-                                                                    ?.toLowerCase() ==
-                                                                'male' &&
-                                                            bus.busType ==
-                                                                'women') {
-                                                          _showWomenBusPopup();
-                                                        } else {
-                                                          _showStopsDialog(bus);
-                                                        }
-                                                      },
-                                                      tooltip: isGreyedOut
-                                                          ? 'Women only bus - Not available for male passengers'
-                                                          : 'Show stops',
-                                                      padding: EdgeInsets.zero,
-                                                      constraints:
-                                                          BoxConstraints(),
-                                                      style:
-                                                          IconButton.styleFrom(
-                                                        disabledForegroundColor:
-                                                            Colors.grey[500],
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
                                           ),
-                                          SizedBox(height: 12),
-                                          Row(
-                                            children: [
-                                              if (isWomenBus)
-                                                Container(
-                                                  padding: EdgeInsets.symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 4),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.pink[50],
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8),
-                                                    border: Border.all(
-                                                        color:
-                                                            Colors.pink[200]!),
-                                                  ),
-                                                  child: Text(
-                                                    'Women Only',
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      color: Colors.pink[700],
-                                                    ),
-                                                  ),
-                                                ),
-                                              if (isWomenBus)
-                                                SizedBox(width: 12),
-                                              Container(
-                                                padding: EdgeInsets.symmetric(
-                                                    horizontal: 10,
-                                                    vertical: 4),
-                                                decoration: BoxDecoration(
-                                                  color: isGreyedOut
-                                                      ? Colors.grey[100]
-                                                      : Colors.blue[50],
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                  border: Border.all(
-                                                      color: isGreyedOut
-                                                          ? Colors.grey[300]!
-                                                          : Colors.blue[200]!),
-                                                ),
-                                                child: Text(
-                                                  '${distance.toStringAsFixed(1)} km',
-                                                  style: TextStyle(
-                                                    fontSize: 14,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: isGreyedOut
-                                                        ? Colors.grey[500]
-                                                        : Colors.blue[700],
-                                                  ),
-                                                ),
-                                              ),
-                                              SizedBox(width: 12),
-                                              Container(
-                                                padding: EdgeInsets.symmetric(
-                                                    horizontal: 12,
-                                                    vertical: 6),
-                                                decoration: BoxDecoration(
-                                                  color: isGreyedOut
-                                                      ? Colors.grey[100]
-                                                      : Colors.green[50],
-                                                  borderRadius:
-                                                      BorderRadius.circular(10),
-                                                  border: Border.all(
-                                                      color: isGreyedOut
-                                                          ? Colors.grey[300]!
-                                                          : Colors.green[200]!),
-                                                ),
-                                                child: Text(
-                                                  '৳${totalFare.toStringAsFixed(0)}',
-                                                  style: TextStyle(
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.w700,
-                                                    color: isGreyedOut
-                                                        ? Colors.grey[500]
-                                                        : Colors.green[700],
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
+                                        ),
                                       ),
                                     );
                                   },
                                 ),
-                ),
-              ],
-            );
-          },
+                  ),
+                ],
+              );
+            },
+          ),
         );
       },
     );
   }
 
   void _showResultsSheetForCustomLocation() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
+      isDismissible: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(0.5),
       builder: (context) {
         return DraggableScrollableSheet(
           initialChildSize: 0.25,
@@ -3153,25 +3256,29 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     SystemChrome.setSystemUIOverlayStyle(
-      const SystemUiOverlayStyle(
-        statusBarColor: Colors.white,
-        statusBarIconBrightness: Brightness.dark,
-        systemNavigationBarColor: Colors.white,
-        systemNavigationBarIconBrightness: Brightness.dark,
+      SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        systemNavigationBarColor: isDark ? AppTheme.darkSurface : Colors.white,
+        systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
       ),
     );
 
     if (_mapController == null) {
-      return const Scaffold(
+      return Scaffold(
+        backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundLight,
         body: Center(
-          child: CircularProgressIndicator(),
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryBlue),
+          ),
         ),
       );
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundLight,
       body: Stack(
         children: [
           FlutterMap(
@@ -3209,28 +3316,108 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                   animation: _polylineAnimationController,
                   builder: (context, child) {
                     final animationValue = _polylineAnimationController.value;
-                    // Create a pulsing light effect using multiple polyline layers
-                    // Use sine wave for smooth pulsing animation
-                    final pulseAlpha = 0.3 + (0.5 * (1 + math.sin(animationValue * 2 * math.pi)) / 2);
-                    return PolylineLayer(
-                      polylines: [
-                        // Base shadow layer - thick and semi-transparent
-                        Polyline(
-                          points: _routePoints,
-                          strokeWidth: 12.0,
-                          color: Colors.blue.withValues(alpha: 0.5),
+                    
+                    // Calculate animated segment position along the route
+                    final totalLength = _routePoints.length;
+                    final segmentLength = (totalLength * 0.2).round().clamp(8, 30); // 20% of route length
+                    final startIndex = ((animationValue * (totalLength + segmentLength)) % (totalLength + segmentLength)).round();
+                    
+                    // Create animated segment points
+                    List<LatLng> animatedSegment = [];
+                    if (startIndex < totalLength) {
+                      final endIndex = (startIndex + segmentLength).clamp(0, totalLength);
+                      animatedSegment = _routePoints.sublist(startIndex, endIndex);
+                    }
+                    
+                    // Create pulsing effect for the animated segment
+                    final pulseIntensity = 0.7 + (0.3 * (1 + math.sin(animationValue * 6 * math.pi)) / 2);
+                    
+                    return Stack(
+                      children: [
+                        // Base shadow layer - thick and semi-transparent for depth
+                        PolylineLayer(
+                          polylines: [
+                            Polyline(
+                              points: _routePoints,
+                              strokeWidth: 16.0,
+                              color: AppTheme.primaryBlue.withValues(alpha: 0.15),
+                              borderStrokeWidth: 0,
+                            ),
+                          ],
                         ),
-                        // Animated pulse layer - creates pulsing light effect
-                        Polyline(
-                          points: _routePoints,
-                          strokeWidth: 10.0,
-                          color: Colors.lightBlue.withValues(alpha: pulseAlpha),
+                        // Main route polyline
+                        PolylineLayer(
+                          polylines: [
+                            Polyline(
+                              points: _routePoints,
+                              strokeWidth: 10.0,
+                              color: AppTheme.primaryBlue.withValues(alpha: 0.7),
+                              borderStrokeWidth: 0,
+                            ),
+                          ],
                         ),
-                        // Main visible layer - always fully opaque
-                        Polyline(
-                          points: _routePoints,
-                          strokeWidth: 8.0,
-                          color: Colors.blue.withValues(alpha: 1.0),
+                        // Animated moving segment - creates flowing effect
+                        if (animatedSegment.length > 1)
+                          PolylineLayer(
+                            polylines: [
+                              Polyline(
+                                points: animatedSegment,
+                                strokeWidth: 14.0,
+                                color: AppTheme.primaryBlueLight.withValues(alpha: pulseIntensity),
+                                borderStrokeWidth: 3.0,
+                                borderColor: Colors.white.withValues(alpha: 0.9),
+                              ),
+                            ],
+                          ),
+                      ],
+                    );
+                  },
+                ),
+              // Leading edge marker - separate layer for better performance
+              if (_routePoints.isNotEmpty)
+                AnimatedBuilder(
+                  animation: _polylineAnimationController,
+                  builder: (context, child) {
+                    final animationValue = _polylineAnimationController.value;
+                    final totalLength = _routePoints.length;
+                    final segmentLength = (totalLength * 0.2).round().clamp(8, 30);
+                    final startIndex = ((animationValue * (totalLength + segmentLength)) % (totalLength + segmentLength)).round();
+                    
+                    if (startIndex >= totalLength || startIndex < 0) {
+                      return const SizedBox.shrink();
+                    }
+                    
+                    final leadingPoint = _routePoints[startIndex];
+                    final pulseScale = 1.0 + (0.3 * (1 + math.sin(animationValue * 8 * math.pi)) / 2);
+                    
+                    return MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: leadingPoint,
+                          width: 24 * pulseScale,
+                          height: 24 * pulseScale,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.white,
+                                  AppTheme.primaryBlueLight,
+                                ],
+                              ),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppTheme.primaryBlue,
+                                width: 2.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppTheme.primaryBlue.withValues(alpha: 0.6),
+                                  blurRadius: 10,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ],
                     );
@@ -3276,24 +3463,42 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
             bottom: 20,
             left: 16,
             right: 16,
-            child: ElevatedButton.icon(
-              onPressed: _navigateToSearch,
-              icon: const Icon(Icons.search, color: Colors.white),
-              label: const Text(
-                'Go',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: AppTheme.primaryGradient,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryBlue.withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue[600],
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _navigateToSearch,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.search_rounded, color: Colors.white, size: 24),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Search Route',
+                          style: AppTheme.labelLarge.copyWith(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                elevation: 2,
               ),
             ),
           ),
@@ -3304,25 +3509,40 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
               left: 16,
               right: 16,
               child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: AppTheme.modernCardDecoration(),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: AppTheme.modernCardDecorationDark(
+                  context,
+                  color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.search, color: AppTheme.accentGreen, size: 20),
-                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                AppTheme.accentGreen,
+                                AppTheme.accentGreen.withOpacity(0.8),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.location_on_rounded, color: Colors.white, size: 18),
+                        ),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             _sourceController.text.isNotEmpty
                                 ? _sourceController.text
                                 : 'Source',
-                            style: AppTheme.bodyMedium.copyWith(
+                            style: AppTheme.bodyMediumDark(context).copyWith(
                               fontWeight: FontWeight.w600,
                               color: _sourceController.text.isNotEmpty
-                                  ? AppTheme.textPrimary
-                                  : AppTheme.textTertiary,
+                                  ? null
+                                  : (isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary),
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -3333,18 +3553,30 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Icon(Icons.directions_bus, color: AppTheme.accentRed, size: 20),
-                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                AppTheme.accentRed,
+                                AppTheme.accentRed.withOpacity(0.8),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.flag_rounded, color: Colors.white, size: 18),
+                        ),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             _destinationController.text.isNotEmpty
                                 ? _destinationController.text
                                 : 'Destination',
-                            style: AppTheme.bodyMedium.copyWith(
+                            style: AppTheme.bodyMediumDark(context).copyWith(
                               fontWeight: FontWeight.w600,
                               color: _destinationController.text.isNotEmpty
-                                  ? AppTheme.textPrimary
-                                  : AppTheme.textTertiary,
+                                  ? null
+                                  : (isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary),
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -3394,12 +3626,33 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
             ),
           if (_sourcePoint != null || _destinationPoint != null)
             Positioned(
-              top: 110,
+              top: 16,
               right: 16,
-              child: FloatingActionButton(
-                onPressed: _clearRoute,
-                backgroundColor: Colors.red,
-                child: const Icon(Icons.clear, color: Colors.white),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.red.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _clearRoute,
+                    borderRadius: BorderRadius.circular(28),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                    ),
+                  ),
+                ),
               ),
             ),
           // SOS Button

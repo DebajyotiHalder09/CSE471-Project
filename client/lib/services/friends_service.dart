@@ -3,8 +3,8 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class FriendsService {
-  static const String baseUrl = 'https://smartdhaka.onrender.com/api/friends';
-  //static const String baseUrl = 'http://10.0.2.2:3000'; // For Android emulator
+  //static const String baseUrl = 'https://smartdhaka.onrender.com/api/friends';
+  static const String baseUrl = 'http://10.0.2.2:3000'; // For Android emulator
 
   static Future<Map<String, dynamic>> getFriends() async {
     try {

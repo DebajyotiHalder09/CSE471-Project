@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/bus_service.dart';
 import '../services/fav_bus_service.dart';
 import '../services/auth_service.dart';
+import '../services/rating_service.dart';
 import '../models/bus.dart';
 import 'review.dart';
 import '../utils/loading_widgets.dart';
@@ -24,6 +25,8 @@ class _BusScreenState extends State<BusScreen> {
   String? currentUserGender;
   String? currentUserPass;
   Map<String, bool> favoriteStatus = {};
+  Map<String, double> busRatings = {}; // busId -> rating
+  bool isLoadingRatings = false;
   
   // Search and filter
   final TextEditingController searchController = TextEditingController();
@@ -36,7 +39,49 @@ class _BusScreenState extends State<BusScreen> {
     super.initState();
     _loadAllBuses();
     _getCurrentUserId();
+    _loadBusRatings();
     searchController.addListener(_onSearchChanged);
+  }
+
+  Future<void> _loadBusRatings() async {
+    setState(() {
+      isLoadingRatings = true;
+    });
+
+    try {
+      final result = await RatingService.getAllBusRatings();
+      print('Rating service result: $result');
+      if (result['success'] && result['data'] != null) {
+        final ratingsMap = result['data'] as Map<String, dynamic>;
+        print('Ratings map received: ${ratingsMap.keys.length} buses');
+        setState(() {
+          busRatings = {};
+          ratingsMap.forEach((busId, ratingData) {
+            if (ratingData is Map && ratingData['averageRating'] != null) {
+              final rating = (ratingData['averageRating'] is num)
+                  ? ratingData['averageRating'].toDouble()
+                  : double.tryParse(ratingData['averageRating'].toString()) ?? 0.0;
+              // Store with cleaned busId (trim whitespace)
+              final cleanBusId = busId.toString().trim();
+              busRatings[cleanBusId] = rating;
+              print('Loaded rating for bus $cleanBusId: $rating');
+            }
+          });
+          print('Total ratings loaded: ${busRatings.length}');
+          isLoadingRatings = false;
+        });
+      } else {
+        print('Failed to load ratings: ${result['message']}');
+        setState(() {
+          isLoadingRatings = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading bus ratings: $e');
+      setState(() {
+        isLoadingRatings = false;
+      });
+    }
   }
 
   @override
@@ -78,11 +123,22 @@ class _BusScreenState extends State<BusScreen> {
       result.sort((a, b) => a.busName.compareTo(b.busName));
     } else if (selectedSortFilter == 'z-a') {
       result.sort((a, b) => b.busName.compareTo(a.busName));
+    } else if (selectedSortFilter == 'rating') {
+      result.sort((a, b) {
+        final aRating = busRatings[a.id] ?? 0.0;
+        final bRating = busRatings[b.id] ?? 0.0;
+        return bRating.compareTo(aRating); // Highest rating first
+      });
     }
     
     setState(() {
       filteredBuses = result;
     });
+    
+    // Reload ratings when buses are filtered
+    if (busRatings.isEmpty && !isLoadingRatings) {
+      _loadBusRatings();
+    }
   }
 
   Future<void> _getCurrentUserId() async {
@@ -234,12 +290,18 @@ class _BusScreenState extends State<BusScreen> {
         itemCount: busesToShow.length,
         itemBuilder: (context, index) {
           final bus = busesToShow[index];
+          // Get rating for this bus - match by bus ID
+          // The bus.id comes from bus._id in the JSON response
+          final busIdStr = bus.id.toString().trim();
+          final rating = busRatings[busIdStr] ?? 0.0;
+          
           return BusResultCard(
             bus: bus,
             isFavorited: favoriteStatus[bus.id] ?? false,
             onFavoriteToggle: () => _toggleFavorite(bus),
             userPass: currentUserPass,
             currentUserGender: currentUserGender,
+            rating: rating,
           );
         },
       ),
@@ -264,6 +326,7 @@ class _BusScreenState extends State<BusScreen> {
           isLoadingAll = false;
         });
         _loadFavoriteStatuses();
+        _loadBusRatings();
         _applyFilters();
       } else {
         setState(() {
@@ -560,6 +623,15 @@ class _BusScreenState extends State<BusScreen> {
                 label: 'Sort Z-A',
                 value: 'z-a',
                 color: AppTheme.accentOrange,
+                isTypeFilter: false,
+              ),
+              const SizedBox(height: 12),
+              // Sort by Rating
+              _buildFilterOption(
+                icon: Icons.star_rounded,
+                label: 'Sort by Rating',
+                value: 'rating',
+                color: AppTheme.primaryBlue,
                 isTypeFilter: false,
               ),
               const SizedBox(height: 12),
@@ -1226,6 +1298,7 @@ class BusResultCard extends StatefulWidget {
   final VoidCallback onFavoriteToggle;
   final String? userPass;
   final String? currentUserGender;
+  final double rating;
 
   const BusResultCard({
     super.key,
@@ -1234,6 +1307,7 @@ class BusResultCard extends StatefulWidget {
     required this.onFavoriteToggle,
     this.userPass,
     this.currentUserGender,
+    this.rating = 0.0,
   });
 
   @override
@@ -1365,6 +1439,47 @@ class _BusResultCardState extends State<BusResultCard> {
                               ),
                             ],
                           ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Rating on the right side
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          AppTheme.primaryBlue,
+                          AppTheme.primaryBlueLight,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.primaryBlue.withOpacity(0.3),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.star_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          widget.rating > 0 
+                              ? widget.rating.toStringAsFixed(1)
+                              : '4.0',
+                          style: AppTheme.bodyLarge.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
                         ),
                       ],
                     ),

@@ -12,6 +12,8 @@ import '../services/fav_bus_service.dart';
 import '../services/individual_bus_service.dart';
 import '../services/trip_history_service.dart';
 import '../services/stops_service.dart' show StopsService, StopData;
+import '../services/fare_service.dart';
+import '../services/rating_service.dart';
 import '../models/bus.dart';
 import '../models/individual_bus.dart';
 import '../utils/distance_calculator.dart' as distance_calc;
@@ -47,6 +49,8 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   final Map<String, bool> _favoriteStatus = {};
   final Map<String, bool> _boardedBuses = {};
   final Map<String, bool> _tripRecordsCreated = {}; // Track created trip records by busInfoId
+  final Map<String, double> _busDistances = {}; // Cache for bus route distances
+  final Map<String, double> _busRatings = {}; // Cache for bus ratings
 
   List<BusStop> _allBusStops = [];
 
@@ -61,6 +65,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
     _initializeMap();
     _getCurrentUserId();
     _loadAllBusStops();
+    _loadBusRatings();
     _bottomSheetController = DraggableScrollableController();
     _polylineAnimationController = AnimationController(
       vsync: this,
@@ -1532,14 +1537,43 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   List<Bus> _getSortedBuses() {
     final sortedBuses = List<Bus>.from(_availableBuses);
     sortedBuses.sort((a, b) {
+      // First sort by favorites
       final aFavorited = _favoriteStatus[a.id] ?? false;
       final bFavorited = _favoriteStatus[b.id] ?? false;
 
       if (aFavorited && !bFavorited) return -1;
       if (!aFavorited && bFavorited) return 1;
-      return 0;
+      
+      // Then sort by rating (highest first)
+      final aRating = _busRatings[a.id] ?? 0.0;
+      final bRating = _busRatings[b.id] ?? 0.0;
+      return bRating.compareTo(aRating); // Highest rating first
     });
     return sortedBuses;
+  }
+  
+  Future<void> _loadBusRatings() async {
+    try {
+      final result = await RatingService.getAllBusRatings();
+      if (result['success'] && result['data'] != null) {
+        final ratingsMap = result['data'] as Map<String, dynamic>;
+        setState(() {
+          _busRatings.clear();
+          ratingsMap.forEach((busId, ratingData) {
+            if (ratingData is Map && ratingData['averageRating'] != null) {
+              final rating = (ratingData['averageRating'] is num)
+                  ? ratingData['averageRating'].toDouble()
+                  : double.tryParse(ratingData['averageRating'].toString()) ?? 0.0;
+              // Store with cleaned busId (trim whitespace)
+              final cleanBusId = busId.toString().trim();
+              _busRatings[cleanBusId] = rating;
+            }
+          });
+        });
+      }
+    } catch (e) {
+      print('Error loading bus ratings in map: $e');
+    }
   }
 
   Future<void> _loadAllBusStops() async {
@@ -1727,70 +1761,118 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
 
   Future<Map<String, double>?> _geocodeAddress(String query) async {
     try {
-      // Try multiple geocoding strategies with better handling for detailed addresses
-      final strategies = [
-        {'q': query, 'countrycodes': 'bd'},
-        {'q': '$query, Dhaka, Bangladesh'},
-        {'q': query},
-        // Try with simplified address (remove house numbers, etc.)
-        if (query.contains(',')) {'q': query.split(',').skip(1).join(',').trim() + ', Dhaka, Bangladesh'},
-      ];
+      print('Geocoding address: "$query"');
 
-      for (final params in strategies) {
-        try {
-          final uri = Uri.parse('https://nominatim.openstreetmap.org/search').replace(
-            queryParameters: {
-              ...params,
-        'format': 'json',
-              'limit': '5', // Get more results to find the best match
-        'addressdetails': '1',
-            },
-          );
-      
-      final response = await http.get(
-            uri,
-            headers: {'User-Agent': 'CSE471-Project/1.0 (map)'},
-          ).timeout(const Duration(seconds: 8));
+      // Use backend geocoding endpoint
+      final uri = Uri.parse('${AuthService.baseUrl}/api/geocoding/geocode').replace(
+        queryParameters: {'q': query},
+      );
 
-      if (response.statusCode == 200) {
-            final List<dynamic> results = json.decode(response.body) as List<dynamic>;
-            if (results.isNotEmpty) {
-              // Try to find the best match (prefer results in Bangladesh)
-              for (final item in results) {
-                final resultMap = item as Map<String, dynamic>;
-                final lat = double.tryParse(resultMap['lat']?.toString() ?? '');
-                final lon = double.tryParse(resultMap['lon']?.toString() ?? '');
-                
-                if (lat != null && lon != null) {
-                  // Validate coordinates are reasonable for Bangladesh
-                  if (lat >= 20.0 && lat <= 27.0 && lon >= 88.0 && lon <= 93.0) {
-                    print('Geocoding success for "$query": lat=$lat, lon=$lon');
-                    return {'lat': lat, 'lon': lon};
-                  }
-                }
-              }
-              
-              // If no Bangladesh result found, use the first result anyway (might be close)
-              final firstItem = results.first as Map<String, dynamic>;
-              final lat = double.tryParse(firstItem['lat']?.toString() ?? '');
-              final lon = double.tryParse(firstItem['lon']?.toString() ?? '');
-              
-              if (lat != null && lon != null) {
-                print('Geocoding success (outside BD bounds) for "$query": lat=$lat, lon=$lon');
-                return {'lat': lat, 'lon': lon};
-              }
-            }
-          }
-        } catch (e) {
-          print('Geocoding strategy failed: $e');
-          continue; // Try next strategy
-        }
+      final response = await http.get(uri).timeout(
+        const Duration(seconds: 10), // Reduced timeout to 10 seconds
+        onTimeout: () {
+          print('Geocoding request timed out for: "$query"');
+          throw TimeoutException('Geocoding request timed out', const Duration(seconds: 10));
+        },
+      );
+
+      if (response.statusCode != 200) {
+        print('Geocoding failed with status: ${response.statusCode}');
+        return null;
+      }
+
+      final responseData = json.decode(response.body) as Map<String, dynamic>;
+      if (!responseData['success'] || responseData['data'] == null) {
+        print('Geocoding failed: ${responseData['message'] ?? 'Unknown error'}');
+        return null;
+      }
+
+      final data = responseData['data'] as Map<String, dynamic>;
+      final lat = double.tryParse(data['lat']?.toString() ?? '');
+      final lon = double.tryParse(data['lon']?.toString() ?? '');
+
+      if (lat == null || lon == null) {
+        print('Invalid coordinates in response');
+        return null;
+      }
+
+      // Validate coordinates are reasonable for Bangladesh
+      if (lat >= 20.0 && lat <= 27.0 && lon >= 88.0 && lon <= 93.0) {
+        print('Geocoding success for "$query": lat=$lat, lon=$lon');
+        print('Detailed address: ${data['display_name'] ?? 'N/A'}');
+        return {'lat': lat, 'lon': lon};
+      } else {
+        print('Warning: Coordinates outside Bangladesh bounds: lat=$lat, lon=$lon');
+        // Still return the coordinates as they might be close
+        return {'lat': lat, 'lon': lon};
       }
     } catch (e) {
       print('Geocoding error for "$query": $e');
+      return null;
     }
+  }
+
+  Future<void> _precalculateBusDistances(List<Bus> buses) async {
+    if (_sourcePoint == null || _destinationPoint == null) return;
     
-    return null;
+    final source = _sourceController.text.trim();
+    final destination = _destinationController.text.trim();
+    
+    if (source.isEmpty || destination.isEmpty) return;
+
+    // Try to get distance from fares collection first
+    try {
+      final user = await AuthService.getUser();
+      final fareResult = await FareService.getFare(
+        userId: user?.id,
+        source: source,
+        destination: destination,
+      );
+
+      if (fareResult['success'] && fareResult['data'] != null) {
+        final fareData = fareResult['data'] as Map<String, dynamic>;
+        final roadDistance = (fareData['distance'] as num).toDouble();
+        
+        // Apply to all buses
+        for (final bus in buses) {
+          final cacheKey = '${bus.id}_${source}_${destination}';
+          if (mounted) {
+            setState(() {
+              _busDistances[cacheKey] = roadDistance;
+            });
+          }
+        }
+        return;
+      }
+    } catch (e) {
+      print('Error getting fare from collection: $e');
+    }
+
+    // If not in fares, calculate road distance using backend
+    try {
+      final distanceResult = await FareService.calculateRoadDistance(
+        sourceLat: _sourcePoint!.latitude,
+        sourceLon: _sourcePoint!.longitude,
+        destLat: _destinationPoint!.latitude,
+        destLon: _destinationPoint!.longitude,
+      );
+
+      if (distanceResult['success'] && distanceResult['data'] != null) {
+        final roadDistance = (distanceResult['data']['distance'] as num).toDouble();
+        
+        // Apply to all buses
+        for (final bus in buses) {
+          final cacheKey = '${bus.id}_${source}_${destination}';
+          if (mounted) {
+            setState(() {
+              _busDistances[cacheKey] = roadDistance;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      print('Error calculating road distance: $e');
+    }
   }
 
   Future<void> _updateRoute() async {
@@ -2010,8 +2092,15 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
           _availableBuses = filteredBuses;
           _busesLoading = false;
           _busesError = null;
+          _busDistances.clear(); // Clear distance cache when buses change
         });
         await _loadFavoriteStatuses();
+        await _loadBusRatings(); // Reload ratings when buses change
+        
+        // Pre-calculate distances for all buses
+        if (_sourcePoint != null && _destinationPoint != null) {
+          _precalculateBusDistances(filteredBuses);
+        }
       } else if (response.statusCode == 404) {
         setState(() {
           _availableBuses = [];
@@ -2444,7 +2533,13 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   double _calculateRouteDistance(Bus bus) {
     if (_sourcePoint == null || _destinationPoint == null) return 0.0;
 
-    // Find source and destination stop indices
+    // Check cache first
+    final cacheKey = '${bus.id}_${_sourceController.text.trim()}_${_destinationController.text.trim()}';
+    if (_busDistances.containsKey(cacheKey)) {
+      return _busDistances[cacheKey]!;
+    }
+
+    // Find source and destination stop coordinates
     final sourceStopIndex = bus.stops.indexWhere(
       (stop) =>
           stop.name.toLowerCase() ==
@@ -2456,34 +2551,101 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
           _destinationController.text.trim().toLowerCase(),
     );
 
-    // If stops not found, use first and last
+    // If stops not found, use source/destination points directly
     if (sourceStopIndex == -1 || destStopIndex == -1) {
-      return distance_calc.DistanceCalculator.calculateDistance(
-        bus.stops.first.latitude,
-        bus.stops.first.longitude,
-        bus.stops.last.latitude,
-        bus.stops.last.longitude,
+      // Use the source and destination points from the map
+      final distance = distance_calc.DistanceCalculator.calculateDistance(
+        _sourcePoint!.latitude,
+        _sourcePoint!.longitude,
+        _destinationPoint!.latitude,
+        _destinationPoint!.longitude,
       );
+      _busDistances[cacheKey] = distance;
+      return distance;
     }
 
-    // Ensure source comes before destination
-    final startIndex = sourceStopIndex < destStopIndex ? sourceStopIndex : destStopIndex;
-    final endIndex = sourceStopIndex < destStopIndex ? destStopIndex : sourceStopIndex;
+    // Get coordinates from stops
+    final sourceStop = bus.stops[sourceStopIndex];
+    final destStop = bus.stops[destStopIndex];
 
-    // Calculate total distance by summing distances between consecutive stops
-    double totalDistance = 0.0;
-    for (int i = startIndex; i < endIndex; i++) {
-      final currentStop = bus.stops[i];
-      final nextStop = bus.stops[i + 1];
-      totalDistance += distance_calc.DistanceCalculator.calculateDistance(
-        currentStop.latitude,
-        currentStop.longitude,
-        nextStop.latitude,
-        nextStop.longitude,
+    // Use road distance calculation (same as rideshare/search)
+    // For now, use Haversine but we'll update this to use backend
+    final distance = distance_calc.DistanceCalculator.calculateDistance(
+      sourceStop.latitude,
+      sourceStop.longitude,
+      destStop.latitude,
+      destStop.longitude,
+    );
+
+    // Cache the result
+    _busDistances[cacheKey] = distance;
+    
+    // Try to get road distance from fares collection or backend (async, don't wait)
+    _updateRouteDistanceWithRoadDistance(
+      bus.id,
+      sourceStop.latitude,
+      sourceStop.longitude,
+      destStop.latitude,
+      destStop.longitude,
+      cacheKey,
+    );
+
+    return distance;
+  }
+
+  Future<void> _updateRouteDistanceWithRoadDistance(
+    String busId,
+    double sourceLat,
+    double sourceLon,
+    double destLat,
+    double destLon,
+    String cacheKey,
+  ) async {
+    try {
+      // First try to get from fares collection
+      final source = _sourceController.text.trim();
+      final destination = _destinationController.text.trim();
+      
+      final user = await AuthService.getUser();
+      final fareResult = await FareService.getFare(
+        userId: user?.id,
+        source: source,
+        destination: destination,
       );
-    }
 
-    return totalDistance;
+      if (fareResult['success'] && fareResult['data'] != null) {
+        final fareData = fareResult['data'] as Map<String, dynamic>;
+        final roadDistance = (fareData['distance'] as num).toDouble();
+        
+        if (mounted) {
+          setState(() {
+            _busDistances[cacheKey] = roadDistance;
+          });
+        }
+        return;
+      }
+
+      // If not in fares, calculate road distance using backend
+      final distanceResult = await FareService.calculateRoadDistance(
+        sourceLat: sourceLat,
+        sourceLon: sourceLon,
+        destLat: destLat,
+        destLon: destLon,
+      );
+
+      if (distanceResult['success'] && distanceResult['data'] != null) {
+        final roadDistance = (distanceResult['data']['distance'] as num).toDouble();
+        
+        if (mounted) {
+          setState(() {
+            _busDistances[cacheKey] = roadDistance;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error updating route distance: $e');
+      // Keep the cached Haversine distance
+    }
   }
 
   String _calculateETA(IndividualBus bus) {
@@ -2821,6 +2983,8 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                     itemCount: _getSortedBuses().length,
                                     itemBuilder: (context, index) {
                                     final bus = _getSortedBuses()[index];
+                                    final busIdStr = bus.id.toString().trim();
+                                    final busRating = _busRatings[busIdStr] ?? 0.0;
                                     final isFavorited =
                                         _favoriteStatus[bus.id] ?? false;
                                     final distance =
@@ -2836,7 +3000,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
 
                                     return Container(
                                       margin: const EdgeInsets.symmetric(
-                                          horizontal: 16, vertical: 6),
+                                          horizontal: 16, vertical: 3),
                                       decoration: AppTheme.modernCardDecorationDark(
                                         context,
                                         color: isGreyedOut
@@ -2853,16 +3017,16 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                               _toggleIndividualBuses(bus.id);
                                             }
                                           },
-                                          borderRadius: BorderRadius.circular(20),
+                                          borderRadius: BorderRadius.circular(28),
                                           child: Padding(
-                                            padding: const EdgeInsets.all(16),
+                                            padding: const EdgeInsets.all(10),
                                             child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
                                                 Row(
                                                   children: [
                                                     Container(
-                                                      padding: const EdgeInsets.all(10),
+                                                      padding: const EdgeInsets.all(8),
                                                       decoration: BoxDecoration(
                                                         gradient: isGreyedOut
                                                             ? LinearGradient(
@@ -2877,10 +3041,10 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                                       child: const Icon(
                                                         Icons.directions_bus_filled,
                                                         color: Colors.white,
-                                                        size: 24,
+                                                        size: 20,
                                                       ),
                                                     ),
-                                                    const SizedBox(width: 12),
+                                                    const SizedBox(width: 10),
                                                     Expanded(
                                                       child: Column(
                                                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2895,7 +3059,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                                             ),
                                                           ),
                                                           if (bus.routeNumber != null) ...[
-                                                            const SizedBox(height: 4),
+                                                            const SizedBox(height: 2),
                                                             Text(
                                                               'Route: ${bus.routeNumber}',
                                                               style: AppTheme.bodySmall.copyWith(
@@ -2908,47 +3072,25 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                                         ],
                                                       ),
                                                     ),
-                                                    Row(
-                                                      mainAxisSize: MainAxisSize.min,
-                                                      children: [
-                                                        Container(
-                                                          padding: const EdgeInsets.all(8),
-                                                          decoration: BoxDecoration(
-                                                            color: isGreyedOut
-                                                                ? (isDark ? AppTheme.darkSurfaceElevated : Colors.grey[200])
-                                                                : (isDark ? AppTheme.darkSurfaceElevated : AppTheme.backgroundLight),
-                                                            borderRadius: BorderRadius.circular(10),
-                                                          ),
-                                                          child: Icon(
-                                                            Icons.info_outline_rounded,
-                                                            color: isGreyedOut
-                                                                ? (isDark ? AppTheme.darkTextTertiary : Colors.grey[500])
-                                                                : AppTheme.primaryBlue,
-                                                            size: 18,
-                                                          ),
-                                                        ),
-                                                        const SizedBox(width: 8),
-                                                        Container(
-                                                          padding: const EdgeInsets.all(8),
-                                                          decoration: BoxDecoration(
-                                                            color: isGreyedOut
-                                                                ? (isDark ? AppTheme.darkSurfaceElevated : Colors.grey[200])
-                                                                : (isDark ? AppTheme.darkSurfaceElevated : AppTheme.backgroundLight),
-                                                            borderRadius: BorderRadius.circular(10),
-                                                          ),
-                                                          child: Icon(
-                                                            Icons.route_rounded,
-                                                            color: isGreyedOut
-                                                                ? (isDark ? AppTheme.darkTextTertiary : Colors.grey[500])
-                                                                : AppTheme.accentGreen,
-                                                            size: 18,
-                                                          ),
-                                                        ),
-                                                      ],
+                                                    Container(
+                                                      padding: const EdgeInsets.all(8),
+                                                      decoration: BoxDecoration(
+                                                        color: isGreyedOut
+                                                            ? (isDark ? AppTheme.darkSurfaceElevated : Colors.grey[200])
+                                                            : (isDark ? AppTheme.darkSurfaceElevated : AppTheme.backgroundLight),
+                                                        borderRadius: BorderRadius.circular(10),
+                                                      ),
+                                                      child: Icon(
+                                                        Icons.route_rounded,
+                                                        color: isGreyedOut
+                                                            ? (isDark ? AppTheme.darkTextTertiary : Colors.grey[500])
+                                                            : AppTheme.accentGreen,
+                                                        size: 24,
+                                                      ),
                                                     ),
                                                   ],
                                                 ),
-                                                const SizedBox(height: 16),
+                                                const SizedBox(height: 10),
                                                 Wrap(
                                                   spacing: 8,
                                                   runSpacing: 8,
@@ -2981,7 +3123,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                                         ),
                                                       ),
                                                     Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                                       decoration: BoxDecoration(
                                                         color: isGreyedOut
                                                             ? (isDark ? AppTheme.darkSurfaceElevated : Colors.grey[200])
@@ -2996,28 +3138,21 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                                       child: Row(
                                                         mainAxisSize: MainAxisSize.min,
                                                         children: [
-                                                          Icon(
-                                                            Icons.straighten_rounded,
-                                                            size: 14,
-                                                            color: isGreyedOut
-                                                                ? (isDark ? AppTheme.darkTextTertiary : Colors.grey[500])
-                                                                : AppTheme.primaryBlue,
-                                                          ),
-                                                          const SizedBox(width: 4),
                                                           Text(
                                                             '${distance.toStringAsFixed(1)} km',
-                                                            style: AppTheme.labelMedium.copyWith(
+                                                            style: AppTheme.heading4Dark(context).copyWith(
                                                               color: isGreyedOut
                                                                   ? (isDark ? AppTheme.darkTextTertiary : Colors.grey[500])
                                                                   : AppTheme.primaryBlue,
-                                                              fontWeight: FontWeight.w600,
+                                                              fontWeight: FontWeight.bold,
+                                                              fontSize: 16,
                                                             ),
                                                           ),
                                                         ],
                                                       ),
                                                     ),
                                                     Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                                       decoration: BoxDecoration(
                                                         gradient: isGreyedOut
                                                             ? LinearGradient(
@@ -3046,13 +3181,63 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                                       child: Row(
                                                         mainAxisSize: MainAxisSize.min,
                                                         children: [
-                                                          const Text('৳', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                                                          const Text('৳', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                                                           const SizedBox(width: 4),
                                                           Text(
                                                             totalFare.toStringAsFixed(0),
-                                                            style: AppTheme.labelMedium.copyWith(
+                                                            style: AppTheme.heading4Dark(context).copyWith(
                                                               color: Colors.white,
                                                               fontWeight: FontWeight.bold,
+                                                              fontSize: 16,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                                      decoration: BoxDecoration(
+                                                        gradient: isGreyedOut
+                                                            ? LinearGradient(
+                                                                colors: [
+                                                                  Colors.grey[400]!,
+                                                                  Colors.grey[500]!,
+                                                                ],
+                                                              )
+                                                            : LinearGradient(
+                                                                colors: [
+                                                                  AppTheme.primaryBlue,
+                                                                  AppTheme.primaryBlueLight,
+                                                                ],
+                                                              ),
+                                                        borderRadius: BorderRadius.circular(10),
+                                                        boxShadow: isGreyedOut
+                                                            ? null
+                                                            : [
+                                                                BoxShadow(
+                                                                  color: AppTheme.primaryBlue.withOpacity(0.3),
+                                                                  blurRadius: 4,
+                                                                  offset: const Offset(0, 2),
+                                                                ),
+                                                              ],
+                                                      ),
+                                                      child: Row(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          const Icon(
+                                                            Icons.star_rounded,
+                                                            color: Colors.white,
+                                                            size: 18,
+                                                          ),
+                                                          const SizedBox(width: 6),
+                                                          Text(
+                                                            busRating > 0 
+                                                                ? busRating.toStringAsFixed(1)
+                                                                : '4.0',
+                                                            style: AppTheme.heading4Dark(context).copyWith(
+                                                              color: Colors.white,
+                                                              fontWeight: FontWeight.bold,
+                                                              fontSize: 16,
                                                             ),
                                                           ),
                                                         ],

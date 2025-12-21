@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import '../models/user.dart';
 import '../services/auth_service.dart';
 import '../services/rideshare_service.dart';
+import '../utils/app_theme.dart';
+import '../utils/error_widgets.dart';
+import '../utils/loading_widgets.dart';
 
 class DriverDashScreen extends StatefulWidget {
   const DriverDashScreen({super.key});
@@ -90,412 +93,579 @@ class _DriverDashScreenState extends State<DriverDashScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 245, 245, 245),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // Header
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey.withValues(alpha: 0.1),
-                    spreadRadius: 1,
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.directions_car,
-                        color: Colors.green,
-                        size: 24,
+  Widget _buildRideCard(Map<String, dynamic> post) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final participantCount = _getCurrentParticipantCount(post);
+    final maxParticipants = post['maxParticipants'] ?? 3;
+    final isFull = participantCount >= maxParticipants;
+    final distance = post['distance'] != null ? (post['distance'] is num ? post['distance'].toDouble() : double.tryParse(post['distance'].toString()) ?? 0.0) : 0.0;
+    final fare = post['fare'] != null ? (post['fare'] is num ? post['fare'].toDouble() : double.tryParse(post['fare'].toString()) ?? 0.0) : 0.0;
+    final createdAt = post['createdAt'] != null 
+        ? DateTime.tryParse(post['createdAt'].toString()) ?? DateTime.now()
+        : DateTime.now();
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: AppTheme.modernCardDecorationDark(context).copyWith(
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            // Show ride details modal
+            _showRideDetailsModal(post);
+          },
+          borderRadius: BorderRadius.circular(24),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header: User info and time
+                Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            AppTheme.primaryBlue,
+                            AppTheme.primaryBlueLight,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                      SizedBox(width: 12),
-                      Text(
-                        'Driver Dashboard',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                      child: Center(
+                        child: Text(
+                          post['userName']?.isNotEmpty == true
+                              ? post['userName'][0].toUpperCase()
+                              : 'U',
+                          style: AppTheme.heading4.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ],
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Available rides to accept',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
                     ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Error Message
-            if (errorMessage != null)
-              Container(
-                width: double.infinity,
-                margin: EdgeInsets.all(16),
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.red[50],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red[200]!),
-                ),
-                child: Text(
-                  errorMessage!,
-                  style: TextStyle(
-                    color: Colors.red[700],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-
-            // Ride Posts
-            if (isLoading)
-              Center(
-                child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: CircularProgressIndicator(),
-                ),
-              )
-            else if (ridePosts.isEmpty)
-              Center(
-                child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.directions_car_outlined,
-                        size: 64,
-                        color: Colors.grey[400],
-                      ),
-                      SizedBox(height: 16),
-                      Text(
-                        'No ride posts available',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.grey[600],
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Check back later for new ride requests',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[500],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            else
-              ListView.builder(
-                shrinkWrap: true,
-                physics: NeverScrollableScrollPhysics(),
-                itemCount: ridePosts.length,
-                itemBuilder: (context, index) {
-                  final post = ridePosts[index];
-                  final participantCount = _getCurrentParticipantCount(post);
-
-                  return Container(
-                    margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withValues(alpha: 0.1),
-                          spreadRadius: 1,
-                          blurRadius: 4,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
+                    const SizedBox(width: 12),
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // User Info
-                          Row(
-                            children: [
-                              CircleAvatar(
-                                backgroundColor: Colors.blue[100],
-                                child: Text(
-                                  post['userName']?.isNotEmpty == true
-                                      ? post['userName'][0].toUpperCase()
-                                      : 'U',
-                                  style: TextStyle(
-                                    color: Colors.blue[700],
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      post['userName'] ?? 'Unknown User',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                    Row(
-                                      children: [
-                                        Icon(Icons.wc,
-                                            color: Colors.purple, size: 14),
-                                        SizedBox(width: 4),
-                                        Text(
-                                          post['gender'] ?? 'Not specified',
-                                          style: TextStyle(
-                                            color: Colors.grey[600],
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          SizedBox(height: 16),
-
-                          // Route Information
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Icon(Icons.location_on,
-                                            color: Colors.green, size: 16),
-                                        SizedBox(width: 8),
-                                        Text(
-                                          'From:',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 14,
-                                            color: Colors.grey[700],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    SizedBox(height: 4),
-                                    Text(
-                                      post['source'] ?? 'Unknown location',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        color: Colors.black87,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Icon(Icons.flag,
-                                            color: Colors.red, size: 16),
-                                        SizedBox(width: 8),
-                                        Text(
-                                          'To:',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 14,
-                                            color: Colors.grey[700],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    SizedBox(height: 4),
-                                    Text(
-                                      post['destination'] ?? 'Unknown location',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        color: Colors.black87,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          SizedBox(height: 12),
-
-                          // Participant Count
-                          Row(
-                            children: [
-                              Icon(Icons.people, color: Colors.blue, size: 16),
-                              SizedBox(width: 8),
-                              Text(
-                                '$participantCount/3 participants',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.blue[700],
-                                ),
-                              ),
-                              Spacer(),
-                              if (participantCount >= 3)
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.red[100],
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    'Full',
-                                    style: TextStyle(
-                                      color: Colors.red[700],
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-
-                          // Participants List
-                          if (post['participants'] != null &&
-                              post['participants'].isNotEmpty) ...[
-                            SizedBox(height: 12),
-                            Container(
-                              padding: EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.green[50],
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.green[200]!),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Current Participants:',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.green[700],
-                                    ),
-                                  ),
-                                  SizedBox(height: 8),
-                                  ...post['participants']
-                                      .map<Widget>((participant) => Padding(
-                                            padding: EdgeInsets.only(bottom: 4),
-                                            child: Row(
-                                              children: [
-                                                Icon(
-                                                    participant['userId'] ==
-                                                            post['userId']
-                                                        ? Icons.star
-                                                        : Icons.person,
-                                                    color:
-                                                        participant['userId'] ==
-                                                                post['userId']
-                                                            ? Colors.orange[600]
-                                                            : Colors.green[600],
-                                                    size: 16),
-                                                SizedBox(width: 8),
-                                                Text(
-                                                  '${participant['userName']} (${participant['gender']})',
-                                                  style: TextStyle(
-                                                    fontSize: 13,
-                                                    color: Colors.green[700],
-                                                    fontWeight:
-                                                        participant['userId'] ==
-                                                                post['userId']
-                                                            ? FontWeight.w600
-                                                            : FontWeight.normal,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ))
-                                      .toList(),
-                                ],
-                              ),
+                          Text(
+                            post['userName'] ?? 'Unknown User',
+                            style: AppTheme.heading4Dark(context).copyWith(
+                              fontWeight: FontWeight.bold,
                             ),
-                          ],
-
-                          SizedBox(height: 16),
-
-                          // Accept Button
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: participantCount >= 3
-                                  ? null
-                                  : () => _acceptRide(post),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: participantCount >= 3
-                                    ? Colors.grey
-                                    : Colors.green,
-                                padding: EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: post['gender']?.toString().toLowerCase() == 'male'
+                                      ? Colors.blue.withOpacity(0.1)
+                                      : Colors.pink.withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                              ),
-                              child: Text(
-                                participantCount >= 3
-                                    ? 'Ride Full'
-                                    : 'Accept Ride',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      post['gender']?.toString().toLowerCase() == 'male'
+                                          ? Icons.male
+                                          : Icons.female,
+                                      size: 14,
+                                      color: post['gender']?.toString().toLowerCase() == 'male'
+                                          ? Colors.blue[700]
+                                          : Colors.pink[700],
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      post['gender'] ?? 'Not specified',
+                                      style: AppTheme.bodySmall.copyWith(
+                                        color: post['gender']?.toString().toLowerCase() == 'male'
+                                            ? Colors.blue[700]
+                                            : Colors.pink[700],
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ),
-                          ),
-
-                          SizedBox(height: 12),
-
-                          // Posted Time
-                          Text(
-                            'Posted ${_formatDate(DateTime.parse(post['createdAt'] ?? DateTime.now().toIso8601String()))}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[500],
-                              fontStyle: FontStyle.italic,
-                            ),
+                              const SizedBox(width: 8),
+                              Text(
+                                _formatDate(createdAt),
+                                style: AppTheme.bodySmallDark(context).copyWith(
+                                  color: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
                     ),
-                  );
-                },
+                    if (isFull)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.red.withOpacity(0.3)),
+                        ),
+                        child: Text(
+                          'FULL',
+                          style: AppTheme.labelSmall.copyWith(
+                            color: Colors.red[700],
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+
+                // Route information with gradient icons
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppTheme.darkSurfaceElevated : AppTheme.backgroundLight,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: [
+                      // Source
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  AppTheme.accentGreen,
+                                  AppTheme.accentGreen.withOpacity(0.8),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.location_on_rounded, color: Colors.white, size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Source',
+                                  style: AppTheme.bodySmallDark(context).copyWith(
+                                    color: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  post['source'] ?? 'Unknown location',
+                                  style: AppTheme.bodyLargeDark(context).copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      // Destination
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  AppTheme.accentRed,
+                                  AppTheme.accentRed.withOpacity(0.8),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.flag_rounded, color: Colors.white, size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Destination',
+                                  style: AppTheme.bodySmallDark(context).copyWith(
+                                    color: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  post['destination'] ?? 'Unknown location',
+                                  style: AppTheme.bodyLargeDark(context).copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Distance, Fare, and Participants
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryBlue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.straighten_rounded, color: AppTheme.primaryBlue, size: 18),
+                            const SizedBox(width: 6),
+                            Text(
+                              distance > 0 ? '${distance.toStringAsFixed(1)} km' : 'N/A',
+                              style: AppTheme.bodyMedium.copyWith(
+                                color: AppTheme.primaryBlue,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              AppTheme.accentGreen,
+                              AppTheme.accentGreen.withOpacity(0.8),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text('৳', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                            const SizedBox(width: 4),
+                            Text(
+                              fare > 0 ? fare.toStringAsFixed(0) : 'N/A',
+                              style: AppTheme.bodyMedium.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.people_rounded, color: Colors.orange[700], size: 18),
+                            const SizedBox(width: 6),
+                            Text(
+                              '$participantCount/$maxParticipants',
+                              style: AppTheme.bodyMedium.copyWith(
+                                color: Colors.orange[700],
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Participants List
+                if (post['participants'] != null && post['participants'].isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.accentGreen.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.accentGreen.withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.people_outline, color: AppTheme.accentGreen, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Participants',
+                              style: AppTheme.bodyMedium.copyWith(
+                                color: AppTheme.accentGreen,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ...post['participants'].map<Widget>((participant) {
+                          final isCreator = participant['userId'] == post['userId'];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    gradient: isCreator
+                                        ? LinearGradient(
+                                            colors: [Colors.orange[400]!, Colors.orange[600]!],
+                                          )
+                                        : LinearGradient(
+                                            colors: [AppTheme.accentGreen, AppTheme.accentGreen.withOpacity(0.8)],
+                                          ),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Center(
+                                    child: Icon(
+                                      isCreator ? Icons.star : Icons.person,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        participant['userName'] ?? 'Unknown',
+                                        style: AppTheme.bodyMediumDark(context).copyWith(
+                                          fontWeight: isCreator ? FontWeight.bold : FontWeight.w600,
+                                        ),
+                                      ),
+                                      if (participant['gender'] != null)
+                                        Text(
+                                          participant['gender'],
+                                          style: AppTheme.bodySmallDark(context).copyWith(
+                                            color: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ],
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 20),
+
+                // Accept Button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: isFull
+                        ? null
+                        : () => _acceptRide(post),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isFull
+                          ? Colors.grey[400]
+                          : null,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: isFull ? 0 : 4,
+                    ).copyWith(
+                      backgroundColor: isFull
+                          ? MaterialStateProperty.all(Colors.grey[400])
+                          : MaterialStateProperty.resolveWith((states) {
+                              if (states.contains(MaterialState.pressed)) {
+                                return AppTheme.accentGreen.withOpacity(0.8);
+                              }
+                              return AppTheme.accentGreen;
+                            }),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          isFull ? Icons.block : Icons.check_circle_outline,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          isFull ? 'Ride Full' : 'Accept Ride',
+                          style: AppTheme.labelLarge.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showRideDetailsModal(Map<String, dynamic> post) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: BoxDecoration(
+          color: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDark ? AppTheme.darkTextTertiary : AppTheme.textTertiary,
+                borderRadius: BorderRadius.circular(2),
               ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Ride Details',
+                      style: AppTheme.heading3Dark(context).copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildRideCard(post),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Scaffold(
+      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundLight,
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: isDark ? AppTheme.darkSurface : AppTheme.backgroundWhite,
+        foregroundColor: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppTheme.accentGreen,
+                    AppTheme.accentGreen.withOpacity(0.8),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.directions_car_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Driver Dashboard',
+              style: AppTheme.heading3Dark(context).copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: _loadRidePosts,
+            tooltip: 'Refresh',
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _loadRidePosts,
+        child: isLoading
+            ? const LoadingWidget()
+            : errorMessage != null
+                ? ErrorDisplayWidget(
+                    message: errorMessage!,
+                    onRetry: _loadRidePosts,
+                  )
+                : ridePosts.isEmpty
+                    ? EmptyStateWidget(
+                        icon: Icons.directions_car_outlined,
+                        title: 'No Rides Available',
+                        message: 'Check back later for new ride requests',
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        itemCount: ridePosts.length,
+                        itemBuilder: (context, index) {
+                          return _buildRideCard(ridePosts[index]);
+                        },
+                      ),
       ),
     );
   }

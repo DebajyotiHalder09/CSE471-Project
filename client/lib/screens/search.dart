@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../services/auth_service.dart';
 import '../services/stops_service.dart' show StopsService, StopData;
+import '../services/fare_service.dart';
 import '../models/bus.dart';
 import '../utils/app_theme.dart';
 import '../utils/error_widgets.dart';
@@ -114,9 +115,9 @@ class _SearchScreenState extends State<SearchScreen> {
 
   void _onSourceChanged() {
     _sourceDebounceTimer?.cancel();
-    _sourceDebounceTimer = Timer(const Duration(milliseconds: 250), () {
+    _sourceDebounceTimer = Timer(const Duration(milliseconds: 500), () { // Increased debounce to 500ms
       final query = _sourceController.text.trim();
-      if (query.isNotEmpty) {
+      if (query.isNotEmpty && query.length >= 2) { // Minimum 2 characters
         _sourceRequestId = 'source_${DateTime.now().millisecondsSinceEpoch}';
         _getSearchSuggestions(query, 'source', _sourceRequestId);
       } else {
@@ -133,9 +134,9 @@ class _SearchScreenState extends State<SearchScreen> {
 
   void _onDestinationChanged() {
     _destinationDebounceTimer?.cancel();
-    _destinationDebounceTimer = Timer(const Duration(milliseconds: 250), () {
+    _destinationDebounceTimer = Timer(const Duration(milliseconds: 500), () { // Increased debounce to 500ms
       final query = _destinationController.text.trim();
-      if (query.isNotEmpty) {
+      if (query.isNotEmpty && query.length >= 2) { // Minimum 2 characters
         _destinationRequestId = 'destination_${DateTime.now().millisecondsSinceEpoch}';
         _getSearchSuggestions(query, 'destination', _destinationRequestId);
       } else {
@@ -297,24 +298,37 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _getGeocodingSuggestions(String query) async {
+    // Skip geocoding for very short queries
+    if (query.length < 3) {
+      return [];
+    }
+
     try {
-      final uri = Uri.parse('https://nominatim.openstreetmap.org/search').replace(
+      // Use backend geocoding endpoint
+      final uri = Uri.parse('${AuthService.baseUrl}/api/geocoding/search').replace(
         queryParameters: {
-          'q': '$query, Dhaka, Bangladesh',
-          'format': 'json',
+          'q': query,
           'limit': '5',
-          'addressdetails': '1',
           'countrycodes': 'bd',
         },
       );
 
-      final response = await http.get(
-        uri,
-        headers: {'User-Agent': 'CSE471-Project/1.0 (search)'},
-      ).timeout(const Duration(seconds: 5));
+      final response = await http.get(uri).timeout(
+        const Duration(seconds: 5), // Reduced timeout for suggestions
+        onTimeout: () {
+          // Silently fail for suggestions - don't spam logs
+          return http.Response('', 408); // Request Timeout
+        },
+      );
 
       if (response.statusCode == 200) {
-        final List<dynamic> results = json.decode(response.body) as List<dynamic>;
+        final responseData = json.decode(response.body) as Map<String, dynamic>;
+        
+        if (!responseData['success'] || responseData['data'] == null) {
+          return [];
+        }
+
+        final List<dynamic> results = responseData['data'] as List<dynamic>;
         
         return results.map((result) {
           final displayName = result['display_name'] as String? ?? '';
@@ -331,7 +345,10 @@ class _SearchScreenState extends State<SearchScreen> {
         }).toList();
       }
     } catch (e) {
-      print('Geocoding error: $e');
+      // Silently handle errors for suggestions - don't spam logs
+      if (e is! TimeoutException) {
+        print('Geocoding error (non-timeout): $e');
+      }
     }
     
     return [];
@@ -680,7 +697,7 @@ class _SearchScreenState extends State<SearchScreen> {
     });
   }
 
-  void _navigateToMap() {
+  void _navigateToMap() async {
     if (_sourceController.text.trim().isEmpty ||
         _destinationController.text.trim().isEmpty) {
       ErrorSnackbar.show(
@@ -726,6 +743,39 @@ class _SearchScreenState extends State<SearchScreen> {
         }
       } catch (e) {
         // No matching bus stop found
+      }
+    }
+
+    // Calculate road distance and save fare data
+    if (_sourceCoordinates != null && _destinationCoordinates != null) {
+      // Use backend to calculate accurate road distance (OSRM)
+      final distanceResult = await FareService.calculateRoadDistance(
+        sourceLat: _sourceCoordinates!['lat']!,
+        sourceLon: _sourceCoordinates!['lon']!,
+        destLat: _destinationCoordinates!['lat']!,
+        destLon: _destinationCoordinates!['lon']!,
+      );
+
+      if (distanceResult['success'] && distanceResult['data'] != null) {
+        final distance = (distanceResult['data']['distance'] as num).toDouble();
+
+        // Save fare data to backend (async, don't wait)
+        final user = await AuthService.getUser();
+        if (user != null) {
+          FareService.saveFare(
+            userId: user.id,
+            source: _sourceController.text.trim(),
+            destination: _destinationController.text.trim(),
+            distance: distance,
+            sourceCoordinates: _sourceCoordinates,
+            destinationCoordinates: _destinationCoordinates,
+          ).then((_) {
+            // Successfully saved
+          }).catchError((e) {
+            print('Error saving fare: $e');
+            // Don't block navigation if saving fails
+          });
+        }
       }
     }
 

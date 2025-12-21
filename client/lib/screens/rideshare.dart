@@ -4,6 +4,7 @@ import '../models/user.dart';
 import '../services/auth_service.dart';
 import '../services/rideshare_service.dart';
 import '../services/riderequest_service.dart';
+import '../services/fare_service.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -171,87 +172,15 @@ class _RideshareScreenState extends State<RideshareScreen>
     try {
       print('Geocoding query: "$query"');
 
-      // Try multiple geocoding strategies
-      final result = await _tryGeocodingStrategies(query);
-      if (result != null) {
-        return result;
-      }
-
-      // If all strategies fail, try with simplified address
-      final simplifiedQuery = _simplifyAddress(query);
-      if (simplifiedQuery != query) {
-        print('Trying simplified address: "$simplifiedQuery"');
-        final simplifiedResult = await _tryGeocodingStrategies(simplifiedQuery);
-        if (simplifiedResult != null) {
-          return simplifiedResult;
-        }
-      }
-
-      // Last resort: try with just the first meaningful part
-      final fallbackQuery = _getFallbackAddress(query);
-      if (fallbackQuery != query && fallbackQuery != simplifiedQuery) {
-        print('Trying fallback address: "$fallbackQuery"');
-        final fallbackResult = await _tryGeocodingStrategies(fallbackQuery);
-        if (fallbackResult != null) {
-          return fallbackResult;
-        }
-      }
-
-      print('All geocoding strategies failed for: "$query"');
-      return null;
-    } catch (e) {
-      print('Geocoding error for "$query": $e');
-      return null;
-    }
-  }
-
-  Future<Map<String, double>?> _tryGeocodingStrategies(String query) async {
-    // Strategy 1: Try with Bangladesh country code
-    final result1 = await _geocodeWithParams(query, {'countrycodes': 'bd'});
-    if (result1 != null) return result1;
-
-    // Strategy 2: Try without country restriction
-    final result2 = await _geocodeWithParams(query, {});
-    if (result2 != null) return result2;
-
-    // Strategy 3: Try with Dhaka context
-    final result3 = await _geocodeWithParams('$query, Dhaka, Bangladesh', {});
-    if (result3 != null) return result3;
-
-    // Strategy 4: Try with just the main part of the address
-    final mainPart = _extractMainAddressPart(query);
-    if (mainPart != query) {
-      final result4 = await _geocodeWithParams('$mainPart, Dhaka', {});
-      if (result4 != null) return result4;
-    }
-
-    return null;
-  }
-
-  Future<Map<String, double>?> _geocodeWithParams(
-      String query, Map<String, String> params) async {
-    try {
-      final defaultParams = {
-        'q': query,
-        'format': 'json',
-        'limit': '1',
-        'addressdetails': '1',
-      };
-
-      final allParams = {...defaultParams, ...params};
-
-      final uri =
-          Uri.parse('https://nominatim.openstreetmap.org/search').replace(
-        queryParameters: allParams,
+      // Use backend geocoding endpoint
+      final uri = Uri.parse('${AuthService.baseUrl}/api/geocoding/geocode').replace(
+        queryParameters: {'q': query},
       );
 
       print('Geocoding URL: $uri');
 
-      final res = await http.get(
-        uri,
-        headers: {'User-Agent': 'CSE471-Project/1.0 (rideshare)'},
-      ).timeout(
-        Duration(seconds: 10),
+      final res = await http.get(uri).timeout(
+        Duration(seconds: 10), // Reduced timeout to 10 seconds
         onTimeout: () {
           print('Geocoding request timed out for: "$query"');
           throw TimeoutException(
@@ -261,19 +190,27 @@ class _RideshareScreenState extends State<RideshareScreen>
 
       if (res.statusCode != 200) {
         print('Geocoding failed with status: ${res.statusCode}');
+        // Try with simplified address as fallback
+        final simplifiedQuery = _simplifyAddress(query);
+        if (simplifiedQuery != query) {
+          print('Trying simplified address: "$simplifiedQuery"');
+          return await _geocode(simplifiedQuery);
+        }
         return null;
       }
 
-      final list = json.decode(res.body) as List<dynamic>;
-      if (list.isEmpty) {
+      final responseData = json.decode(res.body) as Map<String, dynamic>;
+      if (!responseData['success'] || responseData['data'] == null) {
+        print('Geocoding failed: ${responseData['message'] ?? 'Unknown error'}');
         return null;
       }
 
-      final item = list.first as Map<String, dynamic>;
-      final lat = double.tryParse(item['lat']?.toString() ?? '');
-      final lon = double.tryParse(item['lon']?.toString() ?? '');
+      final data = responseData['data'] as Map<String, dynamic>;
+      final lat = double.tryParse(data['lat']?.toString() ?? '');
+      final lon = double.tryParse(data['lon']?.toString() ?? '');
 
       if (lat == null || lon == null) {
+        print('Invalid coordinates in response');
         return null;
       }
 
@@ -285,9 +222,18 @@ class _RideshareScreenState extends State<RideshareScreen>
       }
 
       print('Geocoding successful for "$query": lat=$lat, lon=$lon');
+      print('Detailed address: ${data['display_name'] ?? 'N/A'}');
       return {'lat': lat, 'lon': lon};
     } catch (e) {
       print('Geocoding error for "$query": $e');
+      // Try with simplified address as fallback only if it's not a timeout
+      if (e is! TimeoutException) {
+        final simplifiedQuery = _simplifyAddress(query);
+        if (simplifiedQuery != query) {
+          print('Trying simplified address: "$simplifiedQuery"');
+          return await _geocode(simplifiedQuery);
+        }
+      }
       return null;
     }
   }
@@ -368,30 +314,81 @@ class _RideshareScreenState extends State<RideshareScreen>
 
     print('Computing fare for: $source -> $destination');
 
-    // Try geocoding first
+    // First, try to get cached fare from database
+    try {
+      final user = await AuthService.getUser();
+      final userId = user?.id;
+      final fareResult = await FareService.getFare(
+        userId: userId,
+        source: source.trim(),
+        destination: destination.trim(),
+      );
+
+      if (fareResult['success'] && fareResult['data'] != null) {
+        final fareData = fareResult['data'] as Map<String, dynamic>;
+        final distance = (fareData['distance'] as num).toDouble();
+        final fare = distance * 30.0;
+
+        print('Using cached fare from database: ${distance}km (৳${fare.toStringAsFixed(0)})');
+
+        final result = <String, double>{
+          'distanceKm': distance,
+          'fare': fare
+        };
+        _fareCache[key] = result;
+        return result;
+      }
+    } catch (e) {
+      print('Error getting cached fare: $e');
+      // Continue to calculate from scratch
+    }
+
+    // If no cached fare found, calculate from geocoding using road distance
     final src = await _geocode(source);
     final dst = await _geocode(destination);
     
     if (src != null && dst != null) {
-      // Calculate distance using Haversine formula
-      final km = const Distance().as(
-        LengthUnit.Kilometer,
-        LatLng(src['lat']!, src['lon']!),
-        LatLng(dst['lat']!, dst['lon']!),
+      // Use backend to calculate accurate road distance (OSRM)
+      final distanceResult = await FareService.calculateRoadDistance(
+        sourceLat: src['lat']!,
+        sourceLon: src['lon']!,
+        destLat: dst['lat']!,
+        destLon: dst['lon']!,
       );
 
-      // Round to 1 decimal place for better display
-      final roundedKm = (km * 10).round() / 10;
-      final fare = roundedKm * 30.0;
+      if (distanceResult['success'] && distanceResult['data'] != null) {
+        final roundedKm = (distanceResult['data']['distance'] as num).toDouble();
+        final fare = roundedKm * 30.0;
 
-      print('Geocoding successful: ${roundedKm}km (৳${fare.toStringAsFixed(0)})');
+        print('Road distance calculated: ${roundedKm}km (৳${fare.toStringAsFixed(0)})');
 
-      final result = <String, double>{
-        'distanceKm': roundedKm, 
-        'fare': fare
-      };
-      _fareCache[key] = result;
-      return result;
+        // Save to database for future use (async, don't wait)
+        final user = await AuthService.getUser();
+        if (user != null) {
+          FareService.saveFare(
+            userId: user.id,
+            source: source.trim(),
+            destination: destination.trim(),
+            distance: roundedKm,
+            sourceCoordinates: src,
+            destinationCoordinates: dst,
+          ).then((_) {
+            // Successfully saved
+          }).catchError((e) {
+            print('Error saving fare: $e');
+          });
+        }
+
+        final result = <String, double>{
+          'distanceKm': roundedKm, 
+          'fare': fare
+        };
+        _fareCache[key] = result;
+        return result;
+      } else {
+        print('Failed to calculate road distance, using fallback');
+        // Fall through to fallback estimation
+      }
     }
 
     // If geocoding fails, always use fallback estimation
@@ -401,6 +398,21 @@ class _RideshareScreenState extends State<RideshareScreen>
     if (estimatedDistance != null) {
       final fare = estimatedDistance * 30.0;
       print('Fallback estimation: ${estimatedDistance}km (৳${fare.toStringAsFixed(0)})');
+
+      // Save fallback estimation to database (async, don't wait)
+      final user = await AuthService.getUser();
+      if (user != null) {
+        FareService.saveFare(
+          userId: user.id,
+          source: source.trim(),
+          destination: destination.trim(),
+          distance: estimatedDistance,
+        ).then((_) {
+          // Successfully saved
+        }).catchError((e) {
+          print('Error saving fare: $e');
+        });
+      }
 
       final result = <String, double>{
         'distanceKm': estimatedDistance,

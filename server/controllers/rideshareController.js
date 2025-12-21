@@ -1,4 +1,5 @@
 const RidePost = require('../models/rideshare');
+const Fare = require('../models/fare');
 const { addGemsToUser } = require('./walletController');
 const axios = require('axios');
 
@@ -132,8 +133,80 @@ const rideshareController = {
         });
       }
 
-      // Calculate fare and distance
-      const fareData = await calculateFare(source, destination);
+      // First, try to get cached fare from database
+      let fareData = null;
+      try {
+        const cachedFare = await Fare.findOne({
+          userId: userId,
+          source: source.trim(),
+          destination: destination.trim(),
+        });
+
+        if (!cachedFare) {
+          // Try to find general fare (any user with same route)
+          const generalFare = await Fare.findOne({
+            source: source.trim(),
+            destination: destination.trim(),
+          }).sort({ createdAt: -1 });
+
+          if (generalFare) {
+            fareData = {
+              distance: generalFare.distance,
+              fare: generalFare.distance * 30.0
+            };
+          }
+        } else {
+          fareData = {
+            distance: cachedFare.distance,
+            fare: cachedFare.distance * 30.0
+          };
+        }
+      } catch (fareError) {
+        console.warn('Error getting cached fare:', fareError.message);
+      }
+
+      // If no cached fare found, calculate using geocoding and OSRM
+      if (!fareData) {
+        fareData = await calculateFare(source, destination);
+        
+        // Save the calculated fare to database for future use
+        try {
+          const srcResponse = await axios.get('https://nominatim.openstreetmap.org/search', {
+            params: { q: source, format: 'json', limit: 1, addressdetails: 1 },
+            headers: { 'User-Agent': 'BusApp/1.0' },
+            timeout: 10000
+          });
+          const dstResponse = await axios.get('https://nominatim.openstreetmap.org/search', {
+            params: { q: destination, format: 'json', limit: 1, addressdetails: 1 },
+            headers: { 'User-Agent': 'BusApp/1.0' },
+            timeout: 10000
+          });
+
+          if (srcResponse.data && srcResponse.data.length > 0 && 
+              dstResponse.data && dstResponse.data.length > 0) {
+            const srcLat = parseFloat(srcResponse.data[0].lat);
+            const srcLon = parseFloat(srcResponse.data[0].lon);
+            const dstLat = parseFloat(dstResponse.data[0].lat);
+            const dstLon = parseFloat(dstResponse.data[0].lon);
+
+            await Fare.findOneAndUpdate(
+              { userId: userId, source: source.trim(), destination: destination.trim() },
+              {
+                userId: userId,
+                source: source.trim(),
+                destination: destination.trim(),
+                distance: fareData.distance,
+                sourceCoordinates: { lat: srcLat, lon: srcLon },
+                destinationCoordinates: { lat: dstLat, lon: dstLon },
+                createdAt: new Date()
+              },
+              { upsert: true, new: true }
+            );
+          }
+        } catch (saveError) {
+          console.warn('Error saving fare to database:', saveError.message);
+        }
+      }
 
       const ridePost = new RidePost({
         source,

@@ -3,8 +3,8 @@ import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 
 class FavBusService {
-  static const String baseUrl = 'https://smartdhaka.onrender.com';
-  //static const String baseUrl = 'http://10.0.2.2:3000'; // For Android emulator
+  //static const String baseUrl = 'https://smartdhaka.onrender.com';
+  static const String baseUrl = 'http://10.0.2.2:3000'; // For Android emulator
 
   static Future<Map<String, dynamic>> addToFavorites({
     required String userId,

@@ -4,8 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'wallet_service.dart';
 
 class TripService {
-  static const String baseUrl = 'https://smartdhaka.onrender.com';
-  //static const String baseUrl = 'http://10.0.2.2:3000'; // For Android emulator
+  //static const String baseUrl = 'https://smartdhaka.onrender.com';
+  static const String baseUrl = 'http://10.0.2.2:3000'; // For Android emulator
 
   static Future<Map<String, dynamic>> completeBusTrip({
     required String busId,

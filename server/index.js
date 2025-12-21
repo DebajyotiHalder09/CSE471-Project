@@ -66,6 +66,10 @@ app.use('/gpay', require('./routes/gpay'));
 app.use('/verify', require('./routes/verify'));
 app.use('/api/stops', require('./routes/stops'));
 app.use('/api/chat', require('./routes/chat'));
+app.use('/api/geocoding', require('./routes/geocoding'));
+app.use('/api/fares', require('./routes/fare'));
+app.use('/api/notifications', require('./routes/notification'));
+app.use('/api/ratings', require('./routes/rating'));
 
 // Test route to verify server is working
 app.get('/test', (req, res) => {

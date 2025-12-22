@@ -3,7 +3,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 // Conditional imports - these will be replaced at compile time
-import 'dart:io' if (dart.library.html) 'dart:html' as platform;
+import 'dart:io' if (dart.library.html) '../services/file_stub.dart' as io;
 import 'package:path_provider/path_provider.dart' if (dart.library.html) '../services/path_provider_stub.dart' show getTemporaryDirectory;
 import 'package:open_file/open_file.dart' if (dart.library.html) '../services/open_file_stub.dart' show OpenFile;
 import 'receipt_service_web.dart' if (dart.library.io) 'receipt_service_web_stub.dart' as web_helper;
@@ -59,10 +59,19 @@ class ReceiptService {
     } else {
       // Mobile/Desktop: Save to file system using dart:io
       final output = await getTemporaryDirectory();
-      final file = platform.File('${output.path}/$fileName');
+      // Create file using dart:io.File (only available on mobile/desktop)
+      // The conditional import ensures this code path is only compiled for non-web platforms
+      final filePath = '${output.path}/$fileName';
+      final file = _createFile(filePath);
       await file.writeAsBytes(pdfBytes);
       return file.path;
     }
+  }
+
+  // Helper function to create File - only compiled for non-web platforms
+  static dynamic _createFile(String path) {
+    // This will be dart:io.File on mobile/desktop, stub on web
+    return io.File(path);
   }
 
   static void _downloadPdfWeb(List<int> bytes, String fileName) {

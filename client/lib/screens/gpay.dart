@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../services/gpay_service.dart';
-import '../services/receipt_service.dart';
 import '../services/trip_history_service.dart';
 import '../services/auth_service.dart';
 import 'recharge.dart';
@@ -123,6 +122,243 @@ class _GpayScreenState extends State<GpayScreen> {
     }
   }
 
+  void _showReceiptModal(String formattedDate) {
+    final transactionId = 'TXN${DateTime.now().millisecondsSinceEpoch}';
+    
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Container(
+            constraints: BoxConstraints(maxWidth: 500, maxHeight: 700),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                Container(
+                  padding: EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.blue[600]!, Colors.blue[400]!],
+                    ),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(20),
+                      topRight: Radius.circular(20),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.receipt_long, color: Colors.white, size: 28),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'SmartCommute Dhaka',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              'Payment Receipt',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.close, color: Colors.white),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                ),
+                // Content
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Center(
+                          child: Text(
+                            'PAYMENT RECEIPT',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey[800],
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 30),
+                        Container(
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey[300]!),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildReceiptRowMultiline('Receipt Date:', formattedDate),
+                              SizedBox(height: 12),
+                              _buildReceiptRowMultiline('Transaction ID:', transactionId),
+                              SizedBox(height: 12),
+                              _buildReceiptRow('Bus Name:', widget.busName ?? '-', color: Colors.blue[700]),
+                              SizedBox(height: 12),
+                              _buildReceiptRow('Bus Code:', widget.busCode ?? '-', color: Colors.blue[700]),
+                              SizedBox(height: 12),
+                              _buildReceiptRow('Source:', widget.source ?? '-', color: Colors.green[700]),
+                              SizedBox(height: 12),
+                              _buildReceiptRow('Destination:', widget.destination ?? '-', color: Colors.red[700]),
+                              SizedBox(height: 12),
+                              _buildReceiptRow('Distance:', '${(widget.distance ?? 0).toStringAsFixed(1)} km', color: Colors.orange[700]),
+                              SizedBox(height: 20),
+                              Divider(color: Colors.grey[400], thickness: 2),
+                              SizedBox(height: 20),
+                              _buildReceiptRow('Total Fare:', '৳${(widget.fare ?? widget.amount ?? 0).toStringAsFixed(0)}', color: Colors.green[700], isTotal: true),
+                              SizedBox(height: 12),
+                              _buildReceiptRow('Payment Method:', 'Gpay'),
+                              SizedBox(height: 12),
+                              _buildReceiptRow('Status:', 'PAID', color: Colors.green[700]),
+                            ],
+                          ),
+                        ),
+                        SizedBox(height: 20),
+                        Container(
+                          padding: EdgeInsets.all(16),
+                          child: Column(
+                            children: [
+                              Divider(color: Colors.grey[400]),
+                              SizedBox(height: 16),
+                              Text(
+                                'Thank you for using our service!',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey[600],
+                                  fontStyle: FontStyle.italic,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                'This is an official receipt for your bus journey.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[500],
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // Footer button
+                Container(
+                  padding: EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(20),
+                      bottomRight: Radius.circular(20),
+                    ),
+                  ),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue[600],
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        'Close',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildReceiptRow(String label, String value, {Color? color, bool isTotal = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Flexible(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: isTotal ? 18 : 16,
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+              color: Colors.grey[700],
+            ),
+          ),
+        ),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: TextStyle(
+              fontSize: isTotal ? 20 : 16,
+              fontWeight: FontWeight.bold,
+              color: color ?? Colors.grey[800],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReceiptRowMultiline(String label, String value, {Color? color}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.normal,
+            color: Colors.grey[700],
+          ),
+        ),
+        SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: color ?? Colors.grey[800],
+          ),
+        ),
+      ],
+    );
+  }
+
   void _showPaymentSuccessDialog() {
     final currentDate = DateTime.now();
     final formattedDate =
@@ -186,23 +422,9 @@ class _GpayScreenState extends State<GpayScreen> {
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () async {
-                          try {
-                            final path =
-                                await ReceiptService.generateAndSaveReceipt(
-                              busName: widget.busName ?? '-',
-                              busCode: widget.busCode ?? '-',
-                              source: widget.source ?? '-',
-                              destination: widget.destination ?? '-',
-                              distance: widget.distance ?? 0,
-                              fare: widget.fare ?? (widget.amount ?? 0),
-                              date: formattedDate,
-                            );
-                            await ReceiptService.openReceipt(path);
-                          } catch (_) {}
-                        },
-                        icon: Icon(Icons.download),
-                        label: Text('Download Receipt'),
+                        onPressed: () => _showReceiptModal(formattedDate),
+                        icon: Icon(Icons.receipt_long),
+                        label: Text('Show Receipt'),
                       ),
                     ),
                   ],

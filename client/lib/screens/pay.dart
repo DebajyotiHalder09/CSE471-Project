@@ -5,7 +5,6 @@ import '../models/bus.dart';
 import '../models/individual_bus.dart';
 import '../services/auth_service.dart';
 import '../services/wallet_service.dart';
-import '../services/receipt_service.dart';
 import '../services/offers_service.dart';
 import '../services/trip_history_service.dart';
 import '../models/offers.dart';
@@ -41,7 +40,6 @@ class PayScreen extends StatefulWidget {
 class _PayScreenState extends State<PayScreen> {
   bool _isLoading = true;
   bool _isProcessingPayment = false;
-  bool _isDownloadingReceipt = false;
   double _walletBalance = 0.0;
   int _gems = 0;
   String? _error;
@@ -144,64 +142,244 @@ class _PayScreenState extends State<PayScreen> {
     }
   }
 
-  Future<void> _downloadReceipt() async {
-    setState(() {
-      _isDownloadingReceipt = true;
-    });
+  void _showReceiptModal() {
+    final currentDate = DateTime.now();
+    final formattedDate =
+        '${currentDate.day}/${currentDate.month}/${currentDate.year} at ${currentDate.hour}:${currentDate.minute.toString().padLeft(2, '0')}';
+    final transactionId = 'TXN${DateTime.now().millisecondsSinceEpoch}';
 
-    try {
-      final currentDate = DateTime.now();
-      final formattedDate =
-          '${currentDate.day}/${currentDate.month}/${currentDate.year} at ${currentDate.hour}:${currentDate.minute.toString().padLeft(2, '0')}';
-
-      final receiptPath = await ReceiptService.generateAndSaveReceipt(
-        busName: widget.busInfo.busName,
-        busCode: widget.bus.busCode,
-        source: widget.source,
-        destination: widget.destination,
-        distance: widget.distance,
-        fare: widget.fare,
-        date: formattedDate,
-      );
-
-      final fileName = receiptPath.split('/').last;
-
-      await ReceiptService.openReceipt(receiptPath);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Receipt downloaded successfully!'),
-              Text(
-                'File: $fileName',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ],
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
           ),
-          backgroundColor: Colors.green[600],
-          behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 4),
+          child: Container(
+            constraints: BoxConstraints(maxWidth: 500, maxHeight: 700),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                Container(
+                  padding: EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.blue[600]!, Colors.blue[400]!],
+                    ),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(20),
+                      topRight: Radius.circular(20),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.receipt_long, color: Colors.white, size: 28),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'SmartCommute Dhaka',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              'Payment Receipt',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.close, color: Colors.white),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                ),
+                // Content
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Center(
+                          child: Text(
+                            'PAYMENT RECEIPT',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey[800],
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 30),
+                        Container(
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey[300]!),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildReceiptRowMultiline('Receipt Date:', formattedDate),
+                              SizedBox(height: 12),
+                              _buildReceiptRowMultiline('Transaction ID:', transactionId),
+                              SizedBox(height: 12),
+                              _buildReceiptRow('Bus Name:', widget.busInfo.busName, color: Colors.blue[700]),
+                              SizedBox(height: 12),
+                              _buildReceiptRow('Bus Code:', widget.bus.busCode, color: Colors.blue[700]),
+                              SizedBox(height: 12),
+                              _buildReceiptRow('Source:', widget.source, color: Colors.green[700]),
+                              SizedBox(height: 12),
+                              _buildReceiptRow('Destination:', widget.destination, color: Colors.red[700]),
+                              SizedBox(height: 12),
+                              _buildReceiptRow('Distance:', '${widget.distance.toStringAsFixed(1)} km', color: Colors.orange[700]),
+                              SizedBox(height: 20),
+                              Divider(color: Colors.grey[400], thickness: 2),
+                              SizedBox(height: 20),
+                              _buildReceiptRow('Total Fare:', '৳${widget.fare.toStringAsFixed(0)}', color: Colors.green[700], isTotal: true),
+                              SizedBox(height: 12),
+                              _buildReceiptRow('Payment Method:', 'Wallet Balance'),
+                              SizedBox(height: 12),
+                              _buildReceiptRow('Status:', 'PAID', color: Colors.green[700]),
+                            ],
+                          ),
+                        ),
+                        SizedBox(height: 20),
+                        Container(
+                          padding: EdgeInsets.all(16),
+                          child: Column(
+                            children: [
+                              Divider(color: Colors.grey[400]),
+                              SizedBox(height: 16),
+                              Text(
+                                'Thank you for using our service!',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey[600],
+                                  fontStyle: FontStyle.italic,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                'This is an official receipt for your bus journey.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[500],
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // Footer button
+                Container(
+                  padding: EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(20),
+                      bottomRight: Radius.circular(20),
+                    ),
+                  ),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue[600],
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        'Close',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildReceiptRow(String label, String value, {Color? color, bool isTotal = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Flexible(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: isTotal ? 18 : 16,
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+              color: Colors.grey[700],
+            ),
+          ),
         ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to download receipt: $e'),
-          backgroundColor: Colors.red[600],
-          behavior: SnackBarBehavior.floating,
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: TextStyle(
+              fontSize: isTotal ? 20 : 16,
+              fontWeight: FontWeight.bold,
+              color: color ?? Colors.grey[800],
+            ),
+          ),
         ),
-      );
-    } finally {
-      setState(() {
-        _isDownloadingReceipt = false;
-      });
-    }
+      ],
+    );
+  }
+
+  Widget _buildReceiptRowMultiline(String label, String value, {Color? color}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.normal,
+            color: Colors.grey[700],
+          ),
+        ),
+        SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: color ?? Colors.grey[800],
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _processPayment() async {
@@ -1059,31 +1237,17 @@ class _PayScreenState extends State<PayScreen> {
                 Container(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: _isDownloadingReceipt ? null : _downloadReceipt,
-                    icon: _isDownloadingReceipt
-                        ? SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : Icon(Icons.download, size: 20),
+                    onPressed: _showReceiptModal,
+                    icon: Icon(Icons.receipt_long, size: 20),
                     label: Text(
-                      _isDownloadingReceipt
-                          ? 'Generating Receipt...'
-                          : 'Download Receipt (PDF)',
+                      'Show Receipt',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _isDownloadingReceipt
-                          ? Colors.grey[400]
-                          : Colors.blue[600],
+                      backgroundColor: Colors.blue[600],
                       foregroundColor: Colors.white,
                       padding:
                           EdgeInsets.symmetric(vertical: 12, horizontal: 24),

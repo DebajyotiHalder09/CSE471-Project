@@ -241,22 +241,9 @@ class ModernRideCard extends StatelessWidget {
     bool isOwnPost,
     String? requestStatus,
   ) {
+    // Removed chat button from post card as requested
     if (isOwnPost) {
-      return Row(
-        children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: onChat,
-              icon: const Icon(Icons.chat_bubble_outline),
-              label: const Text('Chat'),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                side: BorderSide(color: AppTheme.primaryBlue),
-              ),
-            ),
-          ),
-        ],
-      );
+      return const SizedBox.shrink();
     }
 
     // Check if ride is full
@@ -496,11 +483,13 @@ class ModernFareDisplay extends StatelessWidget {
 class ModernParticipantsSection extends StatelessWidget {
   final List<Map<String, dynamic>> participants;
   final int? maxParticipants;
+  final Function(String userId, String userName)? onParticipantTap;
 
   const ModernParticipantsSection({
     super.key,
     required this.participants,
     this.maxParticipants,
+    this.onParticipantTap,
   });
 
   @override
@@ -568,54 +557,61 @@ class ModernParticipantsSection extends StatelessWidget {
             runSpacing: 8,
             children: participants.map((participant) {
               final userName = participant['userName'] ?? participant['requesterName'] ?? 'Unknown';
+              final userId = participant['userId']?.toString() ?? participant['requesterId']?.toString() ?? '';
               final isCreator = participant['isCreator'] == true;
               
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isCreator 
-                      ? AppTheme.primaryBlue.withOpacity(0.1)
-                      : Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: isCreator
-                        ? AppTheme.primaryBlue.withOpacity(0.3)
-                        : AppTheme.accentGreen.withOpacity(0.3),
+              return InkWell(
+                onTap: onParticipantTap != null && userId.isNotEmpty
+                    ? () => onParticipantTap!(userId, userName)
+                    : null,
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isCreator 
+                        ? AppTheme.primaryBlue.withOpacity(0.1)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isCreator
+                          ? AppTheme.primaryBlue.withOpacity(0.3)
+                          : AppTheme.accentGreen.withOpacity(0.3),
+                    ),
                   ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: isCreator
-                          ? AppTheme.primaryBlue.withOpacity(0.2)
-                          : AppTheme.accentGreen.withOpacity(0.2),
-                      radius: 14,
-                      child: Text(
-                        userName[0].toUpperCase(),
-                        style: TextStyle(
-                          color: isCreator ? AppTheme.primaryBlue : AppTheme.accentGreen,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: isCreator
+                            ? AppTheme.primaryBlue.withOpacity(0.2)
+                            : AppTheme.accentGreen.withOpacity(0.2),
+                        radius: 14,
+                        child: Text(
+                          userName[0].toUpperCase(),
+                          style: TextStyle(
+                            color: isCreator ? AppTheme.primaryBlue : AppTheme.accentGreen,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      userName,
-                      style: AppTheme.bodySmall.copyWith(
-                        fontWeight: FontWeight.w600,
+                      const SizedBox(width: 8),
+                      Text(
+                        userName,
+                        style: AppTheme.bodySmall.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                    if (isCreator) ...[
-                      const SizedBox(width: 4),
-                      Icon(
-                        Icons.star,
-                        size: 14,
-                        color: AppTheme.primaryBlue,
-                      ),
+                      if (isCreator) ...[
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.star,
+                          size: 14,
+                          color: AppTheme.primaryBlue,
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               );
             }).toList(),

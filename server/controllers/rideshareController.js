@@ -213,6 +213,21 @@ const rideshareController = {
         }
       }
 
+      // Calculate fare based on participant limit
+      let farePerKm;
+      if (participantLimit == 3) {
+        farePerKm = 30.0;
+      } else if (participantLimit == 4) {
+        farePerKm = 50.0;
+      } else if (participantLimit > 4) {
+        farePerKm = 70.0;
+      } else {
+        // For 1-2 participants, use base rate of 30
+        farePerKm = 30.0;
+      }
+      
+      const calculatedFare = fareData.distance * farePerKm;
+
       const ridePost = new RidePost({
         source,
         destination,
@@ -221,7 +236,7 @@ const rideshareController = {
         gender,
         maxParticipants: participantLimit,
         distance: fareData.distance,
-        fare: fareData.fare,
+        fare: calculatedFare,
       });
 
       await ridePost.save();

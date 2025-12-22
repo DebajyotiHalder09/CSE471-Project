@@ -1306,7 +1306,11 @@ class _RideshareScreenState extends State<RideshareScreen>
     );
   }
 
-  Widget? _buildAllParticipantsSection(Map<String, dynamic> post, List<Map<String, dynamic>> acceptedRequests) {
+  Widget? _buildAllParticipantsSection(
+    Map<String, dynamic> post, 
+    List<Map<String, dynamic>> acceptedRequests, {
+    Function(String userId, String userName)? onParticipantTap,
+  }) {
     // Get all participants including the creator
     final maxParticipants = post['maxParticipants'] ?? 3;
     final postParticipants = post['participants'] as List<dynamic>? ?? [];
@@ -1353,6 +1357,7 @@ class _RideshareScreenState extends State<RideshareScreen>
     return ModernParticipantsSection(
       participants: allParticipants,
       maxParticipants: maxParticipants,
+      onParticipantTap: onParticipantTap,
     );
   }
 
@@ -3331,10 +3336,18 @@ class _RideshareScreenState extends State<RideshareScreen>
       rideRequests: rideRequests,
       onRequestJoin: (isOwnPost || isFull) ? null : () => _sendRideRequest(post['_id']),
       onDelete: isOwnPost ? () => _deleteRidePost(post['_id']) : null,
-      onChat: () {
+      fareDisplay: (distance != null && fare != null)
+          ? ModernFareDisplay(
+              distance: distance,
+              fare: fare,
+              individualFare: individualFare,
+              participantCount: participantCount,
+            )
+          : null,
+      participantsSection: _buildAllParticipantsSection(post, acceptedRequests, onParticipantTap: (userId, userName) {
         final friend = User(
-          id: post['userId']?.toString() ?? '',
-          name: post['userName'] ?? 'Unknown',
+          id: userId,
+          name: userName,
           email: '',
           role: '',
         );
@@ -3344,16 +3357,7 @@ class _RideshareScreenState extends State<RideshareScreen>
             builder: (context) => ChatScreen(friend: friend),
           ),
         );
-      },
-      fareDisplay: (distance != null && fare != null)
-          ? ModernFareDisplay(
-              distance: distance,
-              fare: fare,
-              individualFare: individualFare,
-              participantCount: participantCount,
-            )
-          : null,
-      participantsSection: _buildAllParticipantsSection(post, acceptedRequests),
+      }),
       requestsSection: isOwnPost ? _buildModernRequestsSection(post, requests) : null,
     );
   }

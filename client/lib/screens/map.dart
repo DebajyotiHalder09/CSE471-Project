@@ -1215,6 +1215,29 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
     });
   }
 
+  void _centerMapToMyLocation() {
+    // Dummy location - centers map to Dhaka center
+    // In a real implementation, you would use geolocator package to get actual GPS location
+    if (_mapController != null && _mapReady) {
+      _mapController!.move(dhakaCenter, 15.0); // Zoom to 15 for better view
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.my_location, color: Colors.white, size: 20),
+              SizedBox(width: 8),
+              Text('Centered to your location'),
+            ],
+          ),
+          backgroundColor: Colors.blue[700],
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   void _showSOSDialog() {
     showDialog(
       context: context,
@@ -3840,6 +3863,22 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                 ),
               ),
             ),
+          // My Location Button
+          Positioned(
+            bottom: 160,
+            right: 16,
+            child: FloatingActionButton(
+              onPressed: _centerMapToMyLocation,
+              backgroundColor: Colors.blue[700],
+              elevation: 8,
+              heroTag: 'my_location_button',
+              child: const Icon(
+                Icons.my_location,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+          ),
           // SOS Button
           Positioned(
             bottom: 100,
@@ -3848,6 +3887,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
               onPressed: _showSOSDialog,
               backgroundColor: Colors.red[700],
               elevation: 8,
+              heroTag: 'sos_button',
               child: const Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [

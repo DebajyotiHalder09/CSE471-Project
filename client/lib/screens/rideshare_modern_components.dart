@@ -259,6 +259,12 @@ class ModernRideCard extends StatelessWidget {
       );
     }
 
+    // Check if ride is full
+    final maxParticipants = post['maxParticipants'] ?? 3;
+    final participants = post['participants'] as List<dynamic>? ?? [];
+    final currentCount = participants.length;
+    final isFull = currentCount >= maxParticipants;
+
     if (requestStatus == 'pending') {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -322,6 +328,31 @@ class ModernRideCard extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               'Request Rejected',
+              style: AppTheme.labelLarge.copyWith(
+                color: AppTheme.accentRed,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Show "Ride Full" if the ride is full
+    if (isFull) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppTheme.accentRed.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppTheme.accentRed),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.person_off, color: AppTheme.accentRed, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              'Ride Full ($currentCount/$maxParticipants)',
               style: AppTheme.labelLarge.copyWith(
                 color: AppTheme.accentRed,
               ),
@@ -428,8 +459,9 @@ class ModernFareDisplay extends StatelessWidget {
                     const SizedBox(width: 4),
                     Text(
                       '${distance!.toStringAsFixed(1)} km',
-                      style: AppTheme.bodyMedium.copyWith(
-                        color: AppTheme.textSecondary,
+                      style: AppTheme.bodyLarge.copyWith(
+                        color: AppTheme.textPrimary,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -463,10 +495,12 @@ class ModernFareDisplay extends StatelessWidget {
 /// Modern participants section
 class ModernParticipantsSection extends StatelessWidget {
   final List<Map<String, dynamic>> participants;
+  final int? maxParticipants;
 
   const ModernParticipantsSection({
     super.key,
     required this.participants,
+    this.maxParticipants,
   });
 
   @override
@@ -475,13 +509,21 @@ class ModernParticipantsSection extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final max = maxParticipants ?? 3;
+    final currentCount = participants.length;
+    final isFull = currentCount >= max;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.accentGreen.withOpacity(0.05),
+        color: isFull 
+            ? AppTheme.accentRed.withOpacity(0.05)
+            : AppTheme.accentGreen.withOpacity(0.05),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: AppTheme.accentGreen.withOpacity(0.2),
+          color: isFull
+              ? AppTheme.accentRed.withOpacity(0.2)
+              : AppTheme.accentGreen.withOpacity(0.2),
         ),
       ),
       child: Column(
@@ -489,14 +531,35 @@ class ModernParticipantsSection extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.people, color: AppTheme.accentGreen, size: 20),
+              Icon(
+                isFull ? Icons.people_outline : Icons.people,
+                color: isFull ? AppTheme.accentRed : AppTheme.accentGreen,
+                size: 20,
+              ),
               const SizedBox(width: 8),
               Text(
-                'Participants (${participants.length})',
+                'Participants ($currentCount/$max)',
                 style: AppTheme.labelLarge.copyWith(
-                  color: AppTheme.accentGreen,
+                  color: isFull ? AppTheme.accentRed : AppTheme.accentGreen,
                 ),
               ),
+              if (isFull) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.accentRed.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'FULL',
+                    style: AppTheme.labelSmall.copyWith(
+                      color: AppTheme.accentRed,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 12),
@@ -504,25 +567,34 @@ class ModernParticipantsSection extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: participants.map((participant) {
+              final userName = participant['userName'] ?? participant['requesterName'] ?? 'Unknown';
+              final isCreator = participant['isCreator'] == true;
+              
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: isCreator 
+                      ? AppTheme.primaryBlue.withOpacity(0.1)
+                      : Colors.white,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: AppTheme.accentGreen.withOpacity(0.3),
+                    color: isCreator
+                        ? AppTheme.primaryBlue.withOpacity(0.3)
+                        : AppTheme.accentGreen.withOpacity(0.3),
                   ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     CircleAvatar(
-                      backgroundColor: AppTheme.accentGreen.withOpacity(0.2),
+                      backgroundColor: isCreator
+                          ? AppTheme.primaryBlue.withOpacity(0.2)
+                          : AppTheme.accentGreen.withOpacity(0.2),
                       radius: 14,
                       child: Text(
-                        (participant['requesterName']?[0] ?? 'U').toUpperCase(),
+                        userName[0].toUpperCase(),
                         style: TextStyle(
-                          color: AppTheme.accentGreen,
+                          color: isCreator ? AppTheme.primaryBlue : AppTheme.accentGreen,
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),
@@ -530,11 +602,19 @@ class ModernParticipantsSection extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      participant['requesterName'] ?? 'Unknown',
+                      userName,
                       style: AppTheme.bodySmall.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                    if (isCreator) ...[
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.star,
+                        size: 14,
+                        color: AppTheme.primaryBlue,
+                      ),
+                    ],
                   ],
                 ),
               );

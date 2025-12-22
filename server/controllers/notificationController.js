@@ -255,13 +255,13 @@ const notificationController = {
         });
       }
 
-      // Get all users
-      const allUsers = await User.find({}, '_id');
+      // Get all users except the one who sent the SOS
+      const allUsers = await User.find({ _id: { $ne: userId } }, '_id');
       
       if (allUsers.length === 0) {
         return res.status(404).json({
           success: false,
-          message: 'No users found',
+          message: 'No other users found',
         });
       }
 
@@ -286,7 +286,7 @@ const notificationController = {
         notificationMessage = `${userName} needs help at ${source}`;
       }
 
-      // Create notification for each user
+      // Create notification for each user (excluding the sender)
       const notifications = allUsers.map(user => ({
         userId: user._id,
         title: notificationTitle,

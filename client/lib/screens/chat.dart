@@ -469,35 +469,6 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
           ),
-          if (isMe) ...[
-            const SizedBox(width: 8),
-            Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: AppTheme.primaryGradient,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primaryBlue.withOpacity(0.2),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.all(2),
-              child: CircleAvatar(
-                radius: 18,
-                backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
-                child: Text(
-                  _currentUser?.firstNameInitial ?? 'U',
-                  style: AppTheme.bodyMedium.copyWith(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.primaryBlue,
-                  ),
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     );

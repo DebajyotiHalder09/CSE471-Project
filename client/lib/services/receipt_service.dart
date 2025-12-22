@@ -1,8 +1,12 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:path_provider/path_provider.dart';
-import 'package:open_file/open_file.dart';
+
+// Conditional imports - these will be replaced at compile time
+import 'dart:io' if (dart.library.html) 'dart:html' as platform;
+import 'package:path_provider/path_provider.dart' if (dart.library.html) '../services/path_provider_stub.dart' show getTemporaryDirectory;
+import 'package:open_file/open_file.dart' if (dart.library.html) '../services/open_file_stub.dart' show OpenFile;
+import 'receipt_service_web.dart' if (dart.library.io) 'receipt_service_web_stub.dart' as web_helper;
 
 class ReceiptService {
   static Future<String> generateAndSaveReceipt({
@@ -44,13 +48,28 @@ class ReceiptService {
       ),
     );
 
-    final output = await getTemporaryDirectory();
+    final pdfBytes = await pdf.save();
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final fileName = 'bus_receipt_${busCode}_$timestamp.pdf';
-    final file = File('${output.path}/$fileName');
-    await file.writeAsBytes(await pdf.save());
 
-    return file.path;
+    if (kIsWeb) {
+      // Web: Download directly to browser using dart:html
+      _downloadPdfWeb(pdfBytes, fileName);
+      return fileName; // Return filename for web
+    } else {
+      // Mobile/Desktop: Save to file system using dart:io
+      final output = await getTemporaryDirectory();
+      final file = platform.File('${output.path}/$fileName');
+      await file.writeAsBytes(pdfBytes);
+      return file.path;
+    }
+  }
+
+  static void _downloadPdfWeb(List<int> bytes, String fileName) {
+    if (kIsWeb) {
+      // Use web helper for download
+      web_helper.downloadPdfWeb(bytes, fileName);
+    }
   }
 
   static Future<String> getReceiptFileName({
@@ -220,7 +239,14 @@ class ReceiptService {
 
   static Future<void> openReceipt(String filePath) async {
     try {
-      await OpenFile.open(filePath);
+      if (kIsWeb) {
+        // On web, the file is already downloaded, so we don't need to open it
+        // The download happens automatically in generateAndSaveReceipt
+        return;
+      } else {
+        // On mobile/desktop, open the file
+        await OpenFile.open(filePath);
+      }
     } catch (e) {
       print('Error opening file: $e');
     }

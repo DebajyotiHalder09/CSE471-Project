@@ -12,6 +12,7 @@ class RideshareService {
     required String userId,
     required String userName,
     required String gender,
+    required int maxParticipants,
   }) async {
     try {
       final response = await http.post(
@@ -23,6 +24,7 @@ class RideshareService {
           'userId': userId,
           'userName': userName,
           'gender': gender,
+          'maxParticipants': maxParticipants,
         }),
       );
 

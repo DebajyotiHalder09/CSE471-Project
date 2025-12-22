@@ -124,7 +124,7 @@ const calculateFare = async (source, destination) => {
 const rideshareController = {
   createRidePost: async (req, res) => {
     try {
-      const { source, destination, userId, userName, gender } = req.body;
+      const { source, destination, userId, userName, gender, maxParticipants } = req.body;
       
       if (!source || !destination || !userId || !userName || !gender) {
         return res.status(400).json({
@@ -132,6 +132,11 @@ const rideshareController = {
           message: 'All fields are required',
         });
       }
+
+      // Validate maxParticipants (2-9)
+      const participantLimit = maxParticipants && maxParticipants >= 2 && maxParticipants <= 9 
+        ? maxParticipants 
+        : 3; // Default to 3 if invalid
 
       // First, try to get cached fare from database
       let fareData = null;
@@ -214,6 +219,7 @@ const rideshareController = {
         userId,
         userName,
         gender,
+        maxParticipants: participantLimit,
         distance: fareData.distance,
         fare: fareData.fare,
       });
@@ -229,6 +235,8 @@ const rideshareController = {
           userId: ridePost.userId,
           userName: ridePost.userName,
           gender: ridePost.gender,
+          maxParticipants: ridePost.maxParticipants,
+          participants: ridePost.participants || [],
           distance: ridePost.distance,
           fare: ridePost.fare,
           createdAt: ridePost.createdAt,

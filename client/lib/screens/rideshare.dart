@@ -50,6 +50,7 @@ class _RideshareScreenState extends State<RideshareScreen>
   bool isFareCalculating = false;
   Timer? _fareDebounce;
   final Map<String, Map<String, double>> _fareCache = {};
+  int maxParticipants = 3; // Default to 3, range 2-9
   
   // Tab controller and friends list
   late TabController _tabController;
@@ -536,6 +537,23 @@ class _RideshareScreenState extends State<RideshareScreen>
     }
   }
 
+  double _calculateFareForParticipants(double distance, int participantCount) {
+    // Calculate fare per km based on participant count
+    double farePerKm;
+    if (participantCount == 3) {
+      farePerKm = 30.0;
+    } else if (participantCount == 4) {
+      farePerKm = 50.0;
+    } else if (participantCount > 4) {
+      farePerKm = 70.0;
+    } else {
+      // For 1-2 participants, use base rate of 30
+      farePerKm = 30.0;
+    }
+    
+    return distance * farePerKm;
+  }
+
   Map<String, dynamic>? _computeIndividualFare(
       Map<String, dynamic> post, double? totalFare) {
     if (totalFare == null) return null;
@@ -547,18 +565,52 @@ class _RideshareScreenState extends State<RideshareScreen>
     // Always include the ride creator as a participant
     final totalParticipants = acceptedRequests.length + 1; // +1 for the creator
 
-    // If no participants yet, individual fare equals total fare
-    final individualFare =
-        totalParticipants > 1 ? totalFare / totalParticipants : totalFare;
+    // Get distance from post
+    final savedDistance = post['distance'];
+    if (savedDistance == null) {
+      // Fallback to original calculation if no distance
+      final individualFare =
+          totalParticipants > 1 ? totalFare / totalParticipants : totalFare;
+      return {
+        'originalFare': totalFare,
+        'individualFare': individualFare,
+        'participantCount': totalParticipants,
+      };
+    }
+
+    final distance = (savedDistance is num) 
+        ? savedDistance.toDouble() 
+        : double.tryParse(savedDistance.toString()) ?? 0.0;
+
+    // Calculate fare per km based on participant count
+    double farePerKm;
+    if (totalParticipants == 3) {
+      farePerKm = 30.0;
+    } else if (totalParticipants == 4) {
+      farePerKm = 50.0;
+    } else if (totalParticipants > 4) {
+      farePerKm = 70.0;
+    } else {
+      // For 1-2 participants, use base rate of 30
+      farePerKm = 30.0;
+    }
+
+    // Recalculate total fare based on participant count and distance
+    final recalculatedTotalFare = distance * farePerKm;
+    
+    // Individual fare is the recalculated total divided by participants
+    final individualFare = recalculatedTotalFare / totalParticipants;
 
     print('Individual fare calculation for post ${post['_id']}:');
     print('  - Accepted requests: ${acceptedRequests.length}');
     print('  - Total participants: $totalParticipants');
-    print('  - Total fare: ৳${totalFare.toStringAsFixed(0)}');
+    print('  - Distance: ${distance.toStringAsFixed(1)} km');
+    print('  - Fare per km: ৳$farePerKm');
+    print('  - Recalculated total fare: ৳${recalculatedTotalFare.toStringAsFixed(0)}');
     print('  - Individual fare: ৳${individualFare.toStringAsFixed(0)}');
 
     return {
-      'originalFare': totalFare,
+      'originalFare': recalculatedTotalFare,
       'individualFare': individualFare,
       'participantCount': totalParticipants,
     };
@@ -589,7 +641,7 @@ class _RideshareScreenState extends State<RideshareScreen>
               Text(
                 '${km.toStringAsFixed(1)} km · ৳${originalFare.toStringAsFixed(0)}',
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: Colors.blue[700],
                 ),
@@ -704,7 +756,12 @@ class _RideshareScreenState extends State<RideshareScreen>
       if (!mounted) return;
       setState(() {
         estimatedDistanceKm = result?['distanceKm'];
-        estimatedFare = result?['fare'];
+        // Calculate fare based on current maxParticipants selection
+        if (result?['distanceKm'] != null) {
+          estimatedFare = _calculateFareForParticipants(result!['distanceKm']!, maxParticipants);
+        } else {
+          estimatedFare = result?['fare'];
+        }
         isFareCalculating = false;
       });
     });
@@ -748,7 +805,12 @@ class _RideshareScreenState extends State<RideshareScreen>
             'Fare calculation successful: ${result['distanceKm']}km, ৳${result['fare']}');
         setState(() {
           estimatedDistanceKm = result['distanceKm'];
-          estimatedFare = result['fare'];
+          // Calculate fare based on current maxParticipants selection
+          if (result['distanceKm'] != null) {
+            estimatedFare = _calculateFareForParticipants(result['distanceKm']!, maxParticipants);
+          } else {
+            estimatedFare = result['fare'];
+          }
           isFareCalculating = false;
         });
       } else {
@@ -1244,6 +1306,56 @@ class _RideshareScreenState extends State<RideshareScreen>
     );
   }
 
+  Widget? _buildAllParticipantsSection(Map<String, dynamic> post, List<Map<String, dynamic>> acceptedRequests) {
+    // Get all participants including the creator
+    final maxParticipants = post['maxParticipants'] ?? 3;
+    final postParticipants = post['participants'] as List<dynamic>? ?? [];
+    
+    // Build list of all participants
+    final allParticipants = <Map<String, dynamic>>[];
+    
+    // Add creator first
+    allParticipants.add({
+      'userId': post['userId'],
+      'userName': post['userName'],
+      'gender': post['gender'],
+      'isCreator': true,
+    });
+    
+    // Add accepted participants from requests
+    for (final req in acceptedRequests) {
+      allParticipants.add({
+        'userId': req['requesterId'],
+        'userName': req['requesterName'],
+        'gender': req['requesterGender'],
+        'isCreator': false,
+      });
+    }
+    
+    // Also check participants from post.participants (in case they're stored there)
+    for (final p in postParticipants) {
+      if (p is Map<String, dynamic>) {
+        final userId = p['userId']?.toString();
+        // Skip if already added
+        if (!allParticipants.any((ap) => ap['userId']?.toString() == userId)) {
+          allParticipants.add({
+            'userId': p['userId'],
+            'userName': p['userName'] ?? 'Unknown',
+            'gender': p['gender'] ?? '',
+            'isCreator': userId == post['userId']?.toString(),
+          });
+        }
+      }
+    }
+    
+    if (allParticipants.isEmpty) return null;
+    
+    return ModernParticipantsSection(
+      participants: allParticipants,
+      maxParticipants: maxParticipants,
+    );
+  }
+
   Widget _buildAcceptedParticipantsSection(Map<String, dynamic> post) {
     final requests = rideRequests[post['_id']] ?? [];
     final acceptedRequests =
@@ -1588,6 +1700,7 @@ class _RideshareScreenState extends State<RideshareScreen>
         userId: currentUser!.id,
         userName: currentUser!.name,
         gender: currentUser!.gender ?? 'Not specified',
+        maxParticipants: maxParticipants,
       );
 
       if (response['success']) {
@@ -2514,6 +2627,94 @@ class _RideshareScreenState extends State<RideshareScreen>
                               ),
                             ),
                             const SizedBox(height: 20),
+                            // Max Participants Selector
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: AppTheme.backgroundLight,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: AppTheme.textTertiary.withOpacity(0.2),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.people, color: AppTheme.primaryBlue, size: 20),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Maximum Participants',
+                                        style: AppTheme.labelLarge.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'Set how many people can join (including you):',
+                                    style: AppTheme.bodySmall.copyWith(
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: List.generate(8, (index) {
+                                      final value = index + 2; // 2 to 9
+                                      final isSelected = maxParticipants == value;
+                                      return Expanded(
+                                        child: Padding(
+                                          padding: EdgeInsets.only(
+                                            right: index < 7 ? 8 : 0,
+                                          ),
+                                          child: InkWell(
+                                            onTap: () {
+                                              setState(() {
+                                                maxParticipants = value;
+                                                // Recalculate fare estimation based on new participant count
+                                                if (estimatedDistanceKm != null) {
+                                                  estimatedFare = _calculateFareForParticipants(estimatedDistanceKm!, value);
+                                                }
+                                              });
+                                            },
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(vertical: 12),
+                                              decoration: BoxDecoration(
+                                                color: isSelected
+                                                    ? AppTheme.primaryBlue
+                                                    : Colors.white,
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(
+                                                  color: isSelected
+                                                      ? AppTheme.primaryBlue
+                                                      : AppTheme.textTertiary.withOpacity(0.3),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                '$value',
+                                                textAlign: TextAlign.center,
+                                                style: AppTheme.labelMedium.copyWith(
+                                                  color: isSelected
+                                                      ? Colors.white
+                                                      : AppTheme.textPrimary,
+                                                  fontWeight: isSelected
+                                                      ? FontWeight.bold
+                                                      : FontWeight.normal,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 20),
                             // Fare estimation card
                             _buildFareEstimationCardInline(),
                             const SizedBox(height: 20),
@@ -2641,8 +2842,9 @@ class _RideshareScreenState extends State<RideshareScreen>
                                 children: [
                                   Text(
                         '${estimatedDistanceKm!.toStringAsFixed(1)} km',
-                        style: AppTheme.bodySmall.copyWith(
-                          color: AppTheme.textSecondary,
+                        style: AppTheme.bodyLarge.copyWith(
+                          color: AppTheme.textPrimary,
+                          fontWeight: FontWeight.w600,
                                     ),
                                   ),
                       const SizedBox(height: 4),
@@ -2653,13 +2855,13 @@ class _RideshareScreenState extends State<RideshareScreen>
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '৳30 per km',
+                                  const SizedBox(height: 4),
+                                  Text(
+                        'Total for $maxParticipants participants',
                         style: AppTheme.bodySmall.copyWith(
                           color: AppTheme.textSecondary,
-                                      ),
-                                    ),
+                        ),
+                      ),
                                 ],
                               ),
                 ),
@@ -3097,7 +3299,12 @@ class _RideshareScreenState extends State<RideshareScreen>
     final isOwnPost = currentUser?.id == post['userId']?.toString();
     final requests = rideRequests[post['_id']?.toString() ?? ''] ?? [];
     final acceptedRequests = requests.where((req) => req['status'] == 'accepted').toList();
-    final participantCount = acceptedRequests.length + 1; // +1 for creator
+    
+    // Get actual participant count from post.participants array (includes creator)
+    final postParticipants = post['participants'] as List<dynamic>? ?? [];
+    final participantCount = postParticipants.isNotEmpty 
+        ? postParticipants.length 
+        : (acceptedRequests.length + 1); // Fallback: +1 for creator
     
     final savedDistance = post['distance'];
     final savedFare = post['fare'];
@@ -3113,12 +3320,16 @@ class _RideshareScreenState extends State<RideshareScreen>
       }
     }
 
+    // Check if ride is full
+    final maxParticipants = post['maxParticipants'] ?? 3;
+    final isFull = participantCount >= maxParticipants;
+    
     return ModernRideCard(
       post: post,
       currentUser: currentUser,
       userRequestStatus: userRequestStatus,
       rideRequests: rideRequests,
-      onRequestJoin: isOwnPost ? null : () => _sendRideRequest(post['_id']),
+      onRequestJoin: (isOwnPost || isFull) ? null : () => _sendRideRequest(post['_id']),
       onDelete: isOwnPost ? () => _deleteRidePost(post['_id']) : null,
       onChat: () {
         final friend = User(
@@ -3142,9 +3353,7 @@ class _RideshareScreenState extends State<RideshareScreen>
               participantCount: participantCount,
             )
           : null,
-      participantsSection: acceptedRequests.isNotEmpty
-          ? ModernParticipantsSection(participants: acceptedRequests)
-          : null,
+      participantsSection: _buildAllParticipantsSection(post, acceptedRequests),
       requestsSection: isOwnPost ? _buildModernRequestsSection(post, requests) : null,
     );
   }

@@ -97,12 +97,246 @@ class _OffersScreenState extends State<OffersScreen> {
     return ListView(
       padding: EdgeInsets.all(16),
       children: [
-        _buildCashbackCard(),
+        _buildSubscriptionCard(
+          duration: '7 Days',
+          price: '৳99',
+          benefits: [
+            '10% discount on bus only',
+            'Priority customer support',
+          ],
+          color: Colors.blue,
+        ),
         SizedBox(height: 16),
-        _buildCouponCard(),
+        _buildSubscriptionCard(
+          duration: '30 Days',
+          price: '৳299',
+          benefits: [
+            '20% discount on bus',
+            '30% on rideshare',
+            'Priority customer support',
+            'Early access to new feature',
+            'Including rental rides',
+          ],
+          color: Colors.purple,
+          isPopular: true,
+        ),
         SizedBox(height: 16),
-        _buildDiscountCard(),
+        _buildSubscriptionCard(
+          duration: '1 Year',
+          price: '৳2,999',
+          benefits: [
+            'Unlimited bus rides',
+            '40% discount on trips',
+            'Priority customer support',
+            'Exclusive offers & deals',
+            'Early access to new features',
+            'Complimentary rides on special occasions',
+          ],
+          color: Colors.orange,
+        ),
       ],
+    );
+  }
+
+  Widget _buildSubscriptionCard({
+    required String duration,
+    required String price,
+    required List<String> benefits,
+    required Color color,
+    bool isPopular = false,
+  }) {
+    return Container(
+      padding: EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isPopular ? color : Colors.grey[200]!,
+          width: isPopular ? 2 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isPopular
+                ? color.withValues(alpha: 0.2)
+                : Colors.black.withValues(alpha: 0.08),
+            blurRadius: isPopular ? 16 : 12,
+            offset: Offset(0, isPopular ? 8 : 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [color, color.withValues(alpha: 0.7)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.card_membership,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+              SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$duration Subscription',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                    if (isPopular) ...[
+                      SizedBox(height: 4),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'POPULAR',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: color,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 24),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                price,
+                style: TextStyle(
+                  fontSize: 36,
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                ),
+              ),
+              SizedBox(width: 8),
+              Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: Text(
+                  '/ $duration',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 24),
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: color.withValues(alpha: 0.2),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.star_rounded,
+                      color: color,
+                      size: 20,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'Benefits:',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: color,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 12),
+                ...benefits.map((benefit) => Padding(
+                      padding: EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.check_circle_rounded,
+                            color: color,
+                            size: 20,
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              benefit,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[700],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )),
+              ],
+            ),
+          ),
+          SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                // Dummy button - non-functional
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Subscription purchase coming soon!'),
+                    backgroundColor: color,
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: color,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: isPopular ? 4 : 2,
+              ),
+              child: Text(
+                'Purchase Subscription',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

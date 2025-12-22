@@ -4,6 +4,7 @@ import '../models/review.dart';
 import '../models/user.dart';
 import '../services/review_service.dart';
 import '../services/auth_service.dart';
+import '../services/rating_service.dart';
 import '../utils/app_theme.dart';
 import '../utils/error_widgets.dart';
 import '../utils/loading_widgets.dart';
@@ -27,12 +28,17 @@ class _ReviewScreenState extends State<ReviewScreen> {
   final TextEditingController editController = TextEditingController();
   String? replyingToReviewId;
   String? editingReviewId;
+  int selectedRating = 0; // 0 means no rating selected, 1-5 for stars
+  double? busAverageRating;
+  int busTotalRatings = 0;
+  bool isSubmittingRating = false;
 
   @override
   void initState() {
     super.initState();
     _loadCurrentUser();
     _loadReviews();
+    _loadBusRating();
   }
 
   @override
@@ -51,6 +57,50 @@ class _ReviewScreenState extends State<ReviewScreen> {
       });
     } catch (e) {
       print('Error loading current user: $e');
+    }
+  }
+
+  Future<void> _loadBusRating() async {
+    try {
+      final response = await RatingService.getBusRating(widget.bus.id);
+      if (response['success'] && response['data'] != null) {
+        setState(() {
+          busAverageRating = (response['data']['averageRating'] as num?)?.toDouble();
+          busTotalRatings = response['data']['totalRatings'] ?? 0;
+        });
+      }
+    } catch (e) {
+      print('Error loading bus rating: $e');
+    }
+  }
+
+  Future<void> _submitRating(int rating) async {
+    if (currentUser == null || isSubmittingRating) return;
+
+    setState(() {
+      isSubmittingRating = true;
+    });
+
+    try {
+      final response = await RatingService.submitRating(
+        busId: widget.bus.id,
+        userId: currentUser!.id,
+        rating: rating.toDouble(),
+      );
+
+      if (response['success']) {
+        // Reload the bus rating to get updated average
+        await _loadBusRating();
+        SuccessSnackbar.show(context, 'Rating submitted successfully!');
+      } else {
+        ErrorSnackbar.show(context, response['message'] ?? 'Failed to submit rating');
+      }
+    } catch (e) {
+      ErrorSnackbar.show(context, 'Error submitting rating: $e');
+    } finally {
+      setState(() {
+        isSubmittingRating = false;
+      });
     }
   }
 
@@ -493,28 +543,73 @@ class _ReviewScreenState extends State<ReviewScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    if (currentUser != null) ...[
-                      const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryBlue.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: AppTheme.primaryBlue.withOpacity(0.3),
+                    const Spacer(),
+                    // Display current bus rating
+                    if (busAverageRating != null) ...[
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.star_rounded,
+                            color: AppTheme.accentOrange,
+                            size: 20,
                           ),
-                        ),
-                        child: Text(
-                          'as ${currentUser!.name}',
-                          style: AppTheme.bodySmallDark(context).copyWith(
-                            color: AppTheme.primaryBlue,
-                            fontWeight: FontWeight.w600,
+                          const SizedBox(width: 4),
+                          Text(
+                            busAverageRating!.toStringAsFixed(1),
+                            style: AppTheme.heading4Dark(context).copyWith(
+                              color: AppTheme.accentOrange,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
+                          if (busTotalRatings > 0) ...[
+                            const SizedBox(width: 4),
+                            Text(
+                              '($busTotalRatings)',
+                              style: AppTheme.bodySmallDark(context).copyWith(
+                                color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ],
                 ),
+                const SizedBox(height: 16),
+                // Star Rating Widget
+                if (currentUser != null) ...[
+                  Text(
+                    'Rate this bus:',
+                    style: AppTheme.bodyMediumDark(context).copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: List.generate(5, (index) {
+                      final starNumber = index + 1;
+                      final isSelected = selectedRating >= starNumber;
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            selectedRating = starNumber;
+                          });
+                          _submitRating(starNumber);
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Icon(
+                            isSelected ? Icons.star_rounded : Icons.star_border_rounded,
+                            color: isSelected ? AppTheme.accentOrange : AppTheme.textTertiary,
+                            size: 32,
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 const SizedBox(height: 16),
                 if (currentUser == null)
                   Container(
@@ -581,49 +676,97 @@ class _ReviewScreenState extends State<ReviewScreen> {
                     ),
                   ),
                 const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: (isLoading || currentUser == null)
-                          ? LinearGradient(
-                              colors: [
-                                Colors.grey[400]!,
-                                Colors.grey[500]!,
-                              ],
-                            )
-                          : AppTheme.primaryGradient,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: (isLoading || currentUser == null)
-                          ? null
-                          : [
-                              BoxShadow(
-                                color: AppTheme.primaryBlue.withOpacity(0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: (isLoading || currentUser == null)
+                              ? LinearGradient(
+                                  colors: [
+                                    Colors.grey[400]!,
+                                    Colors.grey[500]!,
+                                  ],
+                                )
+                              : AppTheme.primaryGradient,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: (isLoading || currentUser == null)
+                              ? null
+                              : [
+                                  BoxShadow(
+                                    color: AppTheme.primaryBlue.withOpacity(0.3),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: (isLoading || currentUser == null) ? null : _addReview,
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              alignment: Alignment.center,
+                              child: Text(
+                                currentUser == null ? 'Login Required' : 'Post Review',
+                                style: AppTheme.labelLarge.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
                               ),
-                            ],
-                    ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: (isLoading || currentUser == null) ? null : _addReview,
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          alignment: Alignment.center,
-                          child: Text(
-                            currentUser == null ? 'Login Required' : 'Post Review',
-                            style: AppTheme.labelLarge.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: (isLoading || currentUser == null)
+                            ? LinearGradient(
+                                colors: [
+                                  Colors.grey[400]!,
+                                  Colors.grey[500]!,
+                                ],
+                              )
+                            : LinearGradient(
+                                colors: [
+                                  AppTheme.accentOrange,
+                                  AppTheme.accentOrange.withOpacity(0.8),
+                                ],
+                              ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: (isLoading || currentUser == null)
+                            ? null
+                            : [
+                                BoxShadow(
+                                  color: AppTheme.accentOrange.withOpacity(0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: null, // Dummy button - non-functional
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            width: 56,
+                            height: 56,
+                            alignment: Alignment.center,
+                            child: Icon(
+                              Icons.camera_alt_rounded,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
